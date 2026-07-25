@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CW 交信トレーニング</title>
+<meta name="description" content="ブラウザだけで動くモールス符号・CW 交信の練習アプリ">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>📻</text></svg>">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <span class="brand-mark">・－</span>
+    <h1>CW 交信トレーニング</h1>
+  </div>
+
+  <div class="quick-audio">
+    <label class="qa-item">
+      <span>文字速度</span>
+      <input type="range" id="qa-charwpm" min="5" max="40" step="1">
+      <output id="qa-charwpm-out">20 WPM</output>
+    </label>
+    <label class="qa-item">
+      <span>実効速度</span>
+      <input type="range" id="qa-effwpm" min="5" max="40" step="1">
+      <output id="qa-effwpm-out">15 WPM</output>
+    </label>
+    <label class="qa-item">
+      <span>音量</span>
+      <input type="range" id="qa-volume" min="0" max="100" step="1">
+      <output id="qa-volume-out">50</output>
+    </label>
+    <button type="button" id="btn-stop-all" class="btn btn-ghost" title="再生を止める">■ 停止</button>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button type="button" class="tab is-active" role="tab" data-panel="qso">交信シミュレーター</button>
+  <button type="button" class="tab" role="tab" data-panel="drill">聞き取りドリル</button>
+  <button type="button" class="tab" role="tab" data-panel="contest">コンテスト運用</button>
+  <button type="button" class="tab" role="tab" data-panel="keyer">パドル送信</button>
+  <button type="button" class="tab" role="tab" data-panel="tools">変換・電鍵</button>
+  <button type="button" class="tab" role="tab" data-panel="glossary">略語集</button>
+  <button type="button" class="tab" role="tab" data-panel="settings">設定・記録</button>
+</nav>
+
+<main>
+
+<!-- ═══════════════ 交信シミュレーター ═══════════════ -->
+<section class="panel is-active" id="panel-qso" role="tabpanel">
+  <div class="panel-head">
+    <h2>交信シミュレーター</h2>
+    <p class="lede">
+      相手局を呼び出してから <code>73</code> で終わるまで、ラバースタンプ QSO を一通り体験します。
+      相手の送信を聞き取り、ログシートに書き取ってください。
+    </p>
+  </div>
+
+  <div class="card setup-card" id="qso-setup">
+    <div class="field-row">
+      <label class="field">
+        <span>進め方</span>
+        <select id="qso-mode">
+          <option value="cq">自分から CQ を出す</option>
+          <option value="answer">相手の CQ に応答する</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>交信の長さ</span>
+        <select id="qso-length">
+          <option value="short">短い（RST・名前・QTH）</option>
+          <option value="normal" selected>標準（＋リグ・アンテナ）</option>
+          <option value="long">長い（＋天気・気温）</option>
+        </select>
+      </label>
+      <button type="button" class="btn btn-primary" id="btn-qso-start">交信開始</button>
+    </div>
+    <p class="hint">
+      自局のコールサインや名前は「設定・記録」タブで変更できます。
+      現在の自局: <strong id="qso-myprofile">—</strong>
+    </p>
+    <label class="beginner-toggle">
+      <input type="checkbox" class="js-beginner">
+      <span>初心者モード（Q 符号・略語をリアルタイム解説）</span>
+    </label>
+  </div>
+
+  <div class="qso-stage" id="qso-stage" hidden>
+    <div class="card qso-log-card">
+      <h3>交信ログ</h3>
+      <div class="qso-log" id="qso-log"></div>
+    </div>
+
+    <div class="card qso-turn-card" id="qso-turn">
+      <!-- 進行に応じて app.js が中身を差し替える -->
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 聞き取りドリル ═══════════════ -->
+<section class="panel" id="panel-drill" role="tabpanel">
+  <div class="panel-head">
+    <h2>聞き取りドリル</h2>
+    <p class="lede">
+      コッホ法では、少ない文字数から始めて正答率 90% を超えたら 1 文字ずつ増やしていきます。
+      最初から本番と同じ文字速度で聞き、間隔だけを広げるのがコツです。
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="field-row">
+      <label class="field">
+        <span>種類</span>
+        <select id="drill-type"></select>
+      </label>
+      <label class="field" id="drill-level-field">
+        <span>レベル（使う文字数）</span>
+        <input type="range" id="drill-level" min="2" max="41" step="1">
+        <output id="drill-level-out"></output>
+      </label>
+      <label class="field">
+        <span>1 群の文字数</span>
+        <input type="number" id="drill-groupsize" min="1" max="10" step="1">
+      </label>
+      <label class="field">
+        <span>群の数</span>
+        <input type="number" id="drill-groupcount" min="1" max="20" step="1">
+      </label>
+    </div>
+    <p class="hint" id="drill-help"></p>
+    <p class="hint" id="drill-alphabet"></p>
+  </div>
+
+  <div class="card drill-card">
+    <div class="drill-actions">
+      <button type="button" class="btn btn-primary" id="btn-drill-new">出題する</button>
+      <button type="button" class="btn" id="btn-drill-replay" disabled>もう一度聞く</button>
+      <button type="button" class="btn btn-ghost" id="btn-drill-slow" disabled>ゆっくり再生</button>
+    </div>
+
+    <label class="answer-field">
+      <span>聞き取った内容</span>
+      <input type="text" id="drill-answer" autocomplete="off" autocapitalize="characters"
+             spellcheck="false" placeholder="聞こえたまま入力して Enter">
+    </label>
+
+    <div class="drill-result" id="drill-result" hidden></div>
+  </div>
+</section>
+
+<!-- ═══════════════ コンテスト運用（パイルアップ） ═══════════════ -->
+<section class="panel" id="panel-contest" role="tabpanel">
+  <div class="panel-head">
+    <h2>コンテスト運用</h2>
+    <p class="lede">
+      CQ を出すと複数局が同時に呼んできます。音程・速度・強さがそれぞれ違うので、
+      1 局を選んで取り、ナンバーを交換して確定します。操作はファンクションキーで行います。
+    </p>
+  </div>
+
+  <div class="card" id="contest-setup">
+    <div class="field-grid">
+      <label class="field">
+        <span>交換内容</span>
+        <select id="contest-exchange"></select>
+      </label>
+      <label class="field">
+        <span>運用時間</span>
+        <select id="contest-minutes">
+          <option value="3">3 分</option>
+          <option value="5" selected>5 分</option>
+          <option value="10">10 分</option>
+          <option value="30">30 分</option>
+          <option value="60">60 分</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>アクティビティ（同時に呼ぶ局数）</span>
+        <input type="range" id="contest-activity" min="1" max="9" step="1">
+        <output id="contest-activity-out"></output>
+      </label>
+      <label class="field">
+        <span>自局が送るナンバー（JARL 形式のとき）</span>
+        <input type="text" id="contest-mynumber" autocapitalize="characters" placeholder="13H">
+      </label>
+    </div>
+    <p class="hint" id="contest-exchange-help"></p>
+    <label class="check">
+      <input type="checkbox" id="contest-flutter">
+      <span>フラッター（信号のざらつき）を入れる</span>
+    </label>
+    <p class="hint">
+      QRN・QSB・QRM の強さは「設定・記録」タブで調整できます。
+      現在: QRN <strong id="contest-cond">—</strong>
+    </p>
+    <div class="turn-actions">
+      <button type="button" class="btn btn-primary" id="btn-contest-start">運用開始</button>
+      <button type="button" class="btn btn-ghost" id="btn-contest-stop" disabled>終了</button>
+    </div>
+  </div>
+
+  <div class="contest-run" id="contest-run" hidden>
+    <div class="card score-board">
+      <div class="stat-grid" id="contest-score"></div>
+    </div>
+
+    <div class="card">
+      <div class="entry-row">
+        <label class="field">
+          <span>コールサイン</span>
+          <input type="text" id="contest-call" autocomplete="off" autocapitalize="characters"
+                 spellcheck="false" placeholder="JA1ABC">
+        </label>
+        <label class="field">
+          <span>受信ナンバー</span>
+          <input type="text" id="contest-exch" autocomplete="off" autocapitalize="characters"
+                 spellcheck="false" placeholder="001">
+        </label>
+      </div>
+
+      <div class="fkeys" id="contest-fkeys">
+        <button type="button" class="btn fkey" data-fn="cq"><b>F1</b> CQ</button>
+        <button type="button" class="btn fkey" data-fn="exchange"><b>F2</b> ナンバー送信</button>
+        <button type="button" class="btn fkey" data-fn="confirm"><b>F3</b> TU（確定）</button>
+        <button type="button" class="btn fkey" data-fn="myCall"><b>F4</b> 自局コール</button>
+        <button type="button" class="btn fkey" data-fn="hisCall"><b>F5</b> 相手コール</button>
+        <button type="button" class="btn fkey" data-fn="question"><b>F7</b> ?</button>
+        <button type="button" class="btn fkey" data-fn="again"><b>F8</b> AGN?</button>
+      </div>
+      <p class="hint">
+        <kbd>Enter</kbd> はナンバー送信（F2）、コールサイン欄が埋まった状態での 2 回目は確定（F3）に相当します。
+        <kbd>Esc</kbd> で入力欄を消去します。
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>交信ログ</h3>
+      <div class="contest-log" id="contest-log"></div>
+    </div>
+  </div>
+
+  <div class="card" id="contest-result" hidden></div>
+</section>
+
+<!-- ═══════════════ パドル送信（エレクトロニックキーヤー） ═══════════════ -->
+<section class="panel" id="panel-keyer" role="tabpanel">
+  <div class="panel-head">
+    <h2>パドル送信（エレクトロニックキーヤー）</h2>
+    <p class="lede">
+      マウスの<strong>左ボタンが短点</strong>、<strong>右ボタンが長点</strong>です。
+      パドルをクリック信号に変換して接続している場合は、そのまま握って打てます。
+      打った符号はその場で解読されるので、手本と見比べて確認できます。
+    </p>
+  </div>
+
+  <div class="card tutorial-card" id="tutorial">
+    <div class="tutorial-head">
+      <h3>チュートリアル</h3>
+      <div class="tutorial-head-right">
+        <span class="tutorial-count" id="tutorial-count"></span>
+        <button type="button" class="btn btn-ghost" id="btn-tutorial-toggle">たたむ</button>
+      </div>
+    </div>
+    <div class="tutorial-dots" id="tutorial-dots"></div>
+    <div id="tutorial-body">
+      <h4 id="tutorial-title"></h4>
+      <div class="tutorial-text" id="tutorial-text"></div>
+      <div class="tutorial-goal" id="tutorial-goal"></div>
+      <div class="turn-actions">
+        <button type="button" class="btn" id="btn-tutorial-prev">戻る</button>
+        <button type="button" class="btn btn-primary" id="btn-tutorial-next">次へ</button>
+        <button type="button" class="btn btn-ghost" id="btn-tutorial-retry">この課題をやり直す</button>
+        <button type="button" class="btn btn-ghost" id="btn-tutorial-sample">今の設定で試聴</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>課題</h3>
+    <div class="field-row">
+      <label class="field">
+        <span>種類</span>
+        <select id="keyer-task-type">
+          <option value="free">自由練習（手本なし）</option>
+          <option value="callsign">コールサイン</option>
+          <option value="abbrev">略語・Q 符号</option>
+          <option value="word">頻出単語</option>
+          <option value="phrase">交信の定型文</option>
+        </select>
+      </label>
+      <button type="button" class="btn" id="btn-keyer-task">新しい課題</button>
+      <button type="button" class="btn btn-ghost" id="btn-keyer-listen" disabled>手本を聞く</button>
+    </div>
+    <div class="tx-preview" id="keyer-task-text">自由練習モードです。好きな符号を打ってください。</div>
+  </div>
+
+  <div class="paddle-pad" id="keyer-pad" tabindex="0">
+    <div class="paddle-lamps">
+      <span class="lamp" id="lamp-dit">・ 短点 / 左</span>
+      <span class="lamp" id="lamp-dah">－ 長点 / 右</span>
+    </div>
+    <p class="pad-hint">ここをクリック（またはキーボードの <kbd>Z</kbd> / <kbd>X</kbd>）で打電</p>
+    <div class="pad-elements" id="keyer-elements"></div>
+  </div>
+
+  <div class="card">
+    <h3>解読結果</h3>
+    <div class="keyed-text" id="keyer-decoded"><span class="empty">まだ何も打っていません。</span></div>
+    <div class="turn-actions">
+      <button type="button" class="btn btn-primary" id="btn-keyer-grade">採点する</button>
+      <button type="button" class="btn btn-ghost" id="btn-keyer-clear">消去</button>
+    </div>
+    <div id="keyer-result"></div>
+  </div>
+  <div class="card">
+    <div class="field-grid">
+      <label class="field">
+        <span>キーヤーモード</span>
+        <select id="keyer-mode"></select>
+      </label>
+      <label class="field">
+        <span>ウェイト（マーク比）</span>
+        <input type="range" id="keyer-weight" min="35" max="65" step="1">
+        <output id="keyer-weight-out"></output>
+      </label>
+      <label class="field">
+        <span>送信速度</span>
+        <input type="range" id="keyer-wpm" min="5" max="45" step="1">
+        <output id="keyer-wpm-out"></output>
+      </label>
+    </div>
+    <p class="hint" id="keyer-mode-help"></p>
+    <label class="check">
+      <input type="checkbox" id="keyer-swap">
+      <span>左右を入れ替える（左ボタンを長点にする）</span>
+    </label>
+    <label class="check">
+      <input type="checkbox" id="keyer-global">
+      <span>画面全体でパドル入力を受け付ける（このタブを開いている間のみ・ボタンや入力欄の上は除く）</span>
+    </label>
+  </div>
+
+</section>
+
+<!-- ═══════════════ 変換・電鍵 ═══════════════ -->
+<section class="panel" id="panel-tools" role="tabpanel">
+  <div class="panel-head">
+    <h2>変換・電鍵</h2>
+    <p class="lede">任意の文章をモールスに変換して聞いたり、電鍵の代わりに自分で打って音を確かめたりできます。</p>
+  </div>
+
+  <div class="card">
+    <h3>文章をモールスで聞く</h3>
+    <label class="answer-field">
+      <span>本文（<code>&lt;AR&gt;</code> <code>&lt;SK&gt;</code> などのプロサインも使えます）</span>
+      <textarea id="tool-text" rows="3" spellcheck="false">CQ CQ CQ DE JA1ABC JA1ABC K</textarea>
+    </label>
+    <div class="drill-actions">
+      <button type="button" class="btn btn-primary" id="btn-tool-play">再生</button>
+      <button type="button" class="btn btn-ghost" id="btn-tool-stop">停止</button>
+      <span class="hint" id="tool-duration"></span>
+    </div>
+    <div class="morse-out" id="tool-morse"></div>
+
+    <h4>解説つき本文</h4>
+    <p class="hint">色の付いた語にはマウスを乗せると意味が出ます。再生すると送信中の語を順に解説します。</p>
+    <label class="beginner-toggle" style="margin-bottom:.7rem">
+      <input type="checkbox" class="js-beginner">
+      <span>初心者モード（リアルタイム解説）</span>
+    </label>
+    <div class="annotated" id="tool-annotated"></div>
+    <div class="explain-live" id="tool-explain"></div>
+  </div>
+
+  <div class="card">
+    <h3>電鍵の練習</h3>
+    <p class="hint">ボタンを押している間、またはスペースキーを押している間だけ側音が鳴ります。短点 1 に対し長点 3 の長さが目安です。</p>
+    <button type="button" class="btn btn-key" id="btn-key">押して送信</button>
+  </div>
+</section>
+
+<!-- ═══════════════ 略語集 ═══════════════ -->
+<section class="panel" id="panel-glossary" role="tabpanel">
+  <div class="panel-head">
+    <h2>略語・Q 符号集</h2>
+    <p class="lede">行をクリックするとその符号を音で確認できます。</p>
+  </div>
+
+  <div class="card">
+    <label class="answer-field">
+      <span>絞り込み</span>
+      <input type="search" id="glossary-search" placeholder="QTH / 天気 など" autocomplete="off">
+    </label>
+    <div class="glossary" id="glossary-list"></div>
+  </div>
+</section>
+
+<!-- ═══════════════ 設定・記録 ═══════════════ -->
+<section class="panel" id="panel-settings" role="tabpanel">
+  <div class="panel-head">
+    <h2>設定・記録</h2>
+  </div>
+
+  <div class="card">
+    <h3>自局の情報</h3>
+    <p class="hint">交信シミュレーターで自分が送信する内容に使われます。</p>
+    <div class="field-grid">
+      <label class="field"><span>コールサイン</span><input type="text" id="set-callsign" autocapitalize="characters"></label>
+      <label class="field"><span>名前 (NAME)</span><input type="text" id="set-name" autocapitalize="characters"></label>
+      <label class="field"><span>QTH</span><input type="text" id="set-qth" autocapitalize="characters"></label>
+      <label class="field"><span>リグ (RIG)</span><input type="text" id="set-rig" autocapitalize="characters"></label>
+      <label class="field"><span>出力 (PWR)</span><input type="text" id="set-pwr" autocapitalize="characters"></label>
+      <label class="field"><span>アンテナ (ANT)</span><input type="text" id="set-ant" autocapitalize="characters"></label>
+      <label class="field"><span>天気 (WX)</span><input type="text" id="set-wx" autocapitalize="characters"></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>音の設定</h3>
+    <div class="field-grid">
+      <label class="field">
+        <span>側音の高さ</span>
+        <input type="range" id="set-freq" min="400" max="1000" step="10">
+        <output id="set-freq-out"></output>
+      </label>
+      <label class="field">
+        <span>空電 QRN</span>
+        <input type="range" id="set-qrn" min="0" max="100" step="1">
+        <output id="set-qrn-out"></output>
+      </label>
+      <label class="field">
+        <span>フェージング QSB</span>
+        <input type="range" id="set-qsb" min="0" max="100" step="1">
+        <output id="set-qsb-out"></output>
+      </label>
+      <label class="field">
+        <span>混信 QRM</span>
+        <input type="range" id="set-qrm" min="0" max="100" step="1">
+        <output id="set-qrm-out"></output>
+      </label>
+    </div>
+    <label class="check">
+      <input type="checkbox" id="set-showtext">
+      <span>再生中に本文を表示する（答えが見えます）</span>
+    </label>
+    <label class="check">
+      <input type="checkbox" id="set-beginner">
+      <span>初心者モード: 送信中の Q 符号・略語をリアルタイムで解説する</span>
+    </label>
+    <p class="hint">
+      初心者モードは受信中も語の意味を表示するため、聞き取りの答えが部分的に見えます。
+      実力を試すときはオフにしてください。
+    </p>
+  </div>
+
+  <div class="card">
+    <h3>学習の記録</h3>
+    <div class="stat-grid" id="stat-summary"></div>
+    <h4>苦手な文字</h4>
+    <div class="weak-chars" id="weak-chars"></div>
+    <h4>最近の練習</h4>
+    <div class="history" id="history-list"></div>
+    <button type="button" class="btn btn-ghost" id="btn-reset-stats">記録を消去する</button>
+  </div>
+</section>
+
+</main>
+
+<footer class="app-footer">
+  <p>
+    ブラウザだけで動作します。設定と記録はこの端末の中だけに保存されます。
+    着想元: <a href="https://www.fbnews.jp/202408/special2/index.html" rel="noopener" target="_blank">FB NEWS「生成AIとCWで交信practice」</a>
+  </p>
+</footer>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
