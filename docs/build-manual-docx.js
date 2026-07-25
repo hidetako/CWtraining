@@ -195,6 +195,32 @@ function build(markdown) {
       continue;
     }
 
+    // ``` で囲まれたコードブロック。中身は解釈せず、改行をそのまま保つ
+    if (trimmed.startsWith('```')) {
+      flushAll();
+      i += 1;
+      const code = [];
+      while (i < lines.length && !lines[i].trim().startsWith('```')) {
+        code.push(lines[i]);
+        i += 1;
+      }
+      i += 1;   // 閉じる側のフェンスを読み飛ばす
+
+      code.forEach((ln, n) => children.push(new Paragraph({
+        shading: { type: ShadingType.CLEAR, fill: CODE_BG },
+        border: { left: { style: BorderStyle.SINGLE, size: 12, color: RULE, space: 8 } },
+        indent: { left: 200, right: 200 },
+        spacing: {
+          before: n === 0 ? 120 : 0,
+          after: n === code.length - 1 ? 200 : 0,
+          line: 280,
+        },
+        children: [new TextRun({ text: ln || ' ', font: MONO, size: 19 })],
+      })));
+      prevWasOrdered = false;
+      continue;
+    }
+
     i += 1;
 
     if (!trimmed) { flushAll(); prevWasOrdered = false; continue; }
@@ -230,6 +256,25 @@ function build(markdown) {
           children: inline(text),
         }));
       }
+      prevWasOrdered = false;
+      continue;
+    }
+
+    // 引用（> で始まる補足）
+    const quote = trimmed.match(/^>\s?(.*)$/);
+    if (quote) {
+      flushAll();
+      const quoted = [quote[1]];
+      while (i < lines.length && /^>\s?/.test(lines[i].trim())) {
+        quoted.push(lines[i].trim().replace(/^>\s?/, ''));
+        i += 1;
+      }
+      children.push(new Paragraph({
+        border: { left: { style: BorderStyle.SINGLE, size: 12, color: ACCENT, space: 10 } },
+        indent: { left: 220 },
+        spacing: { before: 120, after: 200, line: 320 },
+        children: inline(joinLines(quoted), { italics: true, color: '555555' }),
+      }));
       prevWasOrdered = false;
       continue;
     }
