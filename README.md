@@ -15,6 +15,15 @@ FB NEWS の記事「[生成AIとCWで交信practice](https://www.fbnews.jp/20240
 習熟度別のおすすめ順路、各タブの操作、キーボード操作の一覧、
 困ったときの対処が載っています。
 
+配布用の Word 版も同梱しています
+（[CW交信トレーニング_使い方説明書.docx](docs/CW交信トレーニング_使い方説明書.docx)、A4 20 ページ）。
+本文は Markdown 版が原本で、Word 版は次のコマンドで生成し直せます。
+
+```bash
+npm install docx
+node docs/build-manual-docx.js
+```
+
 ### ローカルで動かす
 
 ES モジュールを使っているため、`file://` で直接開くとブラウザに読み込みを拒否されます。
