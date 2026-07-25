@@ -54,11 +54,28 @@
     <h2>交信シミュレーター</h2>
     <p class="lede">
       相手局を呼び出してから <code>73</code> で終わるまで、ラバースタンプ QSO を一通り体験します。
-      相手の送信を聞き取り、ログシートに書き取ってください。
+      まずは型を覚えるガイド付きで進め、慣れてきたら聞き取りの実力試しに切り替えてください。
     </p>
   </div>
 
   <div class="card setup-card" id="qso-setup">
+    <div class="style-picker" id="qso-style">
+      <button type="button" class="style-option is-active" data-style="guided">
+        <span class="style-name">ガイド付き模擬交信</span>
+        <span class="style-desc">
+          型を覚える段階向け。各段階で「何を・なぜ送るのか」を説明し、
+          返事を選択肢から選びます。相手の反応の読み方も解説します。
+        </span>
+      </button>
+      <button type="button" class="style-option" data-style="copy">
+        <span class="style-name">聞き取り練習</span>
+        <span class="style-desc">
+          型を覚えた後の実力試し。相手の送信を聞き取り、
+          ログシートに書き取って採点します。
+        </span>
+      </button>
+    </div>
+
     <div class="field-row">
       <label class="field">
         <span>進め方</span>
@@ -75,6 +92,10 @@
           <option value="long">長い（＋天気・気温）</option>
         </select>
       </label>
+      <label class="field">
+        <span>相手の反応</span>
+        <select id="qso-reaction"></select>
+      </label>
       <button type="button" class="btn btn-primary" id="btn-qso-start">交信開始</button>
     </div>
     <p class="hint">
@@ -85,6 +106,18 @@
       <input type="checkbox" class="js-beginner">
       <span>初心者モード（Q 符号・略語をリアルタイム解説）</span>
     </label>
+  </div>
+
+  <div class="card pattern-card" id="pattern-card">
+    <div class="tutorial-head">
+      <h3>ラバースタンプ交信の型</h3>
+      <button type="button" class="btn btn-ghost" id="btn-pattern-toggle">開く</button>
+    </div>
+    <p class="hint">
+      定型的な交信の流れです。この順序と決まり文句を覚えてしまえば、
+      あとは相手が変わるだけで中身はほぼ同じです。
+    </p>
+    <div id="pattern-body" hidden></div>
   </div>
 
   <div class="qso-stage" id="qso-stage" hidden>

@@ -29,6 +29,8 @@ export const DEFAULT_SETTINGS = {
   groupCount: 5,
   qsoMode: 'cq',
   qsoLength: 'normal',
+  qsoStyle: 'guided',      // 'guided'（型を覚える）| 'copy'（聞き取り試験）
+  qsoReaction: 'normal',   // 相手の反応のゆらぎ
   showText: false,      // 送信中に本文を表示するか
   beginnerMode: true,   // Q 符号・略語の解説をリアルタイムで出すか
 
@@ -203,8 +205,8 @@ export function recordKeying(stats, { correct, total, target, wpm }) {
 export function recordContest(stats, { score, minutes, exchange }) {
   if (!stats.contest) stats.contest = { sessions: 0, qsos: 0, valid: 0, bestRate: 0 };
   stats.contest.sessions += 1;
-  stats.contest.qsos += score.raw;
-  stats.contest.valid += score.valid;
+  stats.contest.qsos += score.rawPoints ?? 0;
+  stats.contest.valid += score.points ?? 0;
   stats.contest.bestRate = Math.max(stats.contest.bestRate, score.rate ?? 0);
 
   pushHistory(stats, {
@@ -213,7 +215,7 @@ export function recordContest(stats, { score, minutes, exchange }) {
     minutes,
     rate: score.rate ?? 0,
     accuracy: score.accuracy,
-    total: score.raw,
+    total: score.rawPoints ?? 0,
     at: Date.now(),
   });
   return stats;

@@ -281,6 +281,137 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 }
 .morse-out .cur { background: var(--accent); color: #1a1205; border-radius: 3px; }
 
+/* ───────── 練習スタイルの選択 ───────── */
+.style-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: .7rem;
+  margin-bottom: 1.2rem;
+}
+.style-option {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  text-align: left;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: .8rem .9rem;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+.style-option:hover { border-color: var(--accent-dim); }
+.style-option.is-active { border-color: var(--accent); background: #1b1509; }
+.style-name { font-weight: 700; font-size: .92rem; }
+.style-option.is-active .style-name { color: var(--accent); }
+.style-desc { font-size: .78rem; color: var(--text-dim); line-height: 1.6; }
+
+/* ───────── 型の早見表 ───────── */
+.pattern-card .tutorial-head { margin-bottom: .3rem; }
+
+.pattern-step {
+  border-left: 3px solid var(--line);
+  padding: .2rem 0 .2rem .9rem;
+  margin: 1rem 0;
+}
+.pattern-step.who-me { border-left-color: var(--tx); }
+.pattern-step.who-dx { border-left-color: var(--rx); }
+
+.pattern-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+.pattern-title { font-weight: 700; font-size: .88rem; }
+.pattern-who {
+  font-size: .68rem;
+  font-weight: 700;
+  padding: .1rem .5rem;
+  border-radius: 99px;
+  letter-spacing: .06em;
+}
+.who-me .pattern-who { background: #16331a; color: var(--tx); }
+.who-dx .pattern-who { background: #10303f; color: var(--rx); }
+
+.pattern-example {
+  font-family: var(--mono);
+  font-size: .82rem;
+  background: var(--bg-sunken);
+  border-radius: 6px;
+  padding: .55rem .7rem;
+  margin: .5rem 0;
+  word-break: break-word;
+  line-height: 1.8;
+}
+.pattern-parts { display: grid; gap: .2rem; }
+.pattern-part { display: grid; grid-template-columns: minmax(6.5em, auto) 1fr; gap: .7rem; font-size: .78rem; }
+.pattern-part code { background: none; padding: 0; color: var(--accent); }
+.pattern-part span { color: var(--text-dim); }
+
+/* ───────── ガイド付き模擬交信 ───────── */
+.phase-banner {
+  display: flex;
+  align-items: baseline;
+  gap: .7rem;
+  flex-wrap: wrap;
+  background: var(--bg-sunken);
+  border-radius: 8px;
+  padding: .6rem .8rem;
+  margin-bottom: .9rem;
+}
+.phase-step { font-family: var(--mono); font-size: .72rem; color: var(--text-dim); }
+.phase-name { font-weight: 700; color: var(--accent); font-size: .9rem; }
+.phase-purpose { font-size: .8rem; color: var(--text-dim); flex-basis: 100%; }
+
+.guide-tip {
+  border-left: 3px solid var(--rx);
+  background: #10222b;
+  border-radius: 6px;
+  padding: .6rem .8rem;
+  font-size: .82rem;
+  color: var(--text-dim);
+  margin: .9rem 0;
+}
+.guide-tip strong { color: var(--text); }
+
+.choices { display: grid; gap: .6rem; margin: 1rem 0; }
+.choice {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: .7rem .85rem;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: .84rem;
+  color: var(--text);
+  line-height: 1.8;
+  word-break: break-word;
+}
+.choice:hover:not(:disabled) { border-color: var(--accent-dim); }
+.choice:disabled { cursor: default; }
+.choice.is-correct { border-color: var(--ok); background: #12281a; }
+.choice.is-wrong { border-color: var(--ng); background: #2b1416; }
+.choice .verdict {
+  display: block;
+  font-family: system-ui, sans-serif;
+  font-size: .78rem;
+  margin-top: .45rem;
+  line-height: 1.7;
+}
+.choice.is-correct .verdict { color: var(--ok); }
+.choice.is-wrong .verdict { color: var(--ng); }
+
+.reaction-note {
+  border-left: 3px solid var(--accent);
+  background: #241a09;
+  border-radius: 6px;
+  padding: .7rem .85rem;
+  margin: .9rem 0;
+  font-size: .84rem;
+}
+.reaction-note .rlabel { font-weight: 700; color: var(--accent); display: block; margin-bottom: .3rem; }
+.reaction-note .rwhat { color: var(--text-dim); display: block; margin-top: .35rem; }
+
 /* ───────── 初心者向け解説 ───────── */
 .annotated {
   font-family: var(--mono);

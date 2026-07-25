@@ -5,7 +5,8 @@ import { toMorseString, estimateDuration, tokenize } from './morse.js';
 import { ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER } from './data.js';
 import { annotateHtml, createTracker, explainText } from './explain.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
-import { LocalResponder, gradeField } from './qso.js';
+import { LocalResponder, gradeField, REACTION_LABELS } from './qso.js';
+import { PHASES, PATTERN_SHEET, makeReplyOptions, readDxTurn } from './qsoguide.js';
 import { ElectronicKeyer, KEYER_MODES, attachPaddleInput, compareSending } from './keyer.js';
 import { ContestRunner, EXCHANGE_TYPES, RUN_MODES } from './contest.js';
 import {
@@ -150,15 +151,75 @@ function initQso() {
   $('#qso-mode').value = settings.qsoMode;
   $('#qso-length').value = settings.qsoLength;
 
+  const reactionSel = $('#qso-reaction');
+  reactionSel.innerHTML = Object.entries(REACTION_LABELS)
+    .map(([key, label]) => `<option value="${key}">${label}</option>`).join('');
+  reactionSel.value = settings.qsoReaction;
+
   $('#qso-mode').addEventListener('change', (e) => {
     settings.qsoMode = e.target.value; persist();
   });
   $('#qso-length').addEventListener('change', (e) => {
     settings.qsoLength = e.target.value; persist();
   });
+  reactionSel.addEventListener('change', (e) => {
+    settings.qsoReaction = e.target.value; persist();
+  });
 
+  $('#qso-style').addEventListener('click', (e) => {
+    const btn = e.target.closest('.style-option');
+    if (!btn) return;
+    settings.qsoStyle = btn.dataset.style;
+    persist();
+    syncQsoStyle();
+  });
+
+  $('#btn-pattern-toggle').addEventListener('click', () => {
+    const body = $('#pattern-body');
+    body.hidden = !body.hidden;
+    $('#btn-pattern-toggle').textContent = body.hidden ? '開く' : 'たたむ';
+  });
+
+  renderPatternSheet();
+  syncQsoStyle();
   $('#btn-qso-start').addEventListener('click', startQso);
   updateMyProfileLine();
+}
+
+function syncQsoStyle() {
+  $$('#qso-style .style-option').forEach((el) => {
+    el.classList.toggle('is-active', el.dataset.style === settings.qsoStyle);
+  });
+}
+
+/** 型の早見表を描く。自局・相手局のコールサインは実際の設定を当てはめる。 */
+function renderPatternSheet() {
+  const my = settings.callsign;
+  const dx = 'DL1ABC';
+
+  $('#pattern-body').innerHTML = PATTERN_SHEET.map((step) => {
+    const info = PHASES[step.phase] || {};
+    const who = step.who === '自分' ? 'me' : step.who === '相手' ? 'dx' : 'both';
+    const example = step.example.replaceAll('<MY>', my).replaceAll('<DX>', dx);
+
+    return `
+      <div class="pattern-step who-${who}">
+        <div class="pattern-head">
+          <span class="pattern-title">${escapeHtml(info.title || step.phase)}</span>
+          <span class="pattern-who">${escapeHtml(step.who)}</span>
+        </div>
+        <p class="hint" style="margin:.2rem 0">${escapeHtml(info.purpose || '')}</p>
+        <div class="pattern-example">${annotateHtml(example, escapeHtml)}</div>
+        <div class="pattern-parts">
+          ${step.parts.map(([code, meaning]) => `
+            <div class="pattern-part">
+              <code>${escapeHtml(code.replaceAll('<MY>', my).replaceAll('<DX>', dx))}</code>
+              <span>${escapeHtml(meaning)}</span>
+            </div>`).join('')}
+        </div>
+        ${info.tip ? `<p class="hint">${escapeHtml(info.tip)}</p>` : ''}
+      </div>`;
+  }).join('');
 }
 
 function updateMyProfileLine() {
@@ -171,9 +232,11 @@ async function startQso() {
   qso.script = await responder.buildScript(settings, {
     mode: settings.qsoMode,
     length: settings.qsoLength,
+    reaction: settings.qsoReaction,
   });
   qso.index = 0;
   qso.results = [];
+  qso.choices = [];
 
   $('#qso-stage').hidden = false;
   $('#qso-log').innerHTML = '';
@@ -201,6 +264,8 @@ function renderTurn() {
   if (!turn) return renderQsoSummary();
 
   qso.graded = false;
+
+  if (settings.qsoStyle === 'guided') return renderGuidedTurn(turn, box);
 
   if (turn.side === 'me') {
     box.innerHTML = `
@@ -282,6 +347,145 @@ function renderTurn() {
   playText(turn.text, '#qso-playing');
 }
 
+// ───────── ガイド付き模擬交信 ─────────
+
+/** 現在の段階を示す帯。 */
+function phaseBanner(turn) {
+  const info = PHASES[turn.phase] || {};
+  const total = qso.script.turns.length;
+  return `
+    <div class="phase-banner">
+      <span class="phase-step">${qso.index + 1} / ${total}</span>
+      <span class="phase-name">${escapeHtml(info.title || '')}</span>
+      <span class="turn-badge ${turn.side === 'me' ? 'tx' : 'rx'}">
+        ${turn.side === 'me' ? '自分が送信' : '相手が送信'}</span>
+      <span class="phase-purpose">${escapeHtml(info.purpose || '')}</span>
+    </div>`;
+}
+
+function renderGuidedTurn(turn, box) {
+  const info = PHASES[turn.phase] || {};
+
+  if (turn.side === 'dx') {
+    // 相手の送信は、聞かせてから中身と意味を明かす
+    box.innerHTML = `
+      ${phaseBanner(turn)}
+      <p class="hint">まず聞いてみてください。そのあと本文と意味を表示します。</p>
+      <div class="playing-char" id="qso-playing"></div>
+      <div class="explain-live" id="qso-explain"></div>
+      <div class="turn-actions">
+        <button type="button" class="btn" id="btn-guide-listen">もう一度聞く</button>
+        <button type="button" class="btn btn-primary" id="btn-guide-reveal">内容を見る</button>
+      </div>`;
+
+    const opts = { explainSelector: '#qso-explain' };
+    $('#btn-guide-listen').addEventListener('click', () => playText(turn.text, '#qso-playing', opts));
+    $('#btn-guide-reveal').addEventListener('click', () => revealDxTurn(turn, box));
+    playText(turn.text, '#qso-playing', opts);
+    return;
+  }
+
+  // 自分の送信は、選択肢から選ばせる
+  const options = makeReplyOptions(turn, qso.script);
+  qso.currentOptions = options;
+
+  box.innerHTML = `
+    ${phaseBanner(turn)}
+    ${info.tip ? `<div class="guide-tip"><strong>ここでのコツ</strong><br>${escapeHtml(info.tip)}</div>` : ''}
+    <p class="hint">この場面で送るべきものはどれでしょう。選ぶと理由を表示します。</p>
+    <div class="choices" id="qso-choices">
+      ${options.map((opt, i) => `
+        <button type="button" class="choice" data-index="${i}">
+          ${escapeHtml(opt.text)}
+        </button>`).join('')}
+    </div>`;
+
+  $('#qso-choices').addEventListener('click', (e) => {
+    const btn = e.target.closest('.choice');
+    if (btn) answerChoice(Number(btn.dataset.index), turn, box);
+  });
+}
+
+function answerChoice(index, turn, box) {
+  if (qso.graded) return;
+  qso.graded = true;
+
+  const options = qso.currentOptions;
+  const chosen = options[index];
+  qso.choices.push({ correct: !!chosen.correct, phase: turn.phase });
+
+  // どれがなぜ駄目なのかを学べるよう、全選択肢に理由を出す
+  $$('#qso-choices .choice').forEach((btn, i) => {
+    const opt = options[i];
+    btn.disabled = true;
+    btn.classList.add(opt.correct ? 'is-correct' : 'is-wrong');
+
+    const verdict = opt.correct
+      ? (i === index ? '正解。これが定型です。' : 'こちらが正しい送信でした。')
+      : `${i === index ? 'これを選びました。' : ''}${opt.why}`;
+    btn.insertAdjacentHTML('beforeend', `<span class="verdict">${escapeHtml(verdict)}</span>`);
+  });
+
+  const correctText = options.find((o) => o.correct).text;
+  box.insertAdjacentHTML('beforeend', `
+    <h4>実際に送る内容</h4>
+    <div class="annotated">${annotateHtml(correctText, escapeHtml)}</div>
+    <div class="playing-char" id="qso-playing"></div>
+    <div class="explain-live" id="qso-explain"></div>
+    <div class="turn-actions">
+      <button type="button" class="btn btn-primary" id="btn-guide-send">送信して次へ</button>
+      <button type="button" class="btn btn-ghost" id="btn-guide-skip">音を飛ばして次へ</button>
+    </div>`);
+
+  $('#btn-guide-send').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    await playText(correctText, '#qso-playing', {
+      explainSelector: '#qso-explain',
+      ...(turn.slow ? { charWpm: Math.max(8, settings.charWpm - 6), effWpm: Math.max(6, settings.effWpm - 4) } : {}),
+    });
+    advanceTurn({ ...turn, text: correctText }, { reveal: true });
+  });
+  $('#btn-guide-skip').addEventListener('click', () => {
+    player.stop();
+    advanceTurn({ ...turn, text: correctText }, { reveal: true });
+  });
+}
+
+/** 相手の送信内容を明かし、意味と次の一手を説明する。 */
+function revealDxTurn(turn, box) {
+  player.stop();
+  const reaction = readDxTurn(turn);
+  const isTwist = reaction.key !== 'normal';
+
+  box.innerHTML = `
+    ${phaseBanner(turn)}
+    <h4>相手が送ってきた内容</h4>
+    <div class="annotated">${annotateHtml(turn.text, escapeHtml)}</div>
+    <div class="playing-char" id="qso-playing"></div>
+
+    <div class="reaction-note">
+      <span class="rlabel">${escapeHtml(reaction.label)}</span>
+      ${escapeHtml(reaction.meaning)}
+      <span class="rwhat">→ ${escapeHtml(reaction.whatToDo)}</span>
+    </div>
+
+    ${turn.wrongCall ? `<p class="hint">
+      相手は <code>${escapeHtml(turn.wrongCall)}</code> と打っています。
+      あなたのコールサインは <code>${escapeHtml(qso.script.profile.callsign)}</code> です。</p>` : ''}
+
+    ${termListHtml(turn.text)}
+
+    <div class="turn-actions">
+      <button type="button" class="btn" id="btn-guide-relisten">もう一度聞く</button>
+      <button type="button" class="btn btn-primary" id="btn-guide-next">次へ</button>
+    </div>`;
+
+  $('#btn-guide-relisten').addEventListener('click', () => playText(turn.text, '#qso-playing'));
+  $('#btn-guide-next').addEventListener('click', () => advanceTurn(turn, { reveal: true }));
+
+  if (isTwist) qso.hadTwist = true;
+}
+
 function gradeTurn(turn, box) {
   if (qso.graded) return;
   qso.graded = true;
@@ -332,6 +536,8 @@ function advanceTurn(turn, opts) {
 }
 
 function renderQsoSummary() {
+  if (settings.qsoStyle === 'guided') return renderGuidedSummary();
+
   const total = qso.results.reduce((n, r) => n + r.total, 0);
   const correct = qso.results.reduce((n, r) => n + r.correct, 0);
   const pct = total ? Math.round((correct / total) * 100) : 100;
@@ -350,6 +556,45 @@ function renderQsoSummary() {
       <h3>交信終了 — ${escapeHtml(qso.script.station.callsign)}</h3>
       <div class="score">${pct}%</div>
       <p class="hint">書き取り ${correct} / ${total} 項目</p>
+    </div>
+    <div class="turn-actions" style="justify-content:center">
+      <button type="button" class="btn btn-primary" id="btn-qso-again">もう一局</button>
+    </div>`;
+
+  $('#btn-qso-again').addEventListener('click', startQso);
+}
+
+function renderGuidedSummary() {
+  const total = qso.choices.length;
+  const correct = qso.choices.filter((c) => c.correct).length;
+  const pct = total ? Math.round((correct / total) * 100) : 100;
+
+  stats = recordQso(stats, {
+    correct,
+    total,
+    station: qso.script.station.callsign,
+    wpm: settings.charWpm,
+  });
+  saveStats(stats);
+  renderStats();
+
+  const reaction = qso.script.reaction;
+  const twist = reaction && reaction !== 'normal'
+    ? `<p class="hint">今回の相手は「${escapeHtml(REACTION_LABELS[reaction] || reaction)}」でした。</p>`
+    : '';
+
+  $('#qso-turn').innerHTML = `
+    <div class="qso-summary">
+      <h3>交信終了 — ${escapeHtml(qso.script.station.callsign)}</h3>
+      <div class="score">${correct} / ${total}</div>
+      <p class="hint">送信の選択が正しかった回数（${pct}%）</p>
+      ${twist}
+    </div>
+    <div class="guide-tip">
+      <strong>次の一歩</strong><br>
+      型に慣れてきたら「相手の反応」を<em>おまかせ</em>にして、
+      聞き返しや取り違えへの対処も練習してください。
+      その後、上の「聞き取り練習」に切り替えると実力を試せます。
     </div>
     <div class="turn-actions" style="justify-content:center">
       <button type="button" class="btn btn-primary" id="btn-qso-again">もう一局</button>
@@ -1410,6 +1655,8 @@ function initSettings() {
       settings[key] = el.value.toUpperCase();
       persist();
       updateMyProfileLine();
+      // 早見表の例文にも自局のコールサインを反映する
+      if (key === 'callsign') renderPatternSheet();
     });
   });
 
@@ -1515,6 +1762,7 @@ window.__cw = {
   get stats() { return stats; },
   get qsoScript() { return qso.script; },
   get qsoTurn() { return qso.script?.turns[qso.index] ?? null; },
+  get qsoOptions() { return qso.currentOptions ?? null; },
   get drillProblem() { return drill.problem; },
   get keyerTask() { return paddle.task; },
 };
