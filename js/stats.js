@@ -36,7 +36,8 @@ export const DEFAULT_SETTINGS = {
   keyerMode: 'iambicB',
   keyerWeight: 50,
   keyerWpm: 20,
-  keyerSwap: false,
+  keyerHand: 'right',   // 'right' | 'left' — パドルを操作する手
+  keyerThumb: 'dit',    // 'dit' | 'dah'   — 親指側のレバーが出す要素
   keyerGlobal: false,
   keyerTaskType: 'callsign',
 
@@ -76,7 +77,38 @@ function write(key, value) {
 }
 
 export function loadSettings() {
-  return read(SETTINGS_KEY, DEFAULT_SETTINGS);
+  const settings = read(SETTINGS_KEY, DEFAULT_SETTINGS);
+
+  // 旧版の keyerSwap（左右入れ替えのチェックボックス）を利き手設定へ移行する
+  if (settings.keyerSwap != null && !settings.keyerHandMigrated) {
+    settings.keyerHand = settings.keyerSwap ? 'left' : 'right';
+    settings.keyerHandMigrated = true;
+    delete settings.keyerSwap;
+  }
+  return settings;
+}
+
+/**
+ * 利き手と親指の割り当てから、短点・長点をどちらのボタンに置くかを決める。
+ * 右手ではパドルの左レバー、左手では右レバーに親指が当たるため、
+ * 「親指＝短点」を保つには左手用で左右が入れ替わる。
+ * @returns {boolean} true なら左ボタンが長点（＝入れ替え）
+ */
+export function paddleSwapped({ keyerHand, keyerThumb }) {
+  const thumbOnRightButton = keyerHand === 'left';
+  const thumbSendsDah = keyerThumb === 'dah';
+  return thumbOnRightButton !== thumbSendsDah; // 排他的論理和
+}
+
+/** 現在の割り当てで、各ボタンがどちらの要素を出すかを返す。 */
+export function paddleAssignment(settings) {
+  const swapped = paddleSwapped(settings);
+  return {
+    swapped,
+    left: swapped ? 'dah' : 'dit',
+    right: swapped ? 'dit' : 'dah',
+    thumbButton: settings.keyerHand === 'left' ? 'right' : 'left',
+  };
 }
 
 export function saveSettings(settings) {

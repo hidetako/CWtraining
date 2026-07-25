@@ -249,8 +249,9 @@
   <div class="panel-head">
     <h2>パドル送信（エレクトロニックキーヤー）</h2>
     <p class="lede">
-      マウスの<strong>左ボタンが短点</strong>、<strong>右ボタンが長点</strong>です。
-      パドルをクリック信号に変換して接続している場合は、そのまま握って打てます。
+      パドルをマウスのクリック信号に変換して接続している環境向けです。そのまま握って打てます。
+      短点と長点の割り当ては<strong>利き手に合わせて切り替えられます</strong>（現在は
+      <strong id="keyer-hand-current">右手用</strong>）。
       打った符号はその場で解読されるので、手本と見比べて確認できます。
     </p>
   </div>
@@ -298,8 +299,8 @@
 
   <div class="paddle-pad" id="keyer-pad" tabindex="0">
     <div class="paddle-lamps">
-      <span class="lamp" id="lamp-dit">・ 短点 / 左</span>
-      <span class="lamp" id="lamp-dah">－ 長点 / 右</span>
+      <span class="lamp" id="lamp-left"></span>
+      <span class="lamp" id="lamp-right"></span>
     </div>
     <p class="pad-hint">ここをクリック（またはキーボードの <kbd>Z</kbd> / <kbd>X</kbd>）で打電</p>
     <div class="pad-elements" id="keyer-elements"></div>
@@ -330,11 +331,19 @@
         <input type="range" id="keyer-wpm" min="5" max="45" step="1">
         <output id="keyer-wpm-out"></output>
       </label>
+      <label class="field">
+        <span>利き手</span>
+        <select id="keyer-hand">
+          <option value="right">右手用</option>
+          <option value="left">左手用</option>
+        </select>
+      </label>
     </div>
     <p class="hint" id="keyer-mode-help"></p>
+    <p class="hint" id="keyer-hand-help"></p>
     <label class="check">
-      <input type="checkbox" id="keyer-swap">
-      <span>左右を入れ替える（左ボタンを長点にする）</span>
+      <input type="checkbox" id="keyer-thumb">
+      <span>親指側を長点にする（標準は親指＝短点）</span>
     </label>
     <label class="check">
       <input type="checkbox" id="keyer-global">

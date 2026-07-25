@@ -12,6 +12,7 @@ import { Tutorial, TUTORIAL_STEPS } from './tutorial.js';
 import {
   loadSettings, saveSettings, loadStats, saveStats, resetStats,
   recordDrill, recordQso, recordKeying, recordContest, weakChars,
+  paddleAssignment,
 } from './stats.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -805,20 +806,20 @@ function initKeyer() {
     modeSel.value = settings.keyerMode;
     $('#keyer-weight').value = settings.keyerWeight;
     $('#keyer-wpm').value = settings.keyerWpm;
-    $('#keyer-swap').checked = settings.keyerSwap;
+    $('#keyer-hand').value = settings.keyerHand;
+    $('#keyer-thumb').checked = settings.keyerThumb === 'dah';
     $('#keyer-global').checked = settings.keyerGlobal;
     weightOut.textContent = `${settings.keyerWeight}%`;
     wpmOut.textContent = `${settings.keyerWpm} WPM`;
     $('#keyer-mode-help').textContent = KEYER_MODES[settings.keyerMode]?.help || '';
-    $('#keyer-pad .pad-hint').innerHTML = settings.keyerSwap
-      ? '左ボタン＝長点／右ボタン＝短点（キーボードは <kbd>Z</kbd> / <kbd>X</kbd>）'
-      : '左ボタン＝短点／右ボタン＝長点（キーボードは <kbd>Z</kbd> / <kbd>X</kbd>）';
+
+    renderPaddleAssignment();
 
     keyer.setParams({
       mode: settings.keyerMode,
       wpm: settings.keyerWpm,
       weight: settings.keyerWeight,
-      swap: settings.keyerSwap,
+      swap: paddleAssignment(settings).swapped,
     });
   };
 
@@ -834,8 +835,12 @@ function initKeyer() {
   $('#keyer-wpm').addEventListener('input', (e) => {
     settings.keyerWpm = Number(e.target.value); persist(); syncKeyer(); touched('keyerWpm');
   });
-  $('#keyer-swap').addEventListener('change', (e) => {
-    settings.keyerSwap = e.target.checked; persist(); syncKeyer(); touched('keyerSwap');
+  $('#keyer-hand').addEventListener('change', (e) => {
+    settings.keyerHand = e.target.value; persist(); syncKeyer(); touched('keyerHand');
+  });
+  $('#keyer-thumb').addEventListener('change', (e) => {
+    settings.keyerThumb = e.target.checked ? 'dah' : 'dit';
+    persist(); syncKeyer(); touched('keyerThumb');
   });
   $('#keyer-global').addEventListener('change', (e) => {
     settings.keyerGlobal = e.target.checked;
@@ -983,6 +988,28 @@ function checkTutorial() {
   }
 }
 
+/** 利き手設定に応じて、ランプ・説明文・パッドの案内をまとめて描き直す。 */
+function renderPaddleAssignment() {
+  const map = paddleAssignment(settings);
+  const label = (element) => (element === 'dit' ? '・ 短点' : '－ 長点');
+  const handName = settings.keyerHand === 'left' ? '左手用' : '右手用';
+
+  $('#lamp-left').textContent = `左ボタン ${label(map.left)}`;
+  $('#lamp-right').textContent = `右ボタン ${label(map.right)}`;
+  $('#keyer-hand-current').textContent = handName;
+
+  $('#keyer-pad .pad-hint').innerHTML =
+    `左ボタン＝${map.left === 'dit' ? '短点' : '長点'}／`
+    + `右ボタン＝${map.right === 'dit' ? '短点' : '長点'}`
+    + '（キーボードは <kbd>Z</kbd> / <kbd>X</kbd>）';
+
+  const thumbSide = map.thumbButton === 'right' ? '右' : '左';
+  const thumbElement = settings.keyerThumb === 'dah' ? '長点' : '短点';
+  $('#keyer-hand-help').textContent =
+    `${handName}では、パドルの${thumbSide}レバーに親指が当たります。`
+    + `親指＝${thumbElement}になるよう、${thumbSide}ボタンを${thumbElement}に割り当てています。`;
+}
+
 function renderKeyedText() {
   const box = $('#keyer-decoded');
   const pending = keyer.buffer;
@@ -1003,18 +1030,19 @@ function setPaddleActive(active) {
   if (!active) {
     keyer.stop();
     pad.classList.remove('is-active');
-    $('#lamp-dit')?.classList.remove('on');
-    $('#lamp-dah')?.classList.remove('on');
+    $('#lamp-left')?.classList.remove('on');
+    $('#lamp-right')?.classList.remove('on');
     return;
   }
 
   keyer.start();
   pad.classList.add('is-active');
+  // ランプは物理ボタンに対応させ、どちらの要素かはラベル側で示す
   paddle.detach = attachPaddleInput(keyer, pad, {
     global: settings.keyerGlobal,
     onState: (state) => {
-      $('#lamp-dit').classList.toggle('on', settings.keyerSwap ? state.right : state.left);
-      $('#lamp-dah').classList.toggle('on', settings.keyerSwap ? state.left : state.right);
+      $('#lamp-left').classList.toggle('on', state.left);
+      $('#lamp-right').classList.toggle('on', state.right);
     },
   });
 }
