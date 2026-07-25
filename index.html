@@ -150,23 +150,27 @@
   </div>
 </section>
 
-<!-- ═══════════════ コンテスト運用（パイルアップ） ═══════════════ -->
+<!-- ═══════════════ コンテスト運用 ═══════════════ -->
 <section class="panel" id="panel-contest" role="tabpanel">
   <div class="panel-head">
     <h2>コンテスト運用</h2>
     <p class="lede">
-      CQ を出すと複数局が同時に呼んできます。音程・速度・強さがそれぞれ違うので、
-      1 局を選んで取り、ナンバーを交換して確定します。操作はファンクションキーで行います。
+      CQ を出すと複数局が同時に呼んできます。相手は状態を持ったオペレーターとして動くので、
+      取り違えれば訂正を求め、待たせすぎれば諦めて去ります。操作はファンクションキーで行います。
     </p>
   </div>
 
   <div class="card" id="contest-setup">
     <div class="field-grid">
       <label class="field">
+        <span>運用モード</span>
+        <select id="contest-mode"></select>
+      </label>
+      <label class="field">
         <span>交換内容</span>
         <select id="contest-exchange"></select>
       </label>
-      <label class="field">
+      <label class="field" id="contest-minutes-field">
         <span>運用時間</span>
         <select id="contest-minutes">
           <option value="3">3 分</option>
@@ -176,28 +180,36 @@
           <option value="60">60 分</option>
         </select>
       </label>
-      <label class="field">
-        <span>アクティビティ（同時に呼ぶ局数）</span>
+      <label class="field" id="contest-activity-field">
+        <span>アクティビティ（呼ぶ局の多さ）</span>
         <input type="range" id="contest-activity" min="1" max="9" step="1">
         <output id="contest-activity-out"></output>
       </label>
       <label class="field">
-        <span>自局が送るナンバー（JARL 形式のとき）</span>
+        <span>自局が送るナンバー（JARL 形式）</span>
         <input type="text" id="contest-mynumber" autocapitalize="characters" placeholder="13H">
       </label>
     </div>
+    <p class="hint" id="contest-mode-help"></p>
     <p class="hint" id="contest-exchange-help"></p>
-    <label class="check">
-      <input type="checkbox" id="contest-flutter">
-      <span>フラッター（信号のざらつき）を入れる</span>
-    </label>
-    <p class="hint">
-      QRN・QSB・QRM の強さは「設定・記録」タブで調整できます。
-      現在: QRN <strong id="contest-cond">—</strong>
-    </p>
+
+    <h4>バンドコンディション</h4>
+    <div class="cond-grid" id="contest-conditions">
+      <label class="check"><input type="checkbox" id="cond-qrn"><span>QRN（空電）</span></label>
+      <label class="check"><input type="checkbox" id="cond-qrm"><span>QRM（他局の混信）</span></label>
+      <label class="check"><input type="checkbox" id="cond-qsb"><span>QSB（フェージング）</span></label>
+      <label class="check"><input type="checkbox" id="cond-flutter"><span>フラッター</span></label>
+      <label class="check"><input type="checkbox" id="cond-lids"><span>LID（下手な運用者）</span></label>
+    </div>
+    <p class="hint" id="contest-cond-note"></p>
+
     <div class="turn-actions">
       <button type="button" class="btn btn-primary" id="btn-contest-start">運用開始</button>
       <button type="button" class="btn btn-ghost" id="btn-contest-stop" disabled>終了</button>
+      <label class="check" style="margin:0">
+        <input type="checkbox" id="contest-record">
+        <span>この運用を録音する</span>
+      </label>
     </div>
   </div>
 
@@ -226,12 +238,37 @@
         <button type="button" class="btn fkey" data-fn="confirm"><b>F3</b> TU（確定）</button>
         <button type="button" class="btn fkey" data-fn="myCall"><b>F4</b> 自局コール</button>
         <button type="button" class="btn fkey" data-fn="hisCall"><b>F5</b> 相手コール</button>
+        <button type="button" class="btn fkey" data-fn="b4"><b>F6</b> QSO B4</button>
         <button type="button" class="btn fkey" data-fn="question"><b>F7</b> ?</button>
-        <button type="button" class="btn fkey" data-fn="again"><b>F8</b> AGN?</button>
+        <button type="button" class="btn fkey" data-fn="again"><b>F8</b> NR?</button>
       </div>
+
+      <div class="rx-controls">
+        <label class="field">
+          <span>RIT（同調ずれ）</span>
+          <input type="range" id="contest-rit" min="-500" max="500" step="10" value="0">
+          <output id="contest-rit-out">0 Hz</output>
+        </label>
+        <label class="field">
+          <span>受信帯域幅</span>
+          <select id="contest-bandwidth">
+            <option value="2000">広い 2000 Hz</option>
+            <option value="1000">普通 1000 Hz</option>
+            <option value="500" selected>狭い 500 Hz</option>
+            <option value="250">とても狭い 250 Hz</option>
+            <option value="100">極狭 100 Hz</option>
+          </select>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="contest-qsk">
+          <span>QSK（送信中も受信音を聞く）</span>
+        </label>
+      </div>
+
       <p class="hint">
-        <kbd>Enter</kbd> はナンバー送信（F2）、コールサイン欄が埋まった状態での 2 回目は確定（F3）に相当します。
-        <kbd>Esc</kbd> で入力欄を消去します。
+        <kbd>Enter</kbd> 状況に応じて F2 / F3　<kbd>Space</kbd> コールサインを補完　
+        <kbd>Tab</kbd> 入力欄の移動　<kbd>Esc</kbd> 送信を止めて入力欄を消去　
+        <kbd>↑</kbd><kbd>↓</kbd> RIT を回す
       </p>
     </div>
 

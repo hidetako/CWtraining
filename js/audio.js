@@ -18,6 +18,9 @@ export class CWPlayer {
       qrn: 0,        // 空電ノイズ 0..1
       qsb: 0,        // フェージング 0..1
       qrm: 0,        // 混信 0..1
+      bandwidth: 500, // 受信帯域幅 Hz
+      rit: 0,        // RIT 同調ずれ Hz
+      qsk: true,     // セミブレークイン（送信中も受信音を聞く）
     };
     this._playId = 0;
     this._timers = [];
@@ -57,21 +60,37 @@ export class CWPlayer {
     this.qsbDepth.connect(this.qsbGain.gain);
     this.qsbLfo.start();
 
-    // 空電（QRN）: ホワイトノイズを側音付近のバンドパスに通す
+    // ── 受信系 ──
+    // 受信音（相手局・空電）は受信帯域フィルタを通す。自局の側音は通さない。
+    // これにより、帯域を絞ると帯域外の局が減衰し、RIT で各局の音程が動く。
+    this.rxGain = ctx.createGain();   // QSK オフのとき送信中にここを絞る
+    this.rxGain.gain.value = 1;
+    this.rxGain.connect(this.master);
+
+    // 単段では肩が緩いので、バンドパスを 2 段重ねて CW フィルタらしい切れにする
+    this.rxFilters = [ctx.createBiquadFilter(), ctx.createBiquadFilter()];
+    this.rxFilters.forEach((f) => { f.type = 'bandpass'; });
+    this.rxFilters[0].connect(this.rxFilters[1]);
+    this.rxFilters[1].connect(this.rxGain);
+
+    this.rxBus = ctx.createGain();
+    this.rxBus.gain.value = 1;
+    this.rxBus.connect(this.rxFilters[0]);
+
+    // 自局側音のバス。受信フィルタも RIT も影響しない
+    this.txBus = ctx.createGain();
+    this.txBus.gain.value = 1;
+    this.txBus.connect(this.master);
+
+    // 空電（QRN）: ホワイトノイズも受信フィルタを通す
     this.noiseGain = ctx.createGain();
     this.noiseGain.gain.value = 0;
-    this.noiseGain.connect(this.master);
-
-    this.noiseFilter = ctx.createBiquadFilter();
-    this.noiseFilter.type = 'bandpass';
-    this.noiseFilter.frequency.value = this.settings.freq;
-    this.noiseFilter.Q.value = 2.5;
-    this.noiseFilter.connect(this.noiseGain);
+    this.noiseGain.connect(this.rxBus);
 
     this.noiseSource = ctx.createBufferSource();
     this.noiseSource.buffer = this._makeNoiseBuffer();
     this.noiseSource.loop = true;
-    this.noiseSource.connect(this.noiseFilter);
+    this.noiseSource.connect(this.noiseGain);
     this.noiseSource.start();
 
     // 混信（QRM）: 側音から少しずれた周波数の別信号
@@ -101,9 +120,16 @@ export class CWPlayer {
     const now = this.ctx.currentTime;
 
     this.master.gain.setTargetAtTime(s.volume, now, 0.02);
-    this.noiseFilter.frequency.setTargetAtTime(s.freq, now, 0.02);
-    this.noiseGain.gain.setTargetAtTime(s.qrn * 0.12, now, 0.05);
+    this.noiseGain.gain.setTargetAtTime(s.qrn * 0.5, now, 0.05);
     this.qrmGain.gain.setTargetAtTime(s.qrm * 0.22, now, 0.05);
+
+    // バンドパスの Q は 中心周波数 / 帯域幅。帯域を絞るほど Q が上がる
+    const bw = Math.max(50, s.bandwidth);
+    const q = Math.max(0.3, s.freq / bw);
+    this.rxFilters.forEach((f) => {
+      f.frequency.setTargetAtTime(s.freq, now, 0.02);
+      f.Q.setTargetAtTime(q, now, 0.02);
+    });
 
     // 深さ d のとき振幅は (1 - 2d)〜1 の範囲で揺れる
     const depth = s.qsb * 0.45;
@@ -293,7 +319,8 @@ export class CWPlayer {
 
     osc.connect(keyGain);
     keyGain.connect(levelGain);
-    levelGain.connect(this.qsbGain);
+    // 相手局は受信フィルタ経由、自局の側音は素通し
+    levelGain.connect(opts.bus === 'tx' ? this.txBus : this.rxBus);
 
     // フラッター（極域伝搬などのざらついた信号）
     if (opts.flutter) {
@@ -360,6 +387,73 @@ export class CWPlayer {
         }
       },
     };
+  }
+
+  /**
+   * QSK オフのとき、自局の送信中は受信音を絞る（フルブレークインではない状態）。
+   * QSK オンならそのまま聞こえ続ける。
+   */
+  duckRx(fromTime, untilTime) {
+    if (!this.rxGain || this.settings.qsk) return;
+    const g = this.rxGain.gain;
+    g.cancelScheduledValues(fromTime);
+    g.setValueAtTime(1, Math.max(this.ctx.currentTime, fromTime - 0.01));
+    g.linearRampToValueAtTime(0.06, fromTime);
+    g.setValueAtTime(0.06, untilTime);
+    g.linearRampToValueAtTime(1, untilTime + 0.03);
+  }
+
+  /** 受信音の減衰を解除する（運用終了時など）。 */
+  releaseRx() {
+    if (!this.rxGain) return;
+    const now = this.ctx.currentTime;
+    this.rxGain.gain.cancelScheduledValues(now);
+    this.rxGain.gain.setTargetAtTime(1, now, 0.02);
+  }
+
+  // ───────── 運用の録音 ─────────
+
+  /** 出力をそのまま録音し始める。停止時に Blob を返す。 */
+  async startRecording() {
+    await this.resume();
+    if (this._recorder) return false;
+
+    const dest = this.ctx.createMediaStreamDestination();
+    this.master.connect(dest);
+
+    // 対応する形式を選ぶ。多くのブラウザでは WebM/Opus になる
+    const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+    const mimeType = types.find((t) => window.MediaRecorder?.isTypeSupported?.(t));
+    if (!window.MediaRecorder || !mimeType) {
+      this.master.disconnect(dest);
+      return false;
+    }
+
+    const chunks = [];
+    const recorder = new MediaRecorder(dest.stream, { mimeType });
+    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    recorder.start();
+    this._recorder = { recorder, chunks, dest, mimeType };
+    return true;
+  }
+
+  /** 録音を止めて Blob を返す。録音していなければ null。 */
+  stopRecording() {
+    const rec = this._recorder;
+    if (!rec) return Promise.resolve(null);
+    this._recorder = null;
+
+    return new Promise((resolve) => {
+      rec.recorder.onstop = () => {
+        try { this.master.disconnect(rec.dest); } catch { /* 既に切断済み */ }
+        resolve(new Blob(rec.chunks, { type: rec.mimeType }));
+      };
+      rec.recorder.stop();
+    });
+  }
+
+  get isRecording() {
+    return !!this._recorder;
   }
 
   // ───────── キーヤー用の常時接続ライン ─────────

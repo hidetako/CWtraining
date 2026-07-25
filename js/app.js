@@ -7,7 +7,10 @@ import { annotateHtml, createTracker, explainText } from './explain.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
 import { LocalResponder, gradeField } from './qso.js';
 import { ElectronicKeyer, KEYER_MODES, attachPaddleInput, compareSending } from './keyer.js';
-import { ContestRunner, EXCHANGE_TYPES } from './contest.js';
+import { ContestRunner, EXCHANGE_TYPES, RUN_MODES } from './contest.js';
+import {
+  QSO_ERROR, QSO_ERROR_LABEL, loadHighScores, saveHighScore,
+} from './contestlog.js';
 import { Tutorial, TUTORIAL_STEPS } from './tutorial.js';
 import {
   loadSettings, saveSettings, loadStats, saveStats, resetStats,
@@ -70,6 +73,9 @@ function applyAudioSettings() {
     qrn: settings.qrn / 100,
     qsb: settings.qsb / 100,
     qrm: settings.qrm / 100,
+    bandwidth: settings.bandwidth,
+    qsk: settings.qsk,
+    rit: settings.rit ?? 0,
   });
 }
 
@@ -566,38 +572,78 @@ function gradeCurrentProblem() {
 
 // ═══════════════════════════════════════════ コンテスト運用
 
+const CONDITION_KEYS = ['qrn', 'qrm', 'qsb', 'flutter', 'lids'];
+
 function initContest() {
+  const modeSel = $('#contest-mode');
+  modeSel.innerHTML = Object.entries(RUN_MODES)
+    .map(([key, v]) => `<option value="${key}">${v.label}</option>`).join('');
+
   const exchangeSel = $('#contest-exchange');
   exchangeSel.innerHTML = Object.entries(EXCHANGE_TYPES)
-    .map(([key, v]) => `<option value="${key}">${v.label}</option>`)
-    .join('');
+    .map(([key, v]) => `<option value="${key}">${v.label}</option>`).join('');
 
   const sync = () => {
+    modeSel.value = settings.contestMode;
     exchangeSel.value = settings.contestExchange;
     $('#contest-minutes').value = String(settings.contestMinutes);
     $('#contest-activity').value = settings.contestActivity;
     $('#contest-activity-out').textContent = `${settings.contestActivity} / 9`;
-    $('#contest-flutter').checked = settings.contestFlutter;
     $('#contest-mynumber').value = settings.contestMyNumber;
+    $('#contest-record').checked = settings.contestRecord;
+    $('#contest-mode-help').textContent = RUN_MODES[settings.contestMode]?.help || '';
     $('#contest-exchange-help').textContent = EXCHANGE_TYPES[settings.contestExchange]?.help || '';
-    $('#contest-cond').textContent =
-      `${settings.qrn}% / QSB ${settings.qsb}% / QRM ${settings.qrm}%`;
+    CONDITION_KEYS.forEach((k) => { $(`#cond-${k}`).checked = settings[condKey(k)]; });
+
+    // 競技モードは条件と時間が規定で決まるため、設定を触れなくする
+    const fixed = settings.contestMode === 'wpx' || settings.contestMode === 'hst';
+    $('#contest-minutes-field').hidden = fixed;
+    $('#contest-activity-field').hidden = settings.contestMode === 'single';
+    $$('#contest-conditions input').forEach((el) => { el.disabled = fixed; });
+    $('#contest-cond-note').textContent = fixed
+      ? (settings.contestMode === 'wpx'
+        ? 'WPX 競技では条件が固定されます（全条件あり・30 分・マルチはプリフィックス）。'
+        : 'HST 競技では妨害の無い理想的な条件で 10 分間行います。')
+      : 'LID は、呼び回しの割り込み・符号の打ち間違い・おかしな RST などを起こす局です。';
+
+    $('#contest-rit').value = String(settings.rit ?? 0);
+    $('#contest-rit-out').textContent = `${settings.rit ?? 0} Hz`;
+    $('#contest-bandwidth').value = String(settings.bandwidth);
+    $('#contest-qsk').checked = settings.qsk;
   };
 
-  exchangeSel.addEventListener('change', () => {
-    settings.contestExchange = exchangeSel.value; persist(); sync();
+  modeSel.addEventListener('change', () => { settings.contestMode = modeSel.value; persist(); sync(); });
+  exchangeSel.addEventListener('change', () => { settings.contestExchange = exchangeSel.value; persist(); sync(); });
+  $('#contest-minutes').addEventListener('change', (e) => { settings.contestMinutes = Number(e.target.value); persist(); });
+  $('#contest-activity').addEventListener('input', (e) => { settings.contestActivity = Number(e.target.value); persist(); sync(); });
+  $('#contest-mynumber').addEventListener('input', (e) => { settings.contestMyNumber = e.target.value.toUpperCase(); persist(); });
+  $('#contest-record').addEventListener('change', (e) => { settings.contestRecord = e.target.checked; persist(); });
+
+  CONDITION_KEYS.forEach((k) => {
+    $(`#cond-${k}`).addEventListener('change', (e) => {
+      settings[condKey(k)] = e.target.checked;
+      persist();
+      applyAudioSettings();
+    });
   });
-  $('#contest-minutes').addEventListener('change', (e) => {
-    settings.contestMinutes = Number(e.target.value); persist();
+
+  // 受信系のつまみは運用中でも即座に効く
+  $('#contest-rit').addEventListener('input', (e) => {
+    settings.rit = Number(e.target.value);
+    $('#contest-rit-out').textContent = `${settings.rit} Hz`;
+    player.setSettings({ rit: settings.rit });
+    persist();
   });
-  $('#contest-activity').addEventListener('input', (e) => {
-    settings.contestActivity = Number(e.target.value); persist(); sync();
+  $('#contest-bandwidth').addEventListener('change', (e) => {
+    settings.bandwidth = Number(e.target.value);
+    player.setSettings({ bandwidth: settings.bandwidth });
+    persist();
   });
-  $('#contest-flutter').addEventListener('change', (e) => {
-    settings.contestFlutter = e.target.checked; persist();
-  });
-  $('#contest-mynumber').addEventListener('input', (e) => {
-    settings.contestMyNumber = e.target.value.toUpperCase(); persist();
+  $('#contest-qsk').addEventListener('change', (e) => {
+    settings.qsk = e.target.checked;
+    player.setSettings({ qsk: settings.qsk });
+    if (settings.qsk) player.releaseRx();
+    persist();
   });
 
   $('#btn-contest-start').addEventListener('click', startContest);
@@ -608,47 +654,92 @@ function initContest() {
     if (btn) runContestAction(btn.dataset.fn);
   });
 
-  // ファンクションキー。コンテストのタブを開いて運用中のときだけ拾う
-  document.addEventListener('keydown', (e) => {
-    if (!contest.running) return;
-    if (!$('#panel-contest').classList.contains('is-active')) return;
-
-    const fnMap = {
-      F1: 'cq', F2: 'exchange', F3: 'confirm',
-      F4: 'myCall', F5: 'hisCall', F7: 'question', F8: 'again',
-    };
-
-    if (fnMap[e.key]) {
-      e.preventDefault();
-      runContestAction(fnMap[e.key]);
-      return;
-    }
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      // 相手が応答済みなら確定、まだなら呼び出しに対する応答を送る
-      runContestAction(contest.current ? 'confirm' : 'exchange');
-      return;
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      $('#contest-call').value = '';
-      $('#contest-exch').value = '';
-      $('#contest-call').focus();
-    }
-  });
+  document.addEventListener('keydown', onContestKey);
 
   contest.addEventListener('tick', renderContestScore);
   contest.addEventListener('state', renderContestScore);
-  contest.addEventListener('qso', renderContestLog);
+  contest.addEventListener('qso', () => { renderContestScore(); renderContestLog(); });
   contest.addEventListener('end', (e) => finishContest(e.detail.score));
 
   sync();
 }
 
+function condKey(k) {
+  return `cond${k.charAt(0).toUpperCase()}${k.slice(1)}`;
+}
+
+const FKEY_MAP = {
+  F1: 'cq', F2: 'exchange', F3: 'confirm', F4: 'myCall',
+  F5: 'hisCall', F6: 'b4', F7: 'question', F8: 'again',
+};
+
+function onContestKey(e) {
+  if (!contest.running) return;
+  if (!$('#panel-contest').classList.contains('is-active')) return;
+
+  if (FKEY_MAP[e.key]) {
+    e.preventDefault();
+    runContestAction(FKEY_MAP[e.key]);
+    return;
+  }
+
+  switch (e.key) {
+    case 'Enter':
+      e.preventDefault();
+      // 相手が応答済みなら確定、まだなら呼び出しに応答する
+      runContestAction(contest.current ? 'confirm' : 'exchange');
+      break;
+
+    case ' ': {
+      // 部分的に打ち込んだコールサインを、呼んでいる局から補完する
+      if (e.target !== $('#contest-call')) return;
+      e.preventDefault();
+      const full = contest.autoComplete($('#contest-call').value);
+      if (full) {
+        $('#contest-call').value = full;
+      } else {
+        $('#contest-exch').focus();
+      }
+      break;
+    }
+
+    case 'Escape':
+      e.preventDefault();
+      player.stop();
+      $('#contest-call').value = '';
+      $('#contest-exch').value = '';
+      $('#contest-call').focus();
+      break;
+
+    case 'ArrowUp':
+    case 'ArrowDown': {
+      e.preventDefault();
+      const step = e.key === 'ArrowUp' ? 20 : -20;
+      const rit = Math.max(-500, Math.min(500, (settings.rit ?? 0) + step));
+      settings.rit = rit;
+      $('#contest-rit').value = String(rit);
+      $('#contest-rit-out').textContent = `${rit} Hz`;
+      player.setSettings({ rit });
+      persist();
+      break;
+    }
+
+    default:
+      break;
+  }
+}
+
 async function startContest() {
   await player.resume();
 
+  player.setSettings({
+    bandwidth: settings.bandwidth,
+    qsk: settings.qsk,
+    rit: settings.rit ?? 0,
+  });
+
   contest.start({
+    mode: settings.contestMode,
     minutes: settings.contestMinutes,
     activity: settings.contestActivity,
     exchange: settings.contestExchange,
@@ -656,10 +747,18 @@ async function startContest() {
     myNumber: settings.contestMyNumber,
     myWpm: settings.charWpm,
     conditions: {
-      qsb: settings.qsb / 100,
-      flutter: settings.contestFlutter,
+      qrn: settings.condQrn ? 0.5 : 0,
+      qrm: settings.condQrm ? 0.5 : 0,
+      qsb: settings.condQsb ? 0.6 : 0,
+      flutter: settings.condFlutter,
+      lids: settings.condLids,
     },
   });
+
+  // 実際に鳴る空電の強さは、運用モードが決めた条件に合わせる
+  player.setSettings({ qrn: contest.opts.conditions.qrn ?? 0 });
+
+  if (settings.contestRecord) await player.startRecording();
 
   $('#contest-run').hidden = false;
   $('#contest-result').hidden = true;
@@ -671,6 +770,7 @@ async function startContest() {
   $('#contest-call').focus();
 
   renderContestScore();
+  renderContestLog();
   contest.cq();
 }
 
@@ -698,13 +798,13 @@ async function runContestAction(action) {
       if (entry) {
         $('#contest-call').value = '';
         $('#contest-exch').value = '';
-        // 実戦と同じく、確定したらすぐ次の CQ に移る
         setTimeout(() => { if (contest.running) contest.cq(); }, 200);
       }
       break;
     }
     case 'myCall': await contest.myCall(); break;
     case 'hisCall': await contest.hisCall(call); break;
+    case 'b4': await contest.b4(call); break;
     case 'question': await contest.question(); break;
     case 'again': await contest.again(); break;
     default: break;
@@ -718,59 +818,126 @@ function renderContestScore() {
   const remain = contest.remaining;
   const mm = String(Math.floor(remain / 60)).padStart(2, '0');
   const ss = String(Math.floor(remain % 60)).padStart(2, '0');
+  const wpx = contest.opts?.mode === 'wpx';
 
-  $('#contest-score').innerHTML = `
-    <div class="stat clock ${remain < 60 ? 'low' : ''}">
-      <div class="value">${mm}:${ss}</div><div class="label">残り時間</div>
-    </div>
-    <div class="stat"><div class="value">${s.valid}</div><div class="label">有効 QSO</div></div>
-    <div class="stat"><div class="value">${s.errors}</div><div class="label">ミス</div></div>
-    <div class="stat"><div class="value">${s.rate ?? '—'}</div><div class="label">QSO/時</div></div>
-    <div class="stat"><div class="value">${Math.round(s.accuracy * 100)}%</div><div class="label">正確度</div></div>
-    <div class="stat"><div class="value">${contest.callers.length}</div><div class="label">呼んでいる局</div></div>`;
+  const tiles = [
+    `<div class="stat clock ${remain < 60 ? 'low' : ''}">
+       <div class="value">${mm}:${ss}</div><div class="label">残り時間</div></div>`,
+    `<div class="stat"><div class="value">${s.points}</div><div class="label">有効 QSO</div></div>`,
+    `<div class="stat"><div class="value">${s.errors}</div><div class="label">ミス</div></div>`,
+  ];
+  if (wpx) {
+    tiles.push(`<div class="stat"><div class="value">${s.mults}</div><div class="label">マルチ</div></div>`);
+    tiles.push(`<div class="stat"><div class="value">${s.score}</div><div class="label">得点</div></div>`);
+  }
+  tiles.push(`<div class="stat"><div class="value">${s.rate}</div><div class="label">QSO/時</div></div>`);
+  tiles.push(`<div class="stat"><div class="value">${Math.round(s.accuracy * 100)}%</div><div class="label">正確度</div></div>`);
+  tiles.push(`<div class="stat"><div class="value">${s.callers}</div><div class="label">呼んでいる局</div></div>`);
+
+  $('#contest-score').innerHTML = tiles.join('');
 }
 
 function renderContestLog() {
-  $('#contest-log').innerHTML = contest.log.length
-    ? contest.log.map((q) => `
-        <div class="contest-qso ${q.ok ? 'ok' : 'ng'}">
-          <span>${escapeHtml(q.call)} <span class="truth">${escapeHtml(q.exchange)}</span></span>
-          ${q.ok ? '' : `<span class="why">${escapeHtml(q.reason)}${
-            q.truthCall ? ` → ${escapeHtml(q.truthCall)} ${escapeHtml(q.truthExchange || '')}` : ''
-          }</span>`}
-          <span class="mark">${q.ok ? '○' : '×'}</span>
-        </div>`).join('')
+  const qsos = [...contest.log.qsos].reverse();
+  $('#contest-log').innerHTML = qsos.length
+    ? qsos.map((q) => {
+        const ok = q.err === QSO_ERROR.NONE;
+        const label = escapeHtml(QSO_ERROR_LABEL[q.err] || q.err);
+        // 該当局が無い場合は正解が存在しないので、理由だけを出す
+        const why = q.trueCall
+          ? `${label} → ${escapeHtml(q.trueCall)} ${escapeHtml(q.trueNr ?? '')}`
+          : label;
+        return `<div class="contest-qso ${ok ? 'ok' : 'ng'}">
+            <span>${escapeHtml(q.call)} <span class="truth">${escapeHtml(q.nr)}</span></span>
+            ${ok ? '' : `<span class="why">${why}</span>`}
+            <span class="mark">${ok ? '○' : '×'}</span>
+          </div>`;
+      }).join('')
     : '<p class="empty">まだ交信がありません。</p>';
 }
 
-function finishContest(score) {
+async function finishContest(score) {
   $('#btn-contest-start').disabled = false;
   $('#btn-contest-stop').disabled = true;
 
+  const mode = contest.opts?.mode || 'pileup';
+  const wpx = mode === 'wpx';
+
   stats = recordContest(stats, {
     score,
-    minutes: settings.contestMinutes,
+    minutes: contest.opts?.minutes ?? settings.contestMinutes,
     exchange: settings.contestExchange,
   });
   saveStats(stats);
   renderStats();
 
+  const isHigh = saveHighScore(mode, {
+    score: wpx ? score.score : score.points,
+    points: score.points,
+    mults: score.mults,
+    accuracy: score.accuracy,
+    rate: score.rate,
+    callsign: settings.callsign,
+  });
+  const best = loadHighScores()[mode];
+
+  // 5 分ごとの交信数
+  const blocks = contest.log.histogram(contest.startedAt, contest.stoppedAt || Date.now());
+  const peak = Math.max(1, ...blocks.map((b) => b.raw));
+  const hist = blocks.map((b) => `
+    <div class="rate-bar" style="height:${Math.max(2, (b.valid / peak) * 100)}%"
+         title="${b.valid} / ${b.raw} QSO">
+      <span class="n">${b.valid || ''}</span>
+    </div>`).join('');
+
   const box = $('#contest-result');
   box.hidden = false;
   box.innerHTML = `
     <div class="qso-summary">
-      <h3>運用終了</h3>
-      <div class="score">${score.valid} QSO</div>
-      <p class="hint">
-        交信 ${score.raw} 局中 ${score.valid} 局が有効（正確度 ${Math.round(score.accuracy * 100)}%）／
-        ${score.rate == null ? "毎時ペースは 1 分以上の運用から算出します" : `${score.rate} QSO 毎時ペース`}
-      </p>
+      <h3>運用終了 — ${escapeHtml(RUN_MODES[mode]?.label || mode)}</h3>
+      <div class="score">${wpx ? score.score : score.points}</div>
+      <p class="hint">${wpx ? '得点（有効 QSO × マルチ）' : '有効 QSO 数'}</p>
+      ${isHigh ? '<p class="highscore">自己ベスト更新</p>' : ''}
     </div>
+
+    <table class="score-table">
+      <tr><th></th><th>素点</th><th>確定</th></tr>
+      <tr><td>QSO 数</td><td>${score.rawPoints}</td><td>${score.points}</td></tr>
+      ${wpx ? `<tr><td>マルチ</td><td>${score.rawMults}</td><td>${score.mults}</td></tr>` : ''}
+      <tr class="total"><td>${wpx ? '得点' : '有効数'}</td>
+        <td>${wpx ? score.rawScore : score.rawPoints}</td>
+        <td>${wpx ? score.score : score.points}</td></tr>
+    </table>
+
+    <h4>5 分ごとの交信数</h4>
+    <div class="rate-hist">${hist}</div>
+    <div class="rate-axis"><span>開始</span><span>終了</span></div>
+
+    <p class="hint">
+      正確度 ${Math.round(score.accuracy * 100)}%（誤り ${score.errors} 件）／
+      ${score.rate} QSO 毎時ペース
+      ${best ? `／ 自己ベスト ${best.score}` : ''}
+    </p>
+
     <div class="turn-actions" style="justify-content:center">
       <button type="button" class="btn btn-primary" id="btn-contest-again">もう一度</button>
+      <span id="contest-download"></span>
     </div>`;
 
   $('#btn-contest-again').addEventListener('click', startContest);
+
+  // 録音していれば、ダウンロードできるようにする
+  if (player.isRecording) {
+    const blob = await player.stopRecording();
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'm4a' : 'webm';
+      $('#contest-download').innerHTML =
+        `<a class="btn" download="contest-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '')}.${ext}"
+            href="${url}">録音を保存</a>`;
+    }
+  }
+
   box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 

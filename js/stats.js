@@ -42,11 +42,23 @@ export const DEFAULT_SETTINGS = {
   keyerTaskType: 'callsign',
 
   // コンテスト運用
+  contestMode: 'pileup',
   contestExchange: 'serial',
   contestMinutes: 5,
   contestActivity: 3,
-  contestFlutter: false,
   contestMyNumber: '13H',
+  contestRecord: false,
+
+  // バンドコンディション（コンテスト用）
+  condQrn: true,
+  condQrm: true,
+  condQsb: true,
+  condFlutter: true,
+  condLids: true,
+
+  // 受信系
+  bandwidth: 500,
+  qsk: true,
 };
 
 export const DEFAULT_STATS = {

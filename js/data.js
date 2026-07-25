@@ -163,9 +163,10 @@ export function makeCallsign(region) {
   const key = region || pick(['JA', 'JA', 'JA', 'NA', 'EU', 'AS', 'OC']);
   const prefix = pick(PREFIXES[key] || PREFIXES.JA);
 
-  // プレフィックスに既に数字が含まれる場合（7K, 9M2, KH6 など）はそのまま使う
-  const hasDigit = /\d/.test(prefix);
-  const digit = hasDigit ? '' : String(pickInt(0, 9));
+  // エリア番号は、プレフィックスが数字で終わっていない場合だけ付ける。
+  // 9M2 や KH6 は番号を含んで完結しているが、7K や 7L は 7K1ABC のように続く。
+  const endsWithDigit = /\d$/.test(prefix);
+  const digit = endsWithDigit ? '' : String(pickInt(0, 9));
 
   const suffixLen = key === 'JA' ? pick([2, 3, 3]) : pick([2, 3, 3]);
   let suffix = '';

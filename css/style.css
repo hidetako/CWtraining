@@ -18,6 +18,10 @@
 
 * { box-sizing: border-box; }
 
+/* display を指定したクラス（.field など）が hidden 属性に勝ってしまうため、
+   ブラウザ既定より強い指定で打ち消しておく。 */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -361,7 +365,25 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 .fkey.is-hot { background: var(--accent); color: #1a1205; border-color: var(--accent); }
 .fkey.is-hot b { color: #1a1205; }
 
-.contest-log { font-family: var(--mono); font-size: .8rem; max-height: 260px; overflow-y: auto; }
+.cond-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: .3rem 1rem;
+}
+.cond-grid .check { margin-top: .3rem; }
+
+.rx-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1rem;
+  align-items: end;
+  margin-top: 1.1rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--line-soft);
+}
+.rx-controls .check { margin-top: 0; }
+
+.contest-log { font-family: var(--mono); font-size: .8rem; max-height: 280px; overflow-y: auto; }
 .contest-qso {
   display: grid;
   grid-template-columns: 1fr auto auto;
@@ -375,6 +397,50 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 .contest-qso.ng .mark { color: var(--ng); }
 .contest-qso .why { color: var(--ng); font-size: .72rem; }
 .contest-qso .truth { color: var(--accent); font-size: .74rem; }
+
+/* 5 分ごとの交信数ヒストグラム */
+.rate-hist {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 90px;
+  margin: 1rem 0 .4rem;
+  padding: .6rem;
+  background: var(--bg-sunken);
+  border-radius: 8px;
+}
+.rate-bar {
+  flex: 1 1 0;
+  min-width: 6px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  position: relative;
+}
+.rate-bar .n {
+  position: absolute;
+  top: -1.1rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: .64rem;
+  color: var(--text-dim);
+}
+.rate-axis {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: .68rem;
+  color: var(--text-dim);
+}
+
+.score-table { font-family: var(--mono); font-size: .84rem; width: 100%; border-collapse: collapse; }
+.score-table th, .score-table td { padding: .35rem .6rem; text-align: right; border-bottom: 1px solid var(--line-soft); }
+.score-table th:first-child, .score-table td:first-child { text-align: left; color: var(--text-dim); font-weight: 400; }
+.score-table tr.total td { color: var(--accent); font-weight: 700; border-bottom: none; }
+
+.highscore { color: var(--ok); font-weight: 700; font-size: .85rem; }
 
 /* ───────── チュートリアル ───────── */
 .tutorial-card { border-color: var(--accent-dim); }
