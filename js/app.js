@@ -787,7 +787,8 @@ function sendingDiffHtml(target, sent) {
   return `
     <div class="score-line">
       <span class="big">${Math.round(result.accuracy * 100)}%</span>
-      <span class="hint">${result.correct} / ${result.total} 文字一致</span>
+      <span class="hint">${result.correct} / ${result.total} 文字一致${
+        result.extra ? `・余分 ${result.extra} 文字` : ''}</span>
     </div>
     <div class="diff">${diff}</div>
     <div class="diff-legend">
@@ -1214,8 +1215,10 @@ function gradeCurrentProblem() {
   saveStats(stats);
   renderStats();
 
+  // 一致・打ち漏らし・余分を区別して並べる。打ち漏らしは出題側の文字を出す
   const marks = result.marks
-    .map((m) => `<span class="${m.ok ? 'ok' : 'ng'}">${escapeHtml(m.actual || m.expected || '_')}</span>`)
+    .map((m) => `<span class="${m.type || (m.ok ? 'ok' : 'ng')}">${
+      escapeHtml(m.type === 'extra' ? m.actual : m.expected)}</span>`)
     .join('');
 
   // 連続出題の進行を記録する
@@ -1243,11 +1246,17 @@ function gradeCurrentProblem() {
   box.innerHTML = `
     <div class="score-line">
       <span class="big">${pct}%</span>
-      <span class="hint">${result.correct} / ${result.total} 文字</span>
+      <span class="hint">${result.correct} / ${result.total} 文字${
+        result.extra ? `・余分 ${result.extra} 文字` : ''}</span>
       ${progress}
       ${levelUp ? '<span class="levelup">90% 到達 — レベルを上げましょう</span>' : ''}
     </div>
     <div class="marks">${marks}</div>
+    <div class="diff-legend">
+      <span><span class="marks"><span class="ok">■</span></span> 一致</span>
+      <span><span class="marks"><span class="missing">■</span></span> 取り漏らし</span>
+      <span><span class="marks"><span class="extra">■</span></span> 余分・誤り</span>
+    </div>
     <p class="hint">正解: <code>${escapeHtml(drill.problem.answer)}</code>
       ${drill.problem.hint ? ` — ${escapeHtml(drill.problem.hint)}` : ''}</p>
     <p class="hint">モールス: <code>${escapeHtml(toMorseString(drill.problem.answer))}</code></p>
@@ -2066,7 +2075,8 @@ function gradeKeying() {
   box.innerHTML = `
     <div class="score-line">
       <span class="big">${pct}%</span>
-      <span class="hint">${result.correct} / ${result.total} 文字一致</span>
+      <span class="hint">${result.correct} / ${result.total} 文字一致${
+        result.extra ? `・余分 ${result.extra} 文字` : ''}</span>
     </div>
     <div class="diff">${diff}</div>
     <div class="diff-legend">
@@ -2460,6 +2470,7 @@ init();
 // 画面の操作には使っていない。
 window.__cw = {
   player, keyer, contest, responder,
+  gradeProblem, compareSending,   // 採点そのものを検証できるように公開する
   get settings() { return settings; },
   get stats() { return stats; },
   get qsoScript() { return qso.script; },

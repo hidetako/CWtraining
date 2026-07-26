@@ -435,10 +435,15 @@ export function compareSending(target, sent) {
   while (i < at.length) marks.push({ type: 'missing', char: at[i++] });
   while (j < bt.length) marks.push({ type: 'extra', char: bt[j++] });
 
+  // 余分に打った分も分母に入れる。そうしないと、手本の文字さえ含まれていれば
+  // どれだけ余計に打っても 100% になってしまう
+  const extra = marks.filter((m) => m.type === 'extra').length;
+  const denominator = at.length + extra;
   return {
     marks,
     correct,
+    extra,
     total: at.length,
-    accuracy: at.length ? correct / at.length : 0,
+    accuracy: denominator ? correct / denominator : 0,
   };
 }
