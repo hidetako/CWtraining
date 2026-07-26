@@ -299,6 +299,9 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
   padding: .8rem;
 }
 .marks .ok { color: var(--ok); }
+/* 打ち漏らし（出題にあって解答に無い）と、余分（解答にだけある）を区別する */
+.marks .missing { color: var(--ng); text-decoration: line-through; }
+.marks .extra { color: var(--accent); text-decoration: underline wavy var(--accent); }
 .marks .ng { color: var(--ng); text-decoration: underline wavy var(--ng); }
 
 .score-line { display: flex; align-items: baseline; gap: .8rem; margin: .8rem 0; flex-wrap: wrap; }
@@ -701,7 +704,12 @@ kbd {
 .diff .missing { color: var(--ng); text-decoration: line-through; }
 .diff .extra { color: var(--accent); text-decoration: underline wavy var(--accent); }
 
-.diff-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .75rem; color: var(--text-dim); margin-top: .6rem; }
+.diff-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .75rem; color: var(--text-dim); margin-top: .6rem; align-items: center; }
+/* 凡例の色見本は色だけ示したいので、取り消し線や波線は付けない */
+.diff-legend .diff, .diff-legend .marks {
+  display: inline; background: none; padding: 0; font-size: 1em; letter-spacing: 0;
+}
+.diff-legend span span { text-decoration: none; }
 
 /* ───────── 略語集 ───────── */
 .glossary {

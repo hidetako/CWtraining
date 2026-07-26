@@ -93,42 +93,86 @@ function groupsFromAlphabet(alphabet, opts) {
 
 /**
  * 解答を文字単位で採点する。空白は無視して並びだけを比べる。
+ *
+ * 位置をそのまま突き合わせると、1 文字打ち漏らしただけで以降が全部ずれ、
+ * ほとんど取れていても 0% 近くになってしまう。実際には「1 文字落とした」
+ * だけなので、最長共通部分列で対応を取ってから過不足を数える。
+ *
  * @returns {{ total, correct, accuracy, marks, perChar }}
- *   marks は [{ expected, actual, ok }] の配列（表示用）
+ *   marks は [{ type: 'ok'|'missing'|'extra', expected, actual, ok }] の配列（表示用）
  */
 export function gradeProblem(problem, input) {
   const expected = String(problem.answer).toUpperCase().replace(/\s+/g, '');
   const actual = String(input || '').toUpperCase().replace(/\s+/g, '');
 
-  const marks = [];
+  const marks = align(expected, actual);
   const perChar = {};
   let correct = 0;
+  let extra = 0;
 
-  for (let i = 0; i < expected.length; i++) {
-    const e = expected[i];
-    const a = actual[i] ?? '';
-    const ok = e === a;
-    if (ok) correct += 1;
-    marks.push({ expected: e, actual: a, ok });
-
-    if (!perChar[e]) perChar[e] = { sent: 0, correct: 0 };
-    perChar[e].sent += 1;
-    if (ok) perChar[e].correct += 1;
-  }
-
-  // 余分に打った文字も誤りとして見えるようにする
-  for (let i = expected.length; i < actual.length; i++) {
-    marks.push({ expected: '', actual: actual[i], ok: false });
+  for (const m of marks) {
+    // 余分な文字は、どの出題文字の成績でもないが、誤りとしては数える
+    if (m.type === 'extra') { extra += 1; continue; }
+    if (!perChar[m.expected]) perChar[m.expected] = { sent: 0, correct: 0 };
+    perChar[m.expected].sent += 1;
+    if (m.type === 'ok') {
+      perChar[m.expected].correct += 1;
+      correct += 1;
+    }
   }
 
   const total = expected.length;
+  // 余分に打った分も分母に入れる。そうしないと、当てずっぽうに多く打つほど
+  // 得をしてしまう（出題文字さえ含まれていれば 100% になる）
+  const denominator = total + extra;
   return {
     total,
     correct,
-    accuracy: total ? correct / total : 0,
+    extra,
+    accuracy: denominator ? correct / denominator : 0,
     marks,
     perChar,
   };
+}
+
+/**
+ * 最長共通部分列で 2 つの文字列を並べ、一致・打ち漏らし・余分に分ける。
+ * @returns {Array<{ type: 'ok'|'missing'|'extra', expected: string, actual: string, ok: boolean }>}
+ */
+function align(expected, actual) {
+  const a = expected.split('');
+  const b = actual.split('');
+
+  // dp[i][j] = a[i..] と b[j..] の最長共通部分列の長さ
+  const dp = Array.from({ length: a.length + 1 }, () => new Uint32Array(b.length + 1));
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j]
+        ? dp[i + 1][j + 1] + 1
+        : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+
+  const marks = [];
+  let i = 0;
+  let j = 0;
+
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      marks.push({ type: 'ok', expected: a[i], actual: b[j], ok: true });
+      i += 1; j += 1;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      marks.push({ type: 'missing', expected: a[i], actual: '', ok: false });
+      i += 1;
+    } else {
+      marks.push({ type: 'extra', expected: '', actual: b[j], ok: false });
+      j += 1;
+    }
+  }
+  while (i < a.length) marks.push({ type: 'missing', expected: a[i++], actual: '', ok: false });
+  while (j < b.length) marks.push({ type: 'extra', expected: '', actual: b[j++], ok: false });
+
+  return marks;
 }
 
 /**
