@@ -22,6 +22,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'dits',
+    needsKeyer: true,
     title: '短点を連続で出す',
     body: [
       '短点側のレバー（パッドのランプで確認できます）を押したままにしてください。押している間、キーヤーが正確な間隔で短点を打ち続けます。',
@@ -32,6 +33,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'dahs',
+    needsKeyer: true,
     title: '長点を連続で出す',
     body: [
       '今度は長点側のレバーを押したままにしてください。長点は短点 3 個分の長さで、こちらも自動で連続します。',
@@ -42,6 +44,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'letter-a',
+    needsKeyer: true,
     title: '1 文字打ってみる — A（・－）',
     body: [
       '短点をひとつ、続けて長点をひとつ打つと A になります。短点側を軽く 1 回、間を空けずに長点側を 1 回です。',
@@ -52,6 +55,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'letter-n',
+    needsKeyer: true,
     title: '逆の順で — N（－・）',
     body: [
       '今度は長点が先、短点が後です。A と N は同じ 2 要素でも順序が逆なだけで、耳では紛らわしい組み合わせです。',
@@ -62,6 +66,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'squeeze',
+    needsKeyer: true,
     title: 'スクイーズ（両方を握る）',
     body: [
       'アイアンビックキーヤーの本領です。両方のレバーを同時に押さえると、短点と長点が交互に出ます。',
@@ -79,23 +84,26 @@ export const TUTORIAL_STEPS = [
       '<strong>アイアンビック B</strong>（多くの市販キーヤーの既定値）は、両方を離した後にもう 1 要素だけ余分に送ります。3 要素目の途中で離しても 4 要素目が出るので、指を早めに離す打ち方ができます。',
       '<strong>アイアンビック A</strong> は余分な要素を出しません。離した時点で送出中の要素を最後に止まります。',
       'ページ下部の設定欄にある「キーヤーモード」を切り替えて、同じスクイーズを試してみてください。どちらが手に合うかは好みです。迷ったら B のままで構いません。',
+      'なお「縦振り電鍵」を選ぶと、符号の長さは押した時間そのものになり、送信速度の設定は音に反映されなくなります。試したあとはアイアンビックに戻してから次へ進んでください。',
     ],
     goal: 'キーヤーモードを一度切り替えてみる',
     check: (ctx) => ctx.touched.has('keyerMode'),
   },
   {
     id: 'speed',
+    needsKeyer: true,
     title: '速度（WPM）の合わせ方',
     body: [
       '速度は短点の長さそのものです。20 WPM なら短点は 60 ミリ秒になります。',
       'まずは<strong>正確に打てる速度</strong>まで落としてください。速く打ち崩すより、遅くても崩れないほうが相手に届きます。目安として、自分が余裕を持って聞き取れる速度より 2〜3 WPM 遅いあたりが打ちやすい範囲です。',
-      'ページ下部の設定欄にある「送信速度」を動かして、打ちやすい速さを探してください。',
+      'ページ下部の設定欄にある「送信速度」を動かし、そのあとパドルで何要素か打って、速さの違いを耳で確かめてください。',
     ],
-    goal: '送信速度を変更する',
-    check: (ctx) => ctx.touched.has('keyerWpm'),
+    goal: (settings) => `送信速度を変更してから、パドルで打ってみる（現在 ${settings.keyerWpm} WPM ＝ 短点 ${Math.round(1200 / settings.keyerWpm)} ミリ秒）`,
+    check: (ctx) => ctx.touched.has('keyerWpm') && ctx.elements.length >= 3,
   },
   {
     id: 'weight',
+    needsKeyer: true,
     title: 'ウェイトの調整',
     body: [
       'ウェイトは、音を出している時間（マーク）と休んでいる時間（スペース）の比率です。50% が標準で、短点と、その後の間が同じ長さになります。',
@@ -121,6 +129,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'word',
+    needsKeyer: true,
     title: '語を打つ — CQ',
     body: [
       '文字と文字の間は、短点 3 個分ほど手を止めます。キーヤーはこの間で文字の切れ目を判断します。',
@@ -131,6 +140,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'callsign',
+    needsKeyer: true,
     title: '自局のコールサインを打つ',
     body: [
       '最後に、自分のコールサインを打ってみましょう。交信で最も多く打つ符号です。',

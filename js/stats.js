@@ -42,6 +42,8 @@ export const DEFAULT_SETTINGS = {
   keyerThumb: 'dit',    // 'dit' | 'dah'   — 親指側のレバーが出す要素
   keyerGlobal: false,
   keyerTaskType: 'callsign',
+  keyerFreq: 700,       // 送信側音の高さ Hz（受信の freq とは独立）
+  paddleWidgetOpen: true,
 
   // コンテスト運用
   contestMode: 'pileup',
