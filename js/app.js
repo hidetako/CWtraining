@@ -55,18 +55,7 @@ function init() {
 // ここでは繋がない（二重発火防止）。
 
 function initPaddleWidget() {
-  const widget = $('#paddle-widget');
   const padBody = $('#pw-pad');
-
-  // 折りたたみ状態を復元。未設定(null)なら画面幅で決める
-  // （スマートフォンでは開いたままだと入力欄に重なるため、閉じて始める）
-  const initiallyOpen = settings.paddleWidgetOpen ?? (window.innerWidth > 720);
-  widget.classList.toggle('is-closed', !initiallyOpen);
-  $('#pw-toggle').addEventListener('click', () => {
-    settings.paddleWidgetOpen = widget.classList.contains('is-closed');
-    widget.classList.toggle('is-closed', !settings.paddleWidgetOpen);
-    persist();
-  });
 
   // 最初の操作で側音ラインを開く（AudioContext はユーザー操作が必要）
   const ensureLine = () => { player.openKeyLine(); };
@@ -78,15 +67,29 @@ function initPaddleWidget() {
     onState: (state) => {
       $('#pw-left').classList.toggle('on', state.left);
       $('#pw-right').classList.toggle('on', state.right);
-      $('#lamp-left')?.classList.toggle('on', state.left);
-      $('#lamp-right')?.classList.toggle('on', state.right);
     },
   });
+
+  // 送信速度のつまみは initKeyer() 側で配線する（syncKeyer と一緒に扱うため）
+
+  // 打った符号を常時表示する。どのタブにいても自分の打鍵を確認できる
+  const decoded = $('#pw-decoded');
+  const showDecoded = () => {
+    const pending = keyer.buffer;
+    decoded.innerHTML = (!keyer.text && !pending)
+      ? '<span class="empty">パドルを操作すると、ここに解読結果が出ます。</span>'
+      : escapeHtml(keyer.text) + (pending ? `<span class="pending">${escapeHtml(pending)}</span>` : '');
+  };
+  keyer.addEventListener('update', showDecoded);
+  keyer.addEventListener('element', showDecoded);
+  keyer.addEventListener('char', showDecoded);
+  $('#pw-clear').addEventListener('click', () => keyer.reset());
+  showDecoded();
 
   syncPaddleWidget();
 }
 
-/** ウィジェットの表示（割り当て・入力範囲の説明）を現在の設定に合わせる。 */
+/** パドル欄の表示（割り当て・速度・入力範囲の説明）を現在の設定に合わせる。 */
 function syncPaddleWidget() {
   const widget = $('#paddle-widget');
   if (!widget) return;
@@ -95,16 +98,14 @@ function syncPaddleWidget() {
 
   $('#pw-left').textContent = label(map.left);
   $('#pw-right').textContent = label(map.right);
-  $('#pw-mini').textContent = `${settings.keyerWpm} WPM`;
+  $('#pw-mini').textContent = `${KEYER_MODES[settings.keyerMode]?.label.replace(/（.*/, '') ?? ''}`.trim();
+  $('#pw-wpm').value = settings.keyerWpm;
+  $('#pw-wpm-out').textContent = `${settings.keyerWpm} WPM`;
 
   const onKeyerTab = $('#panel-keyer')?.classList.contains('is-active');
-  let scope = 'この枠内はいつでもパドル入力を受け付けます（左半分＝左ボタン扱い）。';
-  if (onKeyerTab) {
-    scope = settings.keyerGlobal
-      ? '現在は画面全体でパドル入力を受け付けています（ボタンや入力欄の上を除く）。'
-      : 'この枠内と、パドル送信タブのパッドで入力を受け付けています。';
-  }
-  $('#pw-scope').textContent = scope;
+  $('#pw-scope').textContent = (onKeyerTab && settings.keyerGlobal)
+    ? '現在は画面全体でパドル入力を受け付けています（ボタンや入力欄の上を除く）。'
+    : 'この枠内はいつでもパドル入力を受け付けます（左半分＝左ボタン扱い）。';
 }
 
 /** 各タブに置いた初心者モードのスイッチを、設定と同期させる。 */
@@ -232,26 +233,54 @@ function initHeaderControls() {
     sync(); applyAudioSettings(); persist();
   });
 
-  $('#btn-stop-all').addEventListener('click', () => player.stop());
+  $('#btn-pause-all').addEventListener('click', togglePause);
+  $('#btn-stop-all').addEventListener('click', endCurrentMode);
 
-  // モバイルでは速度・音量を折りたたみ、要約だけ見せる
-  const qaToggle = $('#qa-toggle');
-  qaToggle.addEventListener('click', () => {
-    const open = $('#quick-audio').classList.toggle('is-open');
-    qaToggle.setAttribute('aria-expanded', String(open));
-    qaToggle.firstChild.textContent = open ? '▴ ' : '▾ ';
+  // Space で一時停止／再開、Esc で終了。
+  // 文字入力の邪魔をしないよう入力欄とボタンの上では効かせない。
+  // コンテスト運用はこの 2 つを独自に使うので除外する
+  document.addEventListener('keydown', (e) => {
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target.tagName)) return;
+    if ($('#panel-contest').classList.contains('is-active')) return;
+    if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+    else if (e.key === 'Escape') { e.preventDefault(); endCurrentMode(); }
   });
 
-  const origSync = sync;
-  const syncAll = () => {
-    origSync();
-    $('#qa-summary').textContent =
-      `${settings.charWpm}/${settings.effWpm} WPM・${Math.round(settings.volume * 100)}`;
-  };
-  charWpm.addEventListener('input', syncAll);
-  effWpm.addEventListener('input', syncAll);
-  volume.addEventListener('input', syncAll);
-  syncAll();
+  sync();
+}
+
+// ═══════════════════════════════════════════ 一時停止・再開・終了
+
+/** 一時停止と再開を切り替える。どのタブでも同じボタンで効く。 */
+async function togglePause() {
+  const ok = player.paused ? await player.resumePlay() : await player.pause();
+  if (!ok && !player.paused) return;   // 鳴っていないときは何もしない
+  syncTransport();
+}
+
+function syncTransport() {
+  const btn = $('#btn-pause-all');
+  if (!btn) return;
+  btn.textContent = player.paused ? '▶ 再開' : '❙❙ 一時停止';
+  btn.classList.toggle('is-paused', player.paused);
+  document.body.classList.toggle('is-paused', player.paused);
+}
+
+/**
+ * 今開いているタブの練習を終了する。
+ * 音を止めるだけでなく、そのモードを開始前の状態に戻す。
+ */
+function endCurrentMode() {
+  player.stop();
+  syncTransport();
+
+  const panel = $('.panel.is-active')?.id;
+  if (panel === 'panel-qso') return endQso();
+  if (panel === 'panel-drill') return endDrill();
+  if (panel === 'panel-contest') return contest.running ? contest.stopSession() : undefined;
+  if (panel === 'panel-keyer') return endKeyerTask();
+  return undefined;
 }
 
 // ═══════════════════════════════════════════ 交信シミュレーター
@@ -283,6 +312,10 @@ function initQso() {
     settings.qsoStyle = btn.dataset.style;
     persist();
     syncQsoStyle();
+  });
+
+  $('#qso-copy-reveal').addEventListener('change', (e) => {
+    settings.copyReveal = e.target.checked; persist();
   });
 
   $('#btn-pattern-toggle').addEventListener('click', () => {
@@ -347,6 +380,9 @@ function syncQsoStyle() {
   $$('#qso-style .style-option').forEach((el) => {
     el.classList.toggle('is-active', el.dataset.style === settings.qsoStyle);
   });
+  // 受信内容を出すかどうかは、聞き取り練習でしか効かない
+  $('#copy-reveal-row').hidden = settings.qsoStyle !== 'copy';
+  $('#qso-copy-reveal').checked = settings.copyReveal;
 }
 
 /** 型の早見表を描く。自局・相手局のコールサインは実際の設定を当てはめる。 */
@@ -400,6 +436,16 @@ async function startQso() {
   $('#qso-log').innerHTML = '';
   renderTurn();
   $('#qso-stage').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/** 交信を途中でやめて、開始前の状態に戻す。 */
+function endQso() {
+  if (!qso.script) return;
+  qso.script = null;
+  qso.index = 0;
+  $('#qso-stage').hidden = true;
+  $('#qso-turn').innerHTML = '';
+  $('#qso-log').innerHTML = '';
 }
 
 function appendLog(turn, { reveal }) {
@@ -483,11 +529,15 @@ function renderTurn() {
     </div>
     ${settings.showText ? `<div class="tx-preview">${escapeHtml(turn.text)}</div>` : ''}`;
 
-  const rxOpts = { explainSelector: '#qso-explain' };
-  $('#btn-turn-rx').addEventListener('click', () => playText(turn.text, '#qso-playing', rxOpts));
-  $('#btn-turn-again').addEventListener('click', () => playText(turn.text, '#qso-playing', rxOpts));
+  // 聞き取り練習では、既定では相手の送信を画面に出さない。
+  // 流れている文字や語の意味が見えると、書き取りの答えがそのまま分かってしまう
+  const reveal = settings.copyReveal;
+  const charBox = reveal ? '#qso-playing' : null;
+  const rxOpts = reveal ? { explainSelector: '#qso-explain' } : {};
+  $('#btn-turn-rx').addEventListener('click', () => playText(turn.text, charBox, rxOpts));
+  $('#btn-turn-again').addEventListener('click', () => playText(turn.text, charBox, rxOpts));
   $('#btn-turn-slow').addEventListener('click', () => {
-    playText(turn.text, '#qso-playing', {
+    playText(turn.text, charBox, {
       ...rxOpts,
       charWpm: Math.max(8, settings.charWpm - 5),
       effWpm: Math.max(6, Math.min(settings.effWpm, settings.charWpm - 5) - 3),
@@ -506,7 +556,7 @@ function renderTurn() {
   });
 
   // 自動で受信を始める
-  playText(turn.text, '#qso-playing');
+  playText(turn.text, charBox);
 }
 
 // ───────── ガイド付き模擬交信 ─────────
@@ -594,10 +644,40 @@ function answerChoice(index, turn, box) {
     <div class="annotated">${annotateHtml(correctText, escapeHtml)}</div>
     <div class="playing-char" id="qso-playing"></div>
     <div class="explain-live" id="qso-explain"></div>
+
+    <div class="try-keying">
+      <h4>パドルで打ってみる<span class="optional">任意</span></h4>
+      <p class="hint">
+        上の内容を自分で打てるか試せます。画面右のパドル欄の左右をクリック
+        （パドルを接続していればそのまま打鍵）、またはキーボードの
+        <kbd>Z</kbd>（短点側）/ <kbd>X</kbd>（長点側）で打てます。
+        打たずに次へ進んでもかまいません。
+      </p>
+      <div class="live-keyed" id="qso-keyed"><span class="empty hint">パドルで打ち始めてください。</span></div>
+      <div class="turn-actions">
+        <button type="button" class="btn btn-ghost" id="btn-guide-clear">打ち直す</button>
+        <button type="button" class="btn" id="btn-guide-check">お手本と照合する</button>
+      </div>
+      <div id="qso-guide-keyed-result"></div>
+    </div>
+
     <div class="turn-actions">
       <button type="button" class="btn btn-primary" id="btn-guide-send">送信して次へ</button>
       <button type="button" class="btn btn-ghost" id="btn-guide-skip">音を飛ばして次へ</button>
     </div>`);
+
+  // 打鍵を受け付ける準備（側音のラインを開き、前のターンの符号を消す）
+  player.openKeyLine();
+  keyer.reset();
+
+  $('#btn-guide-clear').addEventListener('click', () => {
+    keyer.reset();
+    $('#qso-guide-keyed-result').innerHTML = '';
+  });
+  $('#btn-guide-check').addEventListener('click', () => {
+    const sent = keyer.flush();
+    $('#qso-guide-keyed-result').innerHTML = sendingDiffHtml(correctText, sent);
+  });
 
   $('#btn-guide-send').addEventListener('click', async (e) => {
     e.target.disabled = true;
@@ -667,7 +747,7 @@ function renderLiveTurn(turn, box) {
     ${info.tip ? `<div class="guide-tip"><strong>ここでのコツ</strong><br>${escapeHtml(info.tip)}</div>` : ''}
     <p class="hint">
       下の内容を、パドルで実際に打って送信してください。
-      画面右下の「パドル」枠の左右をクリック（パドルを接続していればそのまま打鍵）、
+      画面右のパドル欄の左右をクリック（パドルを接続していればそのまま打鍵）、
       またはキーボードの <kbd>Z</kbd>（短点側）/ <kbd>X</kbd>（長点側）でも打てます。
       <code>=</code> は BT（－…－）、<code>&lt;SK&gt;</code> はプロサインとして続けて打ちます。
     </p>
@@ -694,20 +774,17 @@ function renderLiveTurn(turn, box) {
   $('#btn-live-grade').addEventListener('click', () => gradeLiveTurn(turn));
 }
 
-function gradeLiveTurn(turn) {
-  if (qso.graded) return;
-  qso.graded = true;
-  player.stop();
-
-  const sent = keyer.flush();
-  const result = compareSending(turn.text, sent);
-  qso.liveScores.push(result.accuracy);
-
+/**
+ * 手本と打った符号の照合結果を HTML にする。
+ * 実技モードの採点と、ガイド付きの「お手本と照合する」で共通に使う。
+ */
+function sendingDiffHtml(target, sent) {
+  const result = compareSending(target, sent);
   const diff = result.marks
     .map((m) => `<span class="${m.type}">${escapeHtml(m.char === ' ' ? '␣' : m.char)}</span>`)
     .join('');
 
-  $('#qso-live-result').innerHTML = `
+  return `
     <div class="score-line">
       <span class="big">${Math.round(result.accuracy * 100)}%</span>
       <span class="hint">${result.correct} / ${result.total} 文字一致</span>
@@ -717,7 +794,20 @@ function gradeLiveTurn(turn) {
       <span><span class="diff"><span class="ok">■</span></span> 一致</span>
       <span><span class="diff"><span class="missing">■</span></span> 打ち漏らし</span>
       <span><span class="diff"><span class="extra">■</span></span> 余分・誤り</span>
-    </div>
+    </div>`;
+}
+
+function gradeLiveTurn(turn) {
+  if (qso.graded) return;
+  qso.graded = true;
+  player.stop();
+
+  const sent = keyer.flush();
+  const result = compareSending(turn.text, sent);
+  qso.liveScores.push(result.accuracy);
+
+  $('#qso-live-result').innerHTML = `
+    ${sendingDiffHtml(turn.text, sent)}
     <div class="turn-actions">
       <button type="button" class="btn" id="btn-live-retry">もう一度打つ</button>
       <button type="button" class="btn btn-primary" id="btn-live-next">この内容で送信して次へ</button>
@@ -908,6 +998,9 @@ async function playText(text, selector, override = {}) {
   const opts = { ...override };
   delete opts.explainSelector;
 
+  // 新しい再生は一時停止を解除して始まるので、ボタンの表示も戻す
+  queueMicrotask(syncTransport);
+
   return player.play(text, {
     ...opts,
     onToken: (token, index) => {
@@ -1065,6 +1158,25 @@ function updateDrillControls() {
   $('#drill-alphabet').textContent = `使用文字: ${order.slice(0, level).join(' ')}`;
 }
 
+/** ドリルを途中でやめる。連続出題の途中なら、そこまでの結果を締める。 */
+function endDrill() {
+  if (!drill.problem) return;
+  if (drill.session && drill.session.done > 0) {
+    const box = $('#drill-result');
+    box.hidden = false;
+    box.innerHTML = sessionSummaryHtml(drill.session);
+  } else {
+    $('#drill-result').hidden = true;
+    $('#drill-result').innerHTML = '';
+  }
+  drill.problem = null;
+  drill.session = null;
+  drill.awaitingNext = false;
+  $('#drill-answer').value = '';
+  $('#btn-drill-replay').disabled = true;
+  $('#btn-drill-slow').disabled = true;
+}
+
 async function newProblem() {
   drill.awaitingNext = false;
   drill.problem = makeProblem(settings.drillType, {
@@ -1205,6 +1317,22 @@ function initContest() {
         : 'HST 競技では妨害の無い理想的な条件で 10 分間行います。')
       : 'LID は、呼び回しの割り込み・符号の打ち間違い・おかしな RST などを起こす局です。';
 
+    $('#contest-dx-wpm').value = settings.contestDxWpm;
+    $('#contest-dx-wpm-out').textContent = `${settings.contestDxWpm} WPM`;
+    $('#contest-dx-spread').value = settings.contestDxSpread;
+    $('#contest-dx-spread-out').textContent = settings.contestDxSpread === 0
+      ? 'そろえる' : `±${settings.contestDxSpread} WPM`;
+
+    // 相手局の速度は HST 競技だけ全局そろう規定なので、そのときは触らせない
+    const evenSpeed = settings.contestMode === 'hst';
+    $('#contest-dx-spread').disabled = evenSpeed;
+    const lo = Math.max(10, settings.contestDxWpm - (evenSpeed ? 0 : settings.contestDxSpread));
+    const hi = Math.min(45, settings.contestDxWpm + (evenSpeed ? 0 : settings.contestDxSpread));
+    $('#contest-dx-wpm-help').textContent = evenSpeed
+      ? `HST 競技では全局が ${settings.contestDxWpm} WPM でそろいます。`
+      : `呼んでくる局は ${lo}〜${hi} WPM の範囲に散らばります。`
+        + '運用中に変えると、そのあと現れる局から反映されます（呼んでいる最中の局は変わりません）。';
+
     $('#contest-rit').value = String(settings.rit ?? 0);
     $('#contest-rit-out').textContent = `${settings.rit ?? 0} Hz`;
     $('#contest-bandwidth').value = String(settings.bandwidth);
@@ -1217,6 +1345,17 @@ function initContest() {
   $('#contest-activity').addEventListener('input', (e) => { settings.contestActivity = Number(e.target.value); persist(); sync(); });
   $('#contest-mynumber').addEventListener('input', (e) => { settings.contestMyNumber = e.target.value.toUpperCase(); persist(); });
   $('#contest-record').addEventListener('change', (e) => { settings.contestRecord = e.target.checked; persist(); });
+
+  $('#contest-dx-wpm').addEventListener('input', (e) => {
+    settings.contestDxWpm = Number(e.target.value);
+    persist(); sync();
+    if (contest.running) contest.setDxWpm(settings.contestDxWpm);
+  });
+  $('#contest-dx-spread').addEventListener('input', (e) => {
+    settings.contestDxSpread = Number(e.target.value);
+    persist(); sync();
+    if (contest.running) contest.setDxSpread(settings.contestDxSpread);
+  });
 
   CONDITION_KEYS.forEach((k) => {
     $(`#cond-${k}`).addEventListener('change', (e) => {
@@ -1361,6 +1500,8 @@ async function startContest() {
     myCall: settings.callsign,
     myNumber: settings.contestMyNumber,
     myWpm: settings.charWpm,
+    dxWpm: settings.contestDxWpm,
+    dxSpread: settings.contestDxSpread,
     conditions: {
       qrn: settings.condQrn ? 0.5 : 0,
       qrm: settings.condQrm ? 0.5 : 0,
@@ -1584,7 +1725,6 @@ function initKeyer() {
     .map(([key, v]) => `<option value="${key}">${v.label}</option>`)
     .join('');
 
-  const pad = $('#keyer-pad');
   const weightOut = $('#keyer-weight-out');
   const wpmOut = $('#keyer-wpm-out');
 
@@ -1620,9 +1760,12 @@ function initKeyer() {
   $('#keyer-weight').addEventListener('input', (e) => {
     settings.keyerWeight = Number(e.target.value); persist(); syncKeyer(); touched('keyerWeight');
   });
-  $('#keyer-wpm').addEventListener('input', (e) => {
+  // パドル送信タブのつまみと、右のパドル欄のつまみは同じ設定を指す
+  const setKeyerWpm = (e) => {
     settings.keyerWpm = Number(e.target.value); persist(); syncKeyer(); touched('keyerWpm');
-  });
+  };
+  $('#keyer-wpm').addEventListener('input', setKeyerWpm);
+  $('#pw-wpm').addEventListener('input', setKeyerWpm);
   $('#keyer-freq').addEventListener('input', (e) => {
     settings.keyerFreq = Number(e.target.value);
     player.setSettings({ keyerFreq: settings.keyerFreq });  // 打鍵中でも即時反映
@@ -1674,9 +1817,6 @@ function initKeyer() {
     checkTutorial();
   });
   keyer.addEventListener('update', renderKeyedText);
-
-  // パッドをクリックしたときにフォーカスを移し、キーボード入力も受けられるようにする
-  pad.addEventListener('mousedown', () => pad.focus());
 
   syncKeyerControls = syncKeyer;
   syncKeyer();
@@ -1802,20 +1942,12 @@ function checkTutorial() {
   }
 }
 
-/** 利き手設定に応じて、ランプ・説明文・パッドの案内をまとめて描き直す。 */
+/** 利き手設定に応じて、説明文とパドル欄の案内をまとめて描き直す。 */
 function renderPaddleAssignment() {
   const map = paddleAssignment(settings);
-  const label = (element) => (element === 'dit' ? '・ 短点' : '－ 長点');
   const handName = settings.keyerHand === 'left' ? '左手用' : '右手用';
 
-  $('#lamp-left').textContent = `左ボタン ${label(map.left)}`;
-  $('#lamp-right').textContent = `右ボタン ${label(map.right)}`;
   $('#keyer-hand-current').textContent = handName;
-
-  $('#keyer-pad .pad-hint').innerHTML =
-    `左ボタン＝${map.left === 'dit' ? '短点' : '長点'}／`
-    + `右ボタン＝${map.right === 'dit' ? '短点' : '長点'}`
-    + '（キーボードは <kbd>Z</kbd> / <kbd>X</kbd>）';
 
   const thumbSide = map.thumbButton === 'right' ? '右' : '左';
   const thumbElement = settings.keyerThumb === 'dah' ? '長点' : '短点';
@@ -1837,29 +1969,27 @@ function renderKeyedText() {
     + (pending ? `<span class="pending">${escapeHtml(pending)}</span>` : '');
 }
 
-/** パドル入力の有効・無効を切り替える。 */
+/**
+ * パドル送信タブでの「画面全体で受け付ける」を切り替える。
+ * 打面そのものは右のパドル欄が常時受け付けているので、
+ * ここで足すのは画面全体への取り付けだけ。
+ */
 function setPaddleActive(active) {
   if (paddle.detach) { paddle.detach(); paddle.detach = null; }
-  const pad = $('#keyer-pad');
-  if (!pad) return;
-
-  if (!active) {
-    keyer.stop();
-    pad.classList.remove('is-active');
-    $('#lamp-left')?.classList.remove('on');
-    $('#lamp-right')?.classList.remove('on');
-    return;
-  }
+  if (!active) { keyer.stop(); return; }
 
   keyer.start();
-  pad.classList.add('is-active');
-  // ランプは物理ボタンに対応させ、どちらの要素かはラベル側で示す
-  paddle.detach = attachPaddleInput(keyer, pad, {
-    global: settings.keyerGlobal,
-    onState: (state) => {
-      $('#lamp-left').classList.toggle('on', state.left);
-      $('#lamp-right').classList.toggle('on', state.right);
-    },
+  const lamps = (state) => {
+    $('#pw-left').classList.toggle('on', state.left);
+    $('#pw-right').classList.toggle('on', state.right);
+  };
+
+  // 打面は右のパドル欄が受け持つので、ここで足すのは
+  // キーボード（Z/X）と、全画面モードのときだけマウスも
+  paddle.detach = attachPaddleInput(keyer, document.body, {
+    global: true,
+    mouse: settings.keyerGlobal,
+    onState: lamps,
   });
 }
 
@@ -1886,6 +2016,15 @@ function newKeyerTask() {
     $('#btn-keyer-listen').disabled = false;
   }
 
+  keyer.reset();
+  paddle.elements = '';
+  $('#keyer-elements').textContent = '';
+  $('#keyer-result').innerHTML = '';
+  renderKeyedText();
+}
+
+/** パドル送信の課題をやめて、打鍵と採点結果を消す。 */
+function endKeyerTask() {
   keyer.reset();
   paddle.elements = '';
   $('#keyer-elements').textContent = '';

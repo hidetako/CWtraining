@@ -26,9 +26,12 @@ export class CWPlayer {
       ramp: 0.005,   // キーイングの立ち上がり時間 秒
     };
     this._playId = 0;
-    this._timers = [];
+    this._timers = [];   // { id, fn, at, handle } — 一時停止で組み直せるよう内容を保持する
     this._active = null;
+    this._paused = false;
   }
+
+  get paused() { return this._paused; }
 
   /** AudioContext を用意する。ユーザー操作のハンドラ内から呼ぶこと。 */
   async resume() {
@@ -264,17 +267,58 @@ export class CWPlayer {
   }
 
   _schedule(id, delayMs, fn) {
-    const timer = setTimeout(() => {
+    const entry = { id, fn, at: Date.now() + Math.max(0, delayMs), handle: null };
+    entry.handle = setTimeout(() => {
+      this._timers = this._timers.filter((t) => t !== entry);
       if (this._playId === id) fn();
     }, Math.max(0, delayMs));
-    this._timers.push(timer);
+    this._timers.push(entry);
+  }
+
+  /**
+   * 再生を一時停止する。AudioContext を止めると currentTime も止まるので、
+   * 予約済みの音の続きはそのまま保たれる。文字表示などのコールバックは
+   * 残り時間を覚えておいて、再開時に組み直す。
+   */
+  async pause() {
+    if (!this.ctx || this._paused) return false;
+    if (!this._active && !this._timers.length && this.ctx.state !== 'running') return false;
+
+    const now = Date.now();
+    this._timers.forEach((t) => {
+      clearTimeout(t.handle);
+      t.handle = null;
+      t.remain = Math.max(0, t.at - now);
+    });
+    this._paused = true;
+    await this.ctx.suspend();
+    return true;
+  }
+
+  /** 一時停止した再生を続きから再開する。 */
+  async resumePlay() {
+    if (!this.ctx || !this._paused) return false;
+    await this.ctx.resume();
+    this._paused = false;
+
+    const pending = this._timers;
+    this._timers = [];
+    pending.forEach((t) => {
+      if (this._playId !== t.id) return;
+      this._schedule(t.id, t.remain ?? 0, t.fn);
+    });
+    return true;
   }
 
   /** 再生中の音とコールバックをすべて止める。 */
   stop() {
     this._playId += 1;
-    this._timers.forEach(clearTimeout);
+    this._timers.forEach((t) => { if (t.handle) clearTimeout(t.handle); });
     this._timers = [];
+    if (this._paused) {
+      this._paused = false;
+      this.ctx?.resume();
+    }
 
     if (this._active) {
       const now = this.ctx.currentTime;

@@ -11,7 +11,14 @@
 // 待たされ続ければ諦めて去る。
 
 import { makeCallsign, pick, pickInt } from './data.js';
+import { KEYER_WPM_MAX } from './keyer.js';
 import { ContestLog, QSO_ERROR, normalizeNumber } from './contestlog.js';
+
+/** 相手局の速度の下限・上限（WPM）。自局の上限とは別枠。 */
+export const DX_WPM_MIN = 10;
+export const DX_WPM_MAX = 45;
+export const clampDxWpm = (wpm) =>
+  Math.max(DX_WPM_MIN, Math.min(DX_WPM_MAX, Number(wpm) || DX_WPM_MIN));
 
 /** 運用モード。Morse Runner の TRunMode に対応する。 */
 export const RUN_MODES = {
@@ -79,7 +86,7 @@ const JARL_NUMBERS = [
 
 class DxStation {
   constructor(opts) {
-    const { myWpm, conditions, exchange, lidsEnabled, hst } = opts;
+    const { dxWpm, dxSpread, conditions, exchange, lidsEnabled, hst } = opts;
 
     this.callsign = opts.callsign || makeCallsign();
     this.nr = opts.nr ?? pickInt(1, 999);
@@ -88,7 +95,9 @@ class DxStation {
 
     // 局ごとに音程・速度・強さを散らし、耳で分離できるようにする
     this.offset = hst ? 0 : pickInt(-450, 450);
-    this.wpm = Math.max(12, myWpm + (hst ? 0 : pickInt(-5, 8)));
+    // 相手局の速度は基準値のまわりに散らす。ばらつきを 0 にすると全局そろう
+    const spread = (hst || !dxSpread) ? 0 : pickInt(-dxSpread, dxSpread);
+    this.wpm = Math.max(DX_WPM_MIN, Math.min(DX_WPM_MAX, (dxWpm ?? 25) + spread));
     this.amplitude = hst ? 1 : 0.35 + Math.random() * 0.65;
     this.qsb = conditions.qsb && !hst ? Math.random() * 0.8 : 0;
     this.flutter = conditions.flutter && !hst && Math.random() < 0.2 ? 0.6 : 0;
@@ -239,6 +248,7 @@ export class ContestRunner extends EventTarget {
   /**
    * @param {object} opts
    *   { mode, minutes, activity, exchange, myCall, myNumber, myWpm,
+   *     dxWpm, dxSpread,
    *     conditions: { qrn, qrm, qsb, flutter, lids } }
    */
   start(opts) {
@@ -256,7 +266,10 @@ export class ContestRunner extends EventTarget {
       exchange: opts.exchange ?? 'serial',
       myCall: (opts.myCall || 'JA1ABC').toUpperCase(),
       myNumber: (opts.myNumber || '13H').toUpperCase(),
-      myWpm: opts.myWpm ?? 25,
+      myWpm: Math.min(KEYER_WPM_MAX, opts.myWpm ?? 25),
+      // 相手局の速度は自局とは別に決める。未指定なら従来どおり自局に寄せる
+      dxWpm: clampDxWpm(opts.dxWpm ?? (opts.myWpm ?? 25) + 2),
+      dxSpread: hst ? 0 : Math.max(0, Math.min(12, opts.dxSpread ?? 6)),
       conditions: hst
         ? { qrn: 0, qrm: 0, qsb: 0, flutter: false, lids: false }
         : wpx
@@ -326,7 +339,8 @@ export class ContestRunner extends EventTarget {
     const count = pickInt(1, 2);
     for (let i = 0; i < count; i++) {
       const st = new DxStation({
-        myWpm: this.opts.myWpm,
+        dxWpm: this.opts.dxWpm,
+        dxSpread: this.opts.dxSpread,
         conditions: this.opts.conditions,
         exchange: this.opts.exchange,
         lidsEnabled: false,
@@ -417,7 +431,8 @@ export class ContestRunner extends EventTarget {
 
     for (let i = 0; i < count; i++) {
       const st = new DxStation({
-        myWpm: this.opts.myWpm,
+        dxWpm: this.opts.dxWpm,
+        dxSpread: this.opts.dxSpread,
         conditions: this.opts.conditions,
         exchange: this.opts.exchange,
         lidsEnabled: !!this.opts.conditions.lids,
@@ -526,10 +541,30 @@ export class ContestRunner extends EventTarget {
     return entry;
   }
 
+  /**
+   * 運用中に相手局の速度の基準値を変える。
+   * すでに呼んできている局の速度は変えない（現実の交信でも相手の手は変えられない）。
+   * 以降に現れる局からこの速度になる。
+   */
+  setDxWpm(wpm) {
+    if (!this.opts) return null;
+    this.opts.dxWpm = clampDxWpm(wpm);
+    this._emit('state');
+    return this.opts.dxWpm;
+  }
+
+  /** 相手局どうしの速度のばらつき（±WPM）。0 で全局そろう。 */
+  setDxSpread(spread) {
+    if (!this.opts) return null;
+    this.opts.dxSpread = Math.max(0, Math.min(12, Number(spread) || 0));
+    this._emit('state');
+    return this.opts.dxSpread;
+  }
+
   /** 運用中に自局の送信速度を増減する（PgUp / PgDn 相当）。 */
   adjustWpm(delta) {
     if (!this.opts) return null;
-    this.opts.myWpm = Math.max(10, Math.min(45, this.opts.myWpm + delta));
+    this.opts.myWpm = Math.max(10, Math.min(KEYER_WPM_MAX, this.opts.myWpm + delta));
     this._emit('state');
     return this.opts.myWpm;
   }

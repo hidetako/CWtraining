@@ -1,5 +1,7 @@
 // 設定と学習統計の永続化（localStorage）
 
+import { clampKeyerWpm } from './keyer.js';
+
 const SETTINGS_KEY = 'cwtraining.settings.v1';
 const STATS_KEY = 'cwtraining.stats.v1';
 
@@ -36,6 +38,7 @@ export const DEFAULT_SETTINGS = {
   qsoReaction: 'normal',   // 相手の反応のゆらぎ
   showText: false,      // 送信中に本文を表示するか
   beginnerMode: true,   // Q 符号・略語の解説をリアルタイムで出すか
+  copyReveal: false,    // 聞き取り練習で、受信中に相手の送信を画面に出すか
 
   // エレクトロニックキーヤー
   keyerMode: 'iambicB',
@@ -46,13 +49,14 @@ export const DEFAULT_SETTINGS = {
   keyerGlobal: false,
   keyerTaskType: 'callsign',
   keyerFreq: 700,       // 送信側音の高さ Hz（受信の freq とは独立）
-  paddleWidgetOpen: null,  // null = 自動（画面幅で判断）
 
   // コンテスト運用
   contestMode: 'pileup',
   contestExchange: 'serial',
   contestMinutes: 5,
   contestActivity: 3,
+  contestDxWpm: 22,      // 相手局の速度の基準（WPM）
+  contestDxSpread: 6,    // 相手局どうしの速度のばらつき（±WPM、0 でそろう）
   contestMyNumber: '13H',
   contestRecord: false,
 
@@ -104,6 +108,10 @@ export function loadSettings() {
     settings.keyerHandMigrated = true;
     delete settings.keyerSwap;
   }
+
+  // 送信速度の上限を下げた際、以前の設定値が範囲外のまま残らないようにする
+  settings.keyerWpm = clampKeyerWpm(settings.keyerWpm);
+
   return settings;
 }
 

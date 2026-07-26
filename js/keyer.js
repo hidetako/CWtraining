@@ -11,6 +11,12 @@ import { decodePattern } from './morse.js';
 
 const LOOKAHEAD = 0.008; // 秒。次要素を決める前倒し量
 
+/** 送信速度の下限・上限（WPM）。画面のつまみと保存値の両方をこれで抑える。 */
+export const KEYER_WPM_MIN = 5;
+export const KEYER_WPM_MAX = 28;
+export const clampKeyerWpm = (wpm) =>
+  Math.max(KEYER_WPM_MIN, Math.min(KEYER_WPM_MAX, Number(wpm) || KEYER_WPM_MIN));
+
 export const KEYER_MODES = {
   iambicB: { label: 'アイアンビック B（一般的）', help: '両方を離した後にもう 1 要素送出します。多くの市販キーヤーの既定値です。' },
   iambicA: { label: 'アイアンビック A', help: '両方を離した時点で、送出中の要素を最後に停止します。' },
@@ -56,7 +62,7 @@ export class ElectronicKeyer extends EventTarget {
 
   setParams({ mode, wpm, weight, swap } = {}) {
     if (mode) this.mode = mode;
-    if (wpm) this.wpm = Math.max(5, Math.min(60, wpm));
+    if (wpm) this.wpm = clampKeyerWpm(wpm);
     if (weight != null) this.weight = Math.max(30, Math.min(70, weight));
     if (swap != null) this.swap = !!swap;
   }
@@ -264,7 +270,9 @@ export class ElectronicKeyer extends EventTarget {
  *
  * @param {ElectronicKeyer} keyer
  * @param {HTMLElement} pad  入力を受け付ける要素
- * @param {object} opts { global: 画面全体でパドル入力を拾うか, onState }
+ * @param {object} opts { global: 画面全体でパドル入力を拾うか,
+ *                       mouse: false でマウス／タッチを取らずキーボードだけにする,
+ *                       keyboard: false でキーボードを取らない, onState }
  */
 export function attachPaddleInput(keyer, pad, opts = {}) {
   const target = opts.global ? document : pad;
@@ -353,12 +361,15 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
     }
   };
 
-  target.addEventListener('mousedown', onDown);
-  window.addEventListener('mouseup', onUp);      // パッド外で離しても取りこぼさない
-  target.addEventListener('contextmenu', onContextMenu);
-  pad.addEventListener('touchstart', onTouchStart, { passive: false });
-  pad.addEventListener('touchend', onTouchEnd, { passive: false });
-  pad.addEventListener('touchcancel', onTouchEnd, { passive: false });
+  // 打面を持たず、キーボードだけ受け付けたいときは opts.mouse === false を渡す
+  if (opts.mouse !== false) {
+    target.addEventListener('mousedown', onDown);
+    window.addEventListener('mouseup', onUp);      // パッド外で離しても取りこぼさない
+    target.addEventListener('contextmenu', onContextMenu);
+    pad.addEventListener('touchstart', onTouchStart, { passive: false });
+    pad.addEventListener('touchend', onTouchEnd, { passive: false });
+    pad.addEventListener('touchcancel', onTouchEnd, { passive: false });
+  }
   // 常時表示ウィジェットなど、複数箇所から接続するときに
   // キーボードの二重発火を避けられるよう、opts.keyboard === false で無効化できる
   if (opts.keyboard !== false) {
@@ -367,12 +378,14 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
   }
 
   return function detach() {
-    target.removeEventListener('mousedown', onDown);
-    window.removeEventListener('mouseup', onUp);
-    target.removeEventListener('contextmenu', onContextMenu);
-    pad.removeEventListener('touchstart', onTouchStart);
-    pad.removeEventListener('touchend', onTouchEnd);
-    pad.removeEventListener('touchcancel', onTouchEnd);
+    if (opts.mouse !== false) {
+      target.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mouseup', onUp);
+      target.removeEventListener('contextmenu', onContextMenu);
+      pad.removeEventListener('touchstart', onTouchStart);
+      pad.removeEventListener('touchend', onTouchEnd);
+      pad.removeEventListener('touchcancel', onTouchEnd);
+    }
     if (opts.keyboard !== false) {
       document.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('keyup', onKeyUp);

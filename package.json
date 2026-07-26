@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "test": "tests/run-e2e.sh",
+    "docs": "node docs/build-manual-docx.js"
+  },
   "dependencies": {
     "docx": "^9.7.1"
   }
