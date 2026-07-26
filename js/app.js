@@ -67,8 +67,6 @@ function initPaddleWidget() {
     onState: (state) => {
       $('#pw-left').classList.toggle('on', state.left);
       $('#pw-right').classList.toggle('on', state.right);
-      $('#lamp-left')?.classList.toggle('on', state.left);
-      $('#lamp-right')?.classList.toggle('on', state.right);
     },
   });
 
@@ -105,13 +103,9 @@ function syncPaddleWidget() {
   $('#pw-wpm-out').textContent = `${settings.keyerWpm} WPM`;
 
   const onKeyerTab = $('#panel-keyer')?.classList.contains('is-active');
-  let scope = 'この枠内はいつでもパドル入力を受け付けます（左半分＝左ボタン扱い）。';
-  if (onKeyerTab) {
-    scope = settings.keyerGlobal
-      ? '現在は画面全体でパドル入力を受け付けています（ボタンや入力欄の上を除く）。'
-      : 'この枠内と、パドル送信タブのパッドで入力を受け付けています。';
-  }
-  $('#pw-scope').textContent = scope;
+  $('#pw-scope').textContent = (onKeyerTab && settings.keyerGlobal)
+    ? '現在は画面全体でパドル入力を受け付けています（ボタンや入力欄の上を除く）。'
+    : 'この枠内はいつでもパドル入力を受け付けます（左半分＝左ボタン扱い）。';
 }
 
 /** 各タブに置いた初心者モードのスイッチを、設定と同期させる。 */
@@ -1702,7 +1696,6 @@ function initKeyer() {
     .map(([key, v]) => `<option value="${key}">${v.label}</option>`)
     .join('');
 
-  const pad = $('#keyer-pad');
   const weightOut = $('#keyer-weight-out');
   const wpmOut = $('#keyer-wpm-out');
 
@@ -1795,9 +1788,6 @@ function initKeyer() {
     checkTutorial();
   });
   keyer.addEventListener('update', renderKeyedText);
-
-  // パッドをクリックしたときにフォーカスを移し、キーボード入力も受けられるようにする
-  pad.addEventListener('mousedown', () => pad.focus());
 
   syncKeyerControls = syncKeyer;
   syncKeyer();
@@ -1923,20 +1913,12 @@ function checkTutorial() {
   }
 }
 
-/** 利き手設定に応じて、ランプ・説明文・パッドの案内をまとめて描き直す。 */
+/** 利き手設定に応じて、説明文とパドル欄の案内をまとめて描き直す。 */
 function renderPaddleAssignment() {
   const map = paddleAssignment(settings);
-  const label = (element) => (element === 'dit' ? '・ 短点' : '－ 長点');
   const handName = settings.keyerHand === 'left' ? '左手用' : '右手用';
 
-  $('#lamp-left').textContent = `左ボタン ${label(map.left)}`;
-  $('#lamp-right').textContent = `右ボタン ${label(map.right)}`;
   $('#keyer-hand-current').textContent = handName;
-
-  $('#keyer-pad .pad-hint').innerHTML =
-    `左ボタン＝${map.left === 'dit' ? '短点' : '長点'}／`
-    + `右ボタン＝${map.right === 'dit' ? '短点' : '長点'}`
-    + '（キーボードは <kbd>Z</kbd> / <kbd>X</kbd>）';
 
   const thumbSide = map.thumbButton === 'right' ? '右' : '左';
   const thumbElement = settings.keyerThumb === 'dah' ? '長点' : '短点';
@@ -1958,29 +1940,27 @@ function renderKeyedText() {
     + (pending ? `<span class="pending">${escapeHtml(pending)}</span>` : '');
 }
 
-/** パドル入力の有効・無効を切り替える。 */
+/**
+ * パドル送信タブでの「画面全体で受け付ける」を切り替える。
+ * 打面そのものは右のパドル欄が常時受け付けているので、
+ * ここで足すのは画面全体への取り付けだけ。
+ */
 function setPaddleActive(active) {
   if (paddle.detach) { paddle.detach(); paddle.detach = null; }
-  const pad = $('#keyer-pad');
-  if (!pad) return;
-
-  if (!active) {
-    keyer.stop();
-    pad.classList.remove('is-active');
-    $('#lamp-left')?.classList.remove('on');
-    $('#lamp-right')?.classList.remove('on');
-    return;
-  }
+  if (!active) { keyer.stop(); return; }
 
   keyer.start();
-  pad.classList.add('is-active');
-  // ランプは物理ボタンに対応させ、どちらの要素かはラベル側で示す
-  paddle.detach = attachPaddleInput(keyer, pad, {
-    global: settings.keyerGlobal,
-    onState: (state) => {
-      $('#lamp-left').classList.toggle('on', state.left);
-      $('#lamp-right').classList.toggle('on', state.right);
-    },
+  const lamps = (state) => {
+    $('#pw-left').classList.toggle('on', state.left);
+    $('#pw-right').classList.toggle('on', state.right);
+  };
+
+  // 打面は右のパドル欄が受け持つので、ここで足すのは
+  // キーボード（Z/X）と、全画面モードのときだけマウスも
+  paddle.detach = attachPaddleInput(keyer, document.body, {
+    global: true,
+    mouse: settings.keyerGlobal,
+    onState: lamps,
   });
 }
 

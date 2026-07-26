@@ -16,10 +16,10 @@ await page.waitForTimeout(500);
 await page.click('.tab[data-panel="keyer"]');
 await page.waitForTimeout(300);
 await page.selectOption('#keyer-task-type','free');
-await page.locator('#keyer-pad').scrollIntoViewIfNeeded();
+await page.locator('#pw-pad').scrollIntoViewIfNeeded();
 await page.waitForTimeout(200);
 
-const b = await page.locator('#keyer-pad').boundingBox();
+const b = await page.locator('#pw-pad').boundingBox();
 await page.mouse.move(b.x+b.width/2, b.y+b.height/2);
 const tap = async (btn,ms)=>{ await page.mouse.down({button:btn}); await page.waitForTimeout(ms); await page.mouse.up({button:btn}); };
 
@@ -27,8 +27,8 @@ const tap = async (btn,ms)=>{ await page.mouse.down({button:btn}); await page.wa
 async function probe(button){
   await page.evaluate(()=>window.__cw.keyer.reset());
   // 設定操作でスクロールしている場合があるので、毎回パッド中央に置き直す
-  await page.locator('#keyer-pad').scrollIntoViewIfNeeded();
-  const bb = await page.locator('#keyer-pad').boundingBox();
+  await page.locator('#pw-pad').scrollIntoViewIfNeeded();
+  const bb = await page.locator('#pw-pad').boundingBox();
   await page.mouse.move(bb.x+bb.width/2, bb.y+bb.height/2);
   await tap(button, 420);
   await page.waitForTimeout(700);
@@ -44,25 +44,28 @@ for (const [hand, thumb] of combos){
   await page.selectOption('#keyer-hand', hand);
   await page.locator('#keyer-thumb').setChecked(thumb==='dah');
   await page.waitForTimeout(250);
-  const lampL = (await page.textContent('#lamp-left')).trim();
-  const lampR = (await page.textContent('#lamp-right')).trim();
+  const lampL = (await page.textContent('#pw-left')).trim();
+  const lampR = (await page.textContent('#pw-right')).trim();
   const left = await probe('left');
   const right = await probe('right');
   console.log(`${hand.padEnd(5)}/親指=${thumb} | ${lampL} | ${lampR} | 左押し="${left}" 右押し="${right}"`);
 }
 
-// キーボード Z/X も割り当てに追従するか
+// キーボード Z/X も割り当てに追従するか（このとき利き手=左・親指=長点なので Z は短点側）
 await page.selectOption('#keyer-hand','left');
 await page.waitForTimeout(200);
 await page.evaluate(()=>window.__cw.keyer.reset());
-await page.locator('#keyer-pad').click();
+// 入力欄に焦点があるとキーボード打鍵は無効なので、外してから試す
+await page.evaluate(() => document.activeElement?.blur());
 await page.keyboard.down('z'); await page.waitForTimeout(420); await page.keyboard.up('z');
 await page.waitForTimeout(700);
-console.log('左手用でZ押しっぱなし (長点になるはず):', JSON.stringify(await page.evaluate(()=>window.__cw.keyer.text.trim())));
+const zKeyed = await page.evaluate(()=>window.__cw.keyer.text.trim());
+console.log('左手用・親指=長点でZ押しっぱなし (短点になるはず):', JSON.stringify(zKeyed));
+if (!/^[EISH5]+$/.test(zKeyed)) { console.log('✗ Z が短点側になっていない'); errors.push('Z の割り当てが誤り: ' + zKeyed); }
 
 console.log('hand hint:', (await page.textContent('#keyer-hand-help')).trim());
 console.log('lede:', (await page.textContent('#keyer-hand-current')).trim());
-console.log('pad hint:', (await page.textContent('#keyer-pad .pad-hint')).trim());
+console.log('pad scope:', (await page.textContent('#pw-scope')).trim());
 
 // 永続化の確認
 await page.reload();

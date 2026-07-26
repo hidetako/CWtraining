@@ -97,7 +97,7 @@ await page.waitForTimeout(300);
 await page.selectOption('#keyer-task-type', 'free');
 await page.waitForTimeout(200);
 
-const pad = page.locator('#keyer-pad');
+const pad = page.locator('#pw-pad');
 await pad.scrollIntoViewIfNeeded();
 await page.waitForTimeout(200);
 const b = await pad.boundingBox();

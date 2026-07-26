@@ -42,7 +42,7 @@ console.log('警告解除後のゴール:', (await page.textContent('#tutorial-g
 await page.locator('#keyer-wpm').evaluate(el=>{ el.value='15'; el.dispatchEvent(new Event('input',{bubbles:true})); });
 await page.waitForTimeout(1700);
 console.log('スライダーのみ → まだ速度ステップ:', (await page.textContent('#tutorial-title')).includes('速度'));
-const pad = await page.locator('#keyer-pad');
+const pad = await page.locator('#pw-pad');
 await pad.scrollIntoViewIfNeeded(); await page.waitForTimeout(150);
 const b = await pad.boundingBox();
 await page.mouse.move(b.x+b.width/2, b.y+b.height/2);

@@ -20,7 +20,7 @@ console.log('設定:', await page.evaluate(()=>window.__cw.settings.keyerFreq),
             '/ 表示:', await page.textContent('#keyer-freq-out'));
 
 // 打鍵ラインの実周波数
-const pad = page.locator('#keyer-pad');
+const pad = page.locator('#pw-pad');
 await pad.scrollIntoViewIfNeeded(); await page.waitForTimeout(150);
 const b = await pad.boundingBox();
 await page.mouse.move(b.x+b.width/2, b.y+b.height/2);

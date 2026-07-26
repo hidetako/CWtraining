@@ -270,7 +270,9 @@ export class ElectronicKeyer extends EventTarget {
  *
  * @param {ElectronicKeyer} keyer
  * @param {HTMLElement} pad  入力を受け付ける要素
- * @param {object} opts { global: 画面全体でパドル入力を拾うか, onState }
+ * @param {object} opts { global: 画面全体でパドル入力を拾うか,
+ *                       mouse: false でマウス／タッチを取らずキーボードだけにする,
+ *                       keyboard: false でキーボードを取らない, onState }
  */
 export function attachPaddleInput(keyer, pad, opts = {}) {
   const target = opts.global ? document : pad;
@@ -359,12 +361,15 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
     }
   };
 
-  target.addEventListener('mousedown', onDown);
-  window.addEventListener('mouseup', onUp);      // パッド外で離しても取りこぼさない
-  target.addEventListener('contextmenu', onContextMenu);
-  pad.addEventListener('touchstart', onTouchStart, { passive: false });
-  pad.addEventListener('touchend', onTouchEnd, { passive: false });
-  pad.addEventListener('touchcancel', onTouchEnd, { passive: false });
+  // 打面を持たず、キーボードだけ受け付けたいときは opts.mouse === false を渡す
+  if (opts.mouse !== false) {
+    target.addEventListener('mousedown', onDown);
+    window.addEventListener('mouseup', onUp);      // パッド外で離しても取りこぼさない
+    target.addEventListener('contextmenu', onContextMenu);
+    pad.addEventListener('touchstart', onTouchStart, { passive: false });
+    pad.addEventListener('touchend', onTouchEnd, { passive: false });
+    pad.addEventListener('touchcancel', onTouchEnd, { passive: false });
+  }
   // 常時表示ウィジェットなど、複数箇所から接続するときに
   // キーボードの二重発火を避けられるよう、opts.keyboard === false で無効化できる
   if (opts.keyboard !== false) {
@@ -373,12 +378,14 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
   }
 
   return function detach() {
-    target.removeEventListener('mousedown', onDown);
-    window.removeEventListener('mouseup', onUp);
-    target.removeEventListener('contextmenu', onContextMenu);
-    pad.removeEventListener('touchstart', onTouchStart);
-    pad.removeEventListener('touchend', onTouchEnd);
-    pad.removeEventListener('touchcancel', onTouchEnd);
+    if (opts.mouse !== false) {
+      target.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mouseup', onUp);
+      target.removeEventListener('contextmenu', onContextMenu);
+      pad.removeEventListener('touchstart', onTouchStart);
+      pad.removeEventListener('touchend', onTouchEnd);
+      pad.removeEventListener('touchcancel', onTouchEnd);
+    }
     if (opts.keyboard !== false) {
       document.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('keyup', onKeyUp);

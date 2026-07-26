@@ -18,22 +18,53 @@ await page.waitForTimeout(600);
 // ── パドル欄が右 1/4 に常置されている ──────────────
 const geom = await page.evaluate(() => {
   const r = document.querySelector('#paddle-widget').getBoundingClientRect();
-  return { x: r.x, w: r.width, h: r.height, vw: innerWidth, vh: innerHeight };
+  const tabs = document.querySelector('.tabs').getBoundingClientRect();
+  const pad = document.querySelector('#pw-pad').getBoundingClientRect();
+  return {
+    x: r.x, w: r.width, top: r.top, bottom: r.bottom,
+    tabsBottom: tabs.bottom, padH: pad.height, padW: pad.width,
+    vw: innerWidth, vh: innerHeight,
+  };
 });
 console.log('パドル欄:', JSON.stringify(geom));
-ok('幅が画面の 1/4', Math.abs(geom.w / geom.vw - 0.25) < 0.01, `${(geom.w / geom.vw * 100).toFixed(1)}%`);
+ok('幅が画面の 28%', Math.abs(geom.w / geom.vw - 0.28) < 0.01, `${(geom.w / geom.vw * 100).toFixed(1)}%`);
 ok('画面の右端に接している', Math.abs(geom.x + geom.w - geom.vw) < 2);
-ok('画面の高さいっぱい', Math.abs(geom.h - geom.vh) < 2);
+ok('タブの直下から始まる', Math.abs(geom.top - geom.tabsBottom) < 2, `${geom.top.toFixed(0)} vs ${geom.tabsBottom.toFixed(0)}`);
+ok('画面の下端まで届く', Math.abs(geom.bottom - geom.vh) < 2);
+ok('打面が十分に大きい', geom.padH >= 300 && geom.padW >= 300, `${geom.padW.toFixed(0)}×${geom.padH.toFixed(0)}`);
 ok('本文と重なっていない', await page.evaluate(() => {
   const rail = document.querySelector('#paddle-widget').getBoundingClientRect();
   const body = document.querySelector('.app-main').getBoundingClientRect();
   return body.right <= rail.left + 1;
 }));
+// 本文を下までスクロールしてもパドル欄は動かない
+await page.evaluate(() => { document.querySelector('.app-main').scrollTop = 99999; });
+await page.waitForTimeout(200);
+ok('スクロールしても位置が変わらない', await page.evaluate((t) => {
+  const r = document.querySelector('#paddle-widget').getBoundingClientRect();
+  return Math.abs(r.top - t) < 2;
+}, geom.top));
+await page.evaluate(() => { document.querySelector('.app-main').scrollTop = 0; });
 await page.screenshot({ path: `${DIR}/L1-rail.png` });
 
 // たたむ仕組みは持たない（常置）
 ok('たたむボタンは無い', await page.locator('#pw-toggle').count() === 0);
 ok('モバイル用の要約トグルは無い', await page.locator('#qa-toggle').count() === 0);
+
+// 打面は 1 か所だけ。パドル送信タブに二つ目を置かない
+await page.click('.tab[data-panel="keyer"]');
+await page.waitForTimeout(250);
+ok('パドル送信タブに二つ目の打面が無い', await page.locator('#keyer-pad').count() === 0);
+ok('画面全体で打面は 1 つ', await page.locator('.pw-pad').count() === 1);
+// それでもキーボード Z/X は効く
+await page.evaluate(() => { window.__cw.keyer.reset(); document.activeElement?.blur(); });
+await page.keyboard.down('z'); await page.waitForTimeout(300); await page.keyboard.up('z');
+await page.waitForTimeout(600);
+const zText = await page.evaluate(() => window.__cw.keyer.text.trim());
+ok('打面が無くても Z で打てる', zText.length > 0, zText);
+await page.evaluate(() => window.__cw.keyer.reset());
+await page.click('.tab[data-panel="qso"]');
+await page.waitForTimeout(200);
 
 // どのタブに移っても残る
 for (const t of ['drill', 'contest', 'keyer', 'tools', 'glossary', 'settings']) {

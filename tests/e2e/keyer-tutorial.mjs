@@ -24,9 +24,9 @@ await page.click('#btn-tutorial-next');
 await page.waitForTimeout(200);
 console.log('step2:', await step(), '|', await goal());
 
-await page.locator('#keyer-pad').scrollIntoViewIfNeeded();
+await page.locator('#pw-pad').scrollIntoViewIfNeeded();
 await page.waitForTimeout(200);
-const b = await page.locator('#keyer-pad').boundingBox();
+const b = await page.locator('#pw-pad').boundingBox();
 await page.mouse.move(b.x+b.width/2, b.y+b.height/2);
 const hold = async (button, ms) => { await page.mouse.down({button}); await page.waitForTimeout(ms); await page.mouse.up({button}); };
 

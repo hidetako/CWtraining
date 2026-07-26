@@ -9,7 +9,6 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>📻</text></svg>">
 </head>
 <body>
-<div class="app-main">
 
 <header class="app-header">
   <div class="brand">
@@ -49,6 +48,10 @@
   <button type="button" class="tab" role="tab" data-panel="glossary">略語集</button>
   <button type="button" class="tab" role="tab" data-panel="settings">設定・記録</button>
 </nav>
+
+<!-- ヘッダーとタブの下を 2 列に分ける。左が本文、右がパドル欄 -->
+<div class="app-body">
+<div class="app-main">
 
 <main>
 
@@ -399,15 +402,6 @@
     <div class="tx-preview" id="keyer-task-text">自由練習モードです。好きな符号を打ってください。</div>
   </div>
 
-  <div class="paddle-pad" id="keyer-pad" tabindex="0">
-    <div class="paddle-lamps">
-      <span class="lamp" id="lamp-left"></span>
-      <span class="lamp" id="lamp-right"></span>
-    </div>
-    <p class="pad-hint">ここをクリック（またはキーボードの <kbd>Z</kbd> / <kbd>X</kbd>）で打電</p>
-    <div class="pad-elements" id="keyer-elements"></div>
-  </div>
-
   <div class="card">
     <h3>解読結果</h3>
     <div class="keyed-text" id="keyer-decoded"><span class="empty">まだ何も打っていません。</span></div>
@@ -625,7 +619,8 @@
 
 </div><!-- /.app-main -->
 
-<!-- 画面右 1/4 に常置するパドル欄。ここをクリックすればどのタブでも打てる -->
+<!-- ヘッダーの下から画面下端まで、右側に常置するパドル欄。
+     ここをクリックすればどのタブでも打てる -->
 <aside class="paddle-rail" id="paddle-widget" aria-label="パドル">
   <div class="pw-head">
     <span class="pw-title">パドル</span>
@@ -637,6 +632,7 @@
       <span class="pw-side" id="pw-left"></span>
       <span class="pw-side" id="pw-right"></span>
     </div>
+    <div class="pw-elements" id="keyer-elements"></div>
 
     <label class="pw-speed">
       <span>送信速度</span>
@@ -653,6 +649,8 @@
     <p class="pw-scope" id="pw-scope"></p>
   </div>
 </aside>
+
+</div><!-- /.app-body -->
 
 <script type="module" src="js/app.js"></script>
 </body>

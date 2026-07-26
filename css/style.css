@@ -22,7 +22,8 @@
    ブラウザ既定より強い指定で打ち消しておく。 */
 [hidden] { display: none !important; }
 
-/* 画面を 2 列に分ける。左が本体、右 1/4 がパドル欄。
+/* 画面を縦に「ヘッダー＋タブ」と「本文｜パドル欄」に分ける。
+   ヘッダーとタブは常に見えたまま、下の 2 列がそれぞれ内側でスクロールする。
    狭い窓でパドルが潰れないよう、右列には下限だけ設けている。
    （スマートフォンは対象外なので、単一段組みへの切り替えは持たない） */
 body {
@@ -32,13 +33,26 @@ body {
   font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
   font-size: 15px;
   line-height: 1.7;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-body {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 25vw);
-  min-height: 100vh;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 28vw);
 }
 
 /* フッターが中途半端な高さで浮かないよう、本文で残りを埋める */
-.app-main { min-width: 0; display: flex; flex-direction: column; }
+.app-main {
+  min-width: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
 .app-main main { flex: 1; }
 
 h1, h2, h3, h4 { line-height: 1.35; }
@@ -648,35 +662,6 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 .tutorial-goal.is-cleared .tag { color: var(--ok); }
 
 /* ───────── パドル送信 ───────── */
-.paddle-pad {
-  background: var(--bg-sunken);
-  border: 2px dashed var(--line);
-  border-radius: var(--radius);
-  padding: 1.4rem 1.2rem;
-  margin-bottom: 1.1rem;
-  text-align: center;
-  cursor: crosshair;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: none;
-  transition: border-color .12s;
-}
-.paddle-pad:focus-visible { outline: 2px solid var(--accent-dim); }
-.paddle-pad.is-active { border-color: var(--accent-dim); }
-
-.paddle-lamps { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; }
-.lamp {
-  font-family: var(--mono);
-  font-size: .82rem;
-  color: var(--text-dim);
-  border: 1px solid var(--line);
-  border-radius: 99px;
-  padding: .3rem .9rem;
-  transition: background .06s, color .06s, border-color .06s;
-}
-.lamp.on { background: var(--accent); color: #1a1205; border-color: var(--accent); font-weight: 700; }
-
-.pad-hint { color: var(--text-dim); font-size: .78rem; margin: .8rem 0 0; }
 kbd {
   font-family: var(--mono);
   font-size: .78em;
@@ -687,14 +672,15 @@ kbd {
   padding: .05em .4em;
 }
 
-.pad-elements {
+/* パドル欄の中に出す、送出中の要素の流れ（・－） */
+.pw-elements {
   font-family: var(--mono);
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   letter-spacing: .12em;
   color: var(--accent);
-  min-height: 2.2rem;
-  margin-top: .8rem;
+  min-height: 2rem;
   word-break: break-all;
+  text-align: center;
 }
 
 .keyed-text {
@@ -783,12 +769,10 @@ kbd {
   * { transition: none !important; }
 }
 
-/* ───────── 右 1/4 に常置するパドル欄 ───────── */
+/* ───────── ヘッダー下から常置するパドル欄 ───────── */
 .paddle-rail {
-  position: sticky;
-  top: 0;
-  align-self: start;
-  height: 100vh;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   background: var(--bg-raised);
@@ -814,17 +798,16 @@ kbd {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: .7rem;
-  padding: .9rem 1rem 1rem;
-  overflow-y: auto;
+  gap: .8rem;
+  padding: 1rem 1.1rem 1.1rem;
 }
 
 /* 打面は大きいほど狙いやすいが、縦長になりすぎると
    親指の当たる位置が定まらないので上限を設ける */
 .pw-pad {
   flex: 1 1 auto;
-  min-height: 150px;
-  max-height: 280px;
+  min-height: 180px;
+  max-height: 380px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
@@ -840,7 +823,7 @@ kbd {
   border-radius: 8px;
   padding: .9rem .2rem;
   font-family: var(--mono);
-  font-size: .8rem;
+  font-size: .95rem;
   color: var(--text-dim);
   transition: background .05s, color .05s;
 }
