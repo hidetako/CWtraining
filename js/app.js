@@ -58,8 +58,10 @@ function initPaddleWidget() {
   const widget = $('#paddle-widget');
   const padBody = $('#pw-pad');
 
-  // 折りたたみ状態を復元
-  widget.classList.toggle('is-closed', !settings.paddleWidgetOpen);
+  // 折りたたみ状態を復元。未設定(null)なら画面幅で決める
+  // （スマートフォンでは開いたままだと入力欄に重なるため、閉じて始める）
+  const initiallyOpen = settings.paddleWidgetOpen ?? (window.innerWidth > 720);
+  widget.classList.toggle('is-closed', !initiallyOpen);
   $('#pw-toggle').addEventListener('click', () => {
     settings.paddleWidgetOpen = widget.classList.contains('is-closed');
     widget.classList.toggle('is-closed', !settings.paddleWidgetOpen);
@@ -136,6 +138,8 @@ function applyAudioSettings() {
     qsk: settings.qsk,
     rit: settings.rit ?? 0,
     keyerFreq: settings.keyerFreq ?? 700,
+    wave: settings.toneWave ?? 'sine',
+    ramp: (settings.toneRamp ?? 5) / 1000,
   });
 }
 
@@ -152,18 +156,47 @@ function escapeHtml(s) {
 // ═══════════════════════════════════════════ タブ
 
 function initTabs() {
-  $$('.tab').forEach((tab) => {
+  const tabs = $$('.tab');
+
+  const syncA11y = () => {
+    tabs.forEach((t) => {
+      const active = t.classList.contains('is-active');
+      t.setAttribute('aria-selected', String(active));
+      t.tabIndex = active ? 0 : -1;   // ロービングタブインデックス
+    });
+  };
+
+  tabs.forEach((tab) => {
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-controls', `panel-${tab.dataset.panel}`);
     tab.addEventListener('click', () => {
       player.stop();
-      $$('.tab').forEach((t) => t.classList.toggle('is-active', t === tab));
+      tabs.forEach((t) => t.classList.toggle('is-active', t === tab));
       $$('.panel').forEach((p) => {
         p.classList.toggle('is-active', p.id === `panel-${tab.dataset.panel}`);
       });
       // パドル入力は開いているタブでだけ有効にする
       setPaddleActive(tab.dataset.panel === 'keyer');
       syncPaddleWidget();
+      syncA11y();
     });
   });
+
+  // 矢印キーでタブ間を移動できるようにする
+  $('.tabs').addEventListener('keydown', (e) => {
+    const current = tabs.findIndex((t) => t.classList.contains('is-active'));
+    let next = -1;
+    if (e.key === 'ArrowRight') next = (current + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') next = (current - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = tabs.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    tabs[next].click();
+    tabs[next].focus();
+  });
+
+  syncA11y();
 }
 
 // ═══════════════════════════════════════════ ヘッダーの速度・音量
@@ -200,7 +233,25 @@ function initHeaderControls() {
   });
 
   $('#btn-stop-all').addEventListener('click', () => player.stop());
-  sync();
+
+  // モバイルでは速度・音量を折りたたみ、要約だけ見せる
+  const qaToggle = $('#qa-toggle');
+  qaToggle.addEventListener('click', () => {
+    const open = $('#quick-audio').classList.toggle('is-open');
+    qaToggle.setAttribute('aria-expanded', String(open));
+    qaToggle.firstChild.textContent = open ? '▴ ' : '▾ ';
+  });
+
+  const origSync = sync;
+  const syncAll = () => {
+    origSync();
+    $('#qa-summary').textContent =
+      `${settings.charWpm}/${settings.effWpm} WPM・${Math.round(settings.volume * 100)}`;
+  };
+  charWpm.addEventListener('input', syncAll);
+  effWpm.addEventListener('input', syncAll);
+  volume.addEventListener('input', syncAll);
+  syncAll();
 }
 
 // ═══════════════════════════════════════════ 交信シミュレーター
@@ -260,6 +311,36 @@ function initQso() {
   keyer.addEventListener('update', updateLiveKeyed);
   keyer.addEventListener('element', updateLiveKeyed);
   keyer.addEventListener('char', updateLiveKeyed);
+
+  // 実技の自局ターンでは、キーボード(Z/X または ←/→)でも打てるようにする。
+  // パドル送信タブの接続とはタブが排他なので二重発火しない
+  const liveKeySide = (code) => {
+    if (code === 'KeyZ' || code === 'ArrowLeft') return keyer.swap ? 'dah' : 'dit';
+    if (code === 'KeyX' || code === 'ArrowRight') return keyer.swap ? 'dit' : 'dah';
+    return null;
+  };
+  const liveKeyActive = () =>
+    $('#panel-qso').classList.contains('is-active') && $('#qso-keyed');
+
+  document.addEventListener('keydown', (e) => {
+    if (e.repeat || !liveKeyActive()) return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    const side = liveKeySide(e.code);
+    if (!side) return;
+    e.preventDefault();
+    player.openKeyLine();
+    const left = e.code === 'KeyZ' || e.code === 'ArrowLeft';
+    $(left ? '#pw-left' : '#pw-right')?.classList.add('on');
+    keyer.paddleDown(side);
+  });
+  document.addEventListener('keyup', (e) => {
+    if (!liveKeyActive()) return;
+    const side = liveKeySide(e.code);
+    if (!side) return;
+    const left = e.code === 'KeyZ' || e.code === 'ArrowLeft';
+    $(left ? '#pw-left' : '#pw-right')?.classList.remove('on');
+    keyer.paddleUp(side);
+  });
 }
 
 function syncQsoStyle() {
@@ -586,7 +667,8 @@ function renderLiveTurn(turn, box) {
     ${info.tip ? `<div class="guide-tip"><strong>ここでのコツ</strong><br>${escapeHtml(info.tip)}</div>` : ''}
     <p class="hint">
       下の内容を、パドルで実際に打って送信してください。
-      画面右下の「パドル」枠の左右をクリック（パドルを接続していればそのまま打鍵）できます。
+      画面右下の「パドル」枠の左右をクリック（パドルを接続していればそのまま打鍵）、
+      またはキーボードの <kbd>Z</kbd>（短点側）/ <kbd>X</kbd>（長点側）でも打てます。
       <code>=</code> は BT（－…－）、<code>&lt;SK&gt;</code> はプロサインとして続けて打ちます。
     </p>
     <h4>打つ内容</h4>
@@ -876,7 +958,18 @@ function termListHtml(text) {
 
 // ═══════════════════════════════════════════ 聞き取りドリル
 
-const drill = { problem: null };
+const drill = { problem: null, session: null, awaitingNext: false };
+
+/** 苦手文字を重み付きの出題アルファベットに変換する。正答率が低いほど多く混ぜる。 */
+function weakAlphabet() {
+  const weak = weakChars(stats, { minSent: 5, limit: 10 });
+  const alphabet = [];
+  for (const w of weak) {
+    const copies = 1 + Math.round((1 - w.accuracy) * 3);
+    for (let i = 0; i < copies; i++) alphabet.push(w.char);
+  }
+  return alphabet;
+}
 
 function initDrill() {
   const typeSel = $('#drill-type');
@@ -901,8 +994,18 @@ function initDrill() {
   $('#drill-groupcount').addEventListener('change', (e) => {
     settings.groupCount = Math.max(1, Number(e.target.value) || 5); persist();
   });
+  $('#drill-count').value = String(settings.drillCount ?? 1);
+  $('#drill-count').addEventListener('change', (e) => {
+    settings.drillCount = Number(e.target.value); persist();
+  });
 
-  $('#btn-drill-new').addEventListener('click', newProblem);
+  $('#btn-drill-new').addEventListener('click', () => {
+    const count = settings.drillCount ?? 1;
+    drill.session = count > 1
+      ? { size: count, done: 0, correct: 0, total: 0, perChar: {} }
+      : null;
+    newProblem();
+  });
   $('#btn-drill-replay').addEventListener('click', () => {
     if (drill.problem) player.play(drill.problem.text);
   });
@@ -914,7 +1017,10 @@ function initDrill() {
     });
   });
   $('#drill-answer').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') gradeCurrentProblem();
+    if (e.key !== 'Enter') return;
+    // 採点後にもう一度 Enter で次の問題へ（連続出題が途切れない）
+    if (drill.awaitingNext) newProblem();
+    else gradeCurrentProblem();
   });
 
   updateDrillControls();
@@ -922,6 +1028,13 @@ function initDrill() {
 
 function isCharDrill(type) {
   return type === 'koch' || type === 'frequency';
+}
+
+function describeWeakDrill() {
+  const weak = weakChars(stats, { minSent: 5, limit: 10 });
+  return weak.length >= 2
+    ? `対象: ${weak.map((w) => w.char).join(' ')}（正答率の低い順）`
+    : 'まだ十分な記録がありません。ドリルを数回解くと苦手文字が集まります（それまではコッホ法の文字で代替）。';
 }
 
 function updateDrillControls() {
@@ -934,6 +1047,10 @@ function updateDrillControls() {
   $('#drill-groupcount').closest('.field').hidden = !charDrill;
   $('#drill-help').textContent = DRILL_TYPES[type]?.help || '';
 
+  if (type === 'weak') {
+    $('#drill-alphabet').textContent = describeWeakDrill();
+    return;
+  }
   if (!charDrill) {
     $('#drill-alphabet').textContent = '';
     return;
@@ -949,10 +1066,12 @@ function updateDrillControls() {
 }
 
 async function newProblem() {
+  drill.awaitingNext = false;
   drill.problem = makeProblem(settings.drillType, {
     level: settings.kochLevel,
     groupSize: settings.groupSize,
     groupCount: settings.groupCount,
+    alphabet: settings.drillType === 'weak' ? weakAlphabet() : undefined,
   });
 
   $('#drill-result').hidden = true;
@@ -987,24 +1106,57 @@ function gradeCurrentProblem() {
     .map((m) => `<span class="${m.ok ? 'ok' : 'ng'}">${escapeHtml(m.actual || m.expected || '_')}</span>`)
     .join('');
 
+  // 連続出題の進行を記録する
+  const session = drill.session;
+  if (session) {
+    session.done += 1;
+    session.correct += result.correct;
+    session.total += result.total;
+    for (const [ch, c] of Object.entries(result.perChar)) {
+      if (!session.perChar[ch]) session.perChar[ch] = { sent: 0, correct: 0 };
+      session.perChar[ch].sent += c.sent;
+      session.perChar[ch].correct += c.correct;
+    }
+  }
+
+  drill.awaitingNext = true;
+
+  const sessionDone = session && session.done >= session.size;
+  const progress = session
+    ? `<span class="hint">${session.done} / ${session.size} 問</span>`
+    : '';
+
   const box = $('#drill-result');
   box.hidden = false;
   box.innerHTML = `
     <div class="score-line">
       <span class="big">${pct}%</span>
       <span class="hint">${result.correct} / ${result.total} 文字</span>
+      ${progress}
       ${levelUp ? '<span class="levelup">90% 到達 — レベルを上げましょう</span>' : ''}
     </div>
     <div class="marks">${marks}</div>
     <p class="hint">正解: <code>${escapeHtml(drill.problem.answer)}</code>
       ${drill.problem.hint ? ` — ${escapeHtml(drill.problem.hint)}` : ''}</p>
     <p class="hint">モールス: <code>${escapeHtml(toMorseString(drill.problem.answer))}</code></p>
+    ${sessionDone ? sessionSummaryHtml(session) : ''}
     <div class="drill-actions" style="margin-top:.9rem">
       ${levelUp ? '<button type="button" class="btn" id="btn-levelup">レベルを 1 上げる</button>' : ''}
-      <button type="button" class="btn btn-primary" id="btn-drill-next">次の問題</button>
+      <button type="button" class="btn btn-primary" id="btn-drill-next">
+        ${sessionDone ? 'もう一度セッション' : '次の問題（Enter）'}</button>
     </div>`;
 
-  $('#btn-drill-next').addEventListener('click', newProblem);
+  if (sessionDone) {
+    // まとめを見せたのでセッションを閉じる。次はボタンから新規に始める
+    drill.session = null;
+    drill.awaitingNext = false;
+    $('#btn-drill-next').addEventListener('click', () => {
+      drill.session = { size: session.size, done: 0, correct: 0, total: 0, perChar: {} };
+      newProblem();
+    });
+  } else {
+    $('#btn-drill-next').addEventListener('click', newProblem);
+  }
   const levelBtn = $('#btn-levelup');
   if (levelBtn) {
     levelBtn.addEventListener('click', () => {
@@ -1096,6 +1248,14 @@ function initContest() {
   $('#btn-contest-start').addEventListener('click', startContest);
   $('#btn-contest-stop').addEventListener('click', () => contest.stopSession());
 
+  const nudgeWpm = (delta) => {
+    const wpm = contest.adjustWpm(delta);
+    if (wpm != null) $('#contest-wpm-out').textContent = `${wpm} WPM`;
+    $('#contest-call').focus();
+  };
+  $('#btn-wpm-up').addEventListener('click', () => nudgeWpm(2));
+  $('#btn-wpm-down').addEventListener('click', () => nudgeWpm(-2));
+
   $('#contest-fkeys').addEventListener('click', (e) => {
     const btn = e.target.closest('.fkey');
     if (btn) runContestAction(btn.dataset.fn);
@@ -1158,6 +1318,14 @@ function onContestKey(e) {
       $('#contest-call').focus();
       break;
 
+    case 'PageUp':
+    case 'PageDown': {
+      e.preventDefault();
+      const wpm = contest.adjustWpm(e.key === 'PageUp' ? 2 : -2);
+      if (wpm != null) $('#contest-wpm-out').textContent = `${wpm} WPM`;
+      break;
+    }
+
     case 'ArrowUp':
     case 'ArrowDown': {
       e.preventDefault();
@@ -1216,6 +1384,7 @@ async function startContest() {
   $('#contest-exch').value = '';
   $('#contest-call').focus();
 
+  $('#contest-wpm-out').textContent = `${contest.opts.myWpm} WPM`;
   renderContestScore();
   renderContestLog();
   contest.cq();
@@ -1775,6 +1944,26 @@ function gradeKeying() {
   $('#btn-keyer-next').addEventListener('click', newKeyerTask);
 }
 
+/** 連続出題のまとめ。平均正答率と、このセッションで崩れた文字を示す。 */
+function sessionSummaryHtml(session) {
+  const avg = session.total ? Math.round((session.correct / session.total) * 100) : 0;
+  const worst = Object.entries(session.perChar)
+    .filter(([, c]) => c.sent >= 3)
+    .map(([ch, c]) => ({ ch, acc: c.correct / c.sent }))
+    .sort((a, b) => a.acc - b.acc)
+    .slice(0, 5);
+
+  return `
+    <div class="guide-tip" style="margin-top:1rem">
+      <strong>セッション終了 — 平均 ${avg}%</strong><br>
+      ${worst.length
+        ? `このセッションで崩れた文字: ${worst
+            .map((w) => `<code>${escapeHtml(w.ch)}</code> ${Math.round(w.acc * 100)}%`)
+            .join('　')}`
+        : '大きく崩れた文字はありませんでした。'}
+    </div>`;
+}
+
 // ═══════════════════════════════════════════ 変換・電鍵
 
 function initTools() {
@@ -1914,6 +2103,22 @@ function initSettings() {
     });
   });
 
+  const waveSel = $('#set-wave');
+  waveSel.value = settings.toneWave ?? 'sine';
+  waveSel.addEventListener('change', () => {
+    settings.toneWave = waveSel.value;
+    applyAudioSettings();
+    persist();
+  });
+
+  const rampSel = $('#set-ramp');
+  rampSel.value = String(settings.toneRamp ?? 5);
+  rampSel.addEventListener('change', () => {
+    settings.toneRamp = Number(rampSel.value);
+    applyAudioSettings();
+    persist();
+  });
+
   const showText = $('#set-showtext');
   showText.checked = settings.showText;
   showText.addEventListener('change', () => {
@@ -1928,6 +2133,45 @@ function initSettings() {
     syncBeginnerToggles();
   });
 
+  // 記録の書き出し（設定・成績・自己ベストをまとめた JSON）
+  $('#btn-export-data').addEventListener('click', () => {
+    const payload = {
+      app: 'CWtraining',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      settings,
+      stats,
+      highscores: loadHighScores(),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `cwtraining-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  $('#btn-import-data').addEventListener('click', () => $('#import-file').click());
+  $('#import-file').addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const payload = JSON.parse(await file.text());
+      if (payload.app !== 'CWtraining' || !payload.settings || !payload.stats) {
+        alert('このファイルは CW 交信トレーニングの記録ではないようです。');
+        return;
+      }
+      if (!confirm('現在の設定と記録を、ファイルの内容で置き換えます。よろしいですか？')) return;
+      saveSettings(payload.settings);
+      saveStats(payload.stats);
+      localStorage.setItem('cwtraining.highscores.v1', JSON.stringify(payload.highscores || {}));
+      location.reload();
+    } catch {
+      alert('ファイルを読み込めませんでした。書き出した JSON を選んでください。');
+    }
+  });
+
   $('#btn-reset-stats').addEventListener('click', () => {
     if (!confirm('学習の記録をすべて消去します。よろしいですか？')) return;
     stats = resetStats();
@@ -1935,7 +2179,77 @@ function initSettings() {
   });
 }
 
+// ───────── 上達の推移（小さな折れ線） ─────────
+
+/**
+ * 単系列のスパークラインを描く。
+ * 線は 2px、値ラベルは本文色、点には SVG ネイティブのツールチップを付ける。
+ */
+function sparklineHtml(label, values, { fmt = (v) => String(v), min = 0, max = 1, color = 'var(--accent)' } = {}) {
+  if (values.length < 3) return '';
+
+  const W = 200;
+  const H = 44;
+  const span = Math.max(1e-9, max - min);
+  const x = (i) => (values.length === 1 ? W / 2 : (i / (values.length - 1)) * W);
+  const y = (v) => H - ((Math.min(Math.max(v, min), max) - min) / span) * H;
+
+  const points = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const last = values[values.length - 1];
+
+  // 点は透明の大きめ円で当たりを取り、<title> で値を出す
+  const hits = values.map((v, i) => `
+    <circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="7" fill="transparent">
+      <title>${escapeHtml(`${i + 1} 回目: ${fmt(v)}`)}</title>
+    </circle>`).join('');
+
+  return `
+    <div class="spark-card">
+      <div class="spark-head">
+        <span>${escapeHtml(label)}</span>
+        <span class="last">${escapeHtml(fmt(last))}</span>
+      </div>
+      <svg viewBox="0 -4 ${W} ${H + 8}" preserveAspectRatio="none" role="img"
+           aria-label="${escapeHtml(`${label}の推移。最新 ${fmt(last)}`)}">
+        <line x1="0" y1="${H}" x2="${W}" y2="${H}" stroke="var(--line-soft)" stroke-width="1"/>
+        <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2"
+                  stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="${x(values.length - 1).toFixed(1)}" cy="${y(last).toFixed(1)}" r="3" fill="${color}"/>
+        ${hits}
+      </svg>
+    </div>`;
+}
+
+function renderProgressCharts() {
+  const box = $('#progress-charts');
+  if (!box) return;
+
+  // history は新しい順なので、時系列に直す
+  const chrono = [...stats.history].reverse();
+  const drillAcc = chrono.filter((h) => h.kind === 'drill').map((h) => h.accuracy);
+  const kochLevels = chrono
+    .filter((h) => h.kind === 'drill' && h.type === 'koch' && h.level)
+    .map((h) => h.level);
+  const sendAcc = chrono
+    .filter((h) => h.kind === 'keying' || (h.kind === 'qso' && h.total > 0))
+    .map((h) => h.accuracy);
+
+  const pctFmt = (v) => `${Math.round(v * 100)}%`;
+  const charts = [
+    sparklineHtml('ドリル正答率', drillAcc, { fmt: pctFmt, color: 'var(--accent)' }),
+    sparklineHtml('コッホ法レベル', kochLevels, {
+      fmt: (v) => `Lv${v}`, min: 2, max: 41, color: 'var(--rx)',
+    }),
+    sparklineHtml('交信・送信の成績', sendAcc, { fmt: pctFmt, color: 'var(--tx)' }),
+  ].filter(Boolean);
+
+  box.innerHTML = charts.length
+    ? charts.join('')
+    : '<p class="empty">練習を 3 回以上すると、推移がここに表示されます。</p>';
+}
+
 function renderStats() {
+  renderProgressCharts();
   const d = stats.drills;
   const q = stats.qso;
   const k = stats.keying || { attempts: 0, chars: 0, correct: 0 };
@@ -1960,6 +2274,20 @@ function renderStats() {
     </div>`).join('');
 
   const weak = weakChars(stats);
+  $('#weak-actions').innerHTML = weak.length >= 2
+    ? '<button type="button" class="btn" id="btn-weak-drill">この文字を集中練習する</button>'
+    : '';
+  $('#btn-weak-drill')?.addEventListener('click', () => {
+    settings.drillType = 'weak';
+    persist();
+    $('#drill-type').value = 'weak';
+    updateDrillControls();
+    $$('.tab').find((t) => t.dataset.panel === 'drill')?.click();
+    drill.session = (settings.drillCount ?? 1) > 1
+      ? { size: settings.drillCount, done: 0, correct: 0, total: 0, perChar: {} }
+      : null;
+    newProblem();
+  });
   $('#weak-chars').innerHTML = weak.length
     ? weak.map((w) => `
         <span class="weak-char">

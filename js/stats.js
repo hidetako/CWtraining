@@ -21,12 +21,15 @@ export const DEFAULT_SETTINGS = {
   qrn: 0,
   qsb: 0,
   qrm: 0,
+  toneWave: 'sine',     // 側音の波形
+  toneRamp: 5,          // キーイングの立ち上がり ms
 
   // 練習
   kochLevel: 2,
   drillType: 'koch',
   groupSize: 5,
   groupCount: 5,
+  drillCount: 1,        // 連続出題の問題数（1 = 都度）
   qsoMode: 'cq',
   qsoLength: 'normal',
   qsoStyle: 'guided',      // 'guided'（型を覚える）| 'copy'（聞き取り試験）
@@ -43,7 +46,7 @@ export const DEFAULT_SETTINGS = {
   keyerGlobal: false,
   keyerTaskType: 'callsign',
   keyerFreq: 700,       // 送信側音の高さ Hz（受信の freq とは独立）
-  paddleWidgetOpen: true,
+  paddleWidgetOpen: null,  // null = 自動（画面幅で判断）
 
   // コンテスト運用
   contestMode: 'pileup',

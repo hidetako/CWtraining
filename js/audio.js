@@ -22,6 +22,8 @@ export class CWPlayer {
       bandwidth: 500, // 受信帯域幅 Hz
       rit: 0,        // RIT 同調ずれ Hz
       qsk: true,     // セミブレークイン（送信中も受信音を聞く）
+      wave: 'sine',  // 側音の波形 sine | triangle | square
+      ramp: 0.005,   // キーイングの立ち上がり時間 秒
     };
     this._playId = 0;
     this._timers = [];
@@ -162,7 +164,7 @@ export class CWPlayer {
     const timing = computeTiming(charWpm, effWpm);
 
     const osc = ctx.createOscillator();
-    osc.type = 'sine';
+    osc.type = this.settings.wave;
     osc.frequency.value = opts.freq ?? this.settings.freq;
 
     const keyGain = ctx.createGain();
@@ -213,11 +215,14 @@ export class CWPlayer {
 
   /** 指定区間だけ側音を鳴らす。両端にランプを付けてクリック音を防ぐ。 */
   _keyDown(gainNode, on, off, dit) {
-    const ramp = Math.min(RAMP_MAX, dit * 0.3);
+    const ramp = Math.min(this.settings.ramp ?? RAMP_MAX, dit * 0.3);
+    // 矩形波・三角波は同振幅だと耳に大きく届くため、聴感をそろえる
+    const peak = this.settings.wave === 'square' ? 0.55
+      : this.settings.wave === 'triangle' ? 0.85 : 1;
     const g = gainNode.gain;
     g.setValueAtTime(0, on);
-    g.linearRampToValueAtTime(1, on + ramp);
-    g.setValueAtTime(1, Math.max(on + ramp, off - ramp));
+    g.linearRampToValueAtTime(peak, on + ramp);
+    g.setValueAtTime(peak, Math.max(on + ramp, off - ramp));
     g.linearRampToValueAtTime(0, off);
   }
 
@@ -314,7 +319,7 @@ export class CWPlayer {
     const freq = opts.freq ?? this.settings.freq;
 
     const osc = ctx.createOscillator();
-    osc.type = 'sine';
+    osc.type = this.settings.wave;
     osc.frequency.value = freq;
 
     const keyGain = ctx.createGain();
@@ -474,7 +479,7 @@ export class CWPlayer {
     }
     const ctx = this.ctx;
     const osc = ctx.createOscillator();
-    osc.type = 'sine';
+    osc.type = this.settings.wave;
     osc.frequency.value = this.settings.keyerFreq;
     const gain = ctx.createGain();
     gain.gain.value = 0;
@@ -520,7 +525,7 @@ export class CWPlayer {
     if (this._manual) return;
     const ctx = this.ctx;
     const osc = ctx.createOscillator();
-    osc.type = 'sine';
+    osc.type = this.settings.wave;
     osc.frequency.value = this.settings.keyerFreq;
     const gain = ctx.createGain();
     gain.gain.value = 0;

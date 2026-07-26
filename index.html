@@ -16,7 +16,9 @@
     <h1>CW 交信トレーニング</h1>
   </div>
 
-  <div class="quick-audio">
+  <button type="button" class="qa-toggle" id="qa-toggle" aria-expanded="false">▾ <span id="qa-summary">20/15 WPM・50</span></button>
+
+  <div class="quick-audio" id="quick-audio">
     <label class="qa-item">
       <span>文字速度</span>
       <input type="range" id="qa-charwpm" min="5" max="40" step="1">
@@ -168,6 +170,15 @@
         <span>群の数</span>
         <input type="number" id="drill-groupcount" min="1" max="20" step="1">
       </label>
+      <label class="field">
+        <span>連続出題</span>
+        <select id="drill-count">
+          <option value="1">1 問ずつ</option>
+          <option value="5">5 問連続</option>
+          <option value="10">10 問連続</option>
+          <option value="20">20 問連続</option>
+        </select>
+      </label>
     </div>
     <p class="hint" id="drill-help"></p>
     <p class="hint" id="drill-alphabet"></p>
@@ -303,12 +314,20 @@
           <input type="checkbox" id="contest-qsk">
           <span>QSK（送信中も受信音を聞く）</span>
         </label>
+        <label class="field">
+          <span>自局速度</span>
+          <div class="wpm-adjust">
+            <button type="button" class="btn" id="btn-wpm-down">−</button>
+            <output id="contest-wpm-out">25 WPM</output>
+            <button type="button" class="btn" id="btn-wpm-up">＋</button>
+          </div>
+        </label>
       </div>
 
       <p class="hint">
         <kbd>Enter</kbd> 状況に応じて F2 / F3　<kbd>Space</kbd> コールサインを補完　
         <kbd>Tab</kbd> 入力欄の移動　<kbd>Esc</kbd> 送信を止めて入力欄を消去　
-        <kbd>↑</kbd><kbd>↓</kbd> RIT を回す
+        <kbd>↑</kbd><kbd>↓</kbd> RIT を回す　<kbd>PgUp</kbd><kbd>PgDn</kbd> 自局速度
       </p>
     </div>
 
@@ -531,6 +550,22 @@
         <input type="range" id="set-qrm" min="0" max="100" step="1">
         <output id="set-qrm-out"></output>
       </label>
+      <label class="field">
+        <span>側音の波形</span>
+        <select id="set-wave">
+          <option value="sine">サイン波（標準）</option>
+          <option value="triangle">三角波（柔らかめ）</option>
+          <option value="square">矩形波（硬め）</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>キーイングの立ち上がり</span>
+        <select id="set-ramp">
+          <option value="2">2 ms（硬い）</option>
+          <option value="5">5 ms（標準）</option>
+          <option value="8">8 ms（柔らかい）</option>
+        </select>
+      </label>
     </div>
     <label class="check">
       <input type="checkbox" id="set-showtext">
@@ -549,11 +584,23 @@
   <div class="card">
     <h3>学習の記録</h3>
     <div class="stat-grid" id="stat-summary"></div>
+    <h4>上達の推移</h4>
+    <div class="progress-charts" id="progress-charts"></div>
     <h4>苦手な文字</h4>
     <div class="weak-chars" id="weak-chars"></div>
+    <div class="drill-actions" id="weak-actions" style="margin-top:.6rem"></div>
     <h4>最近の練習</h4>
     <div class="history" id="history-list"></div>
-    <button type="button" class="btn btn-ghost" id="btn-reset-stats">記録を消去する</button>
+    <div class="drill-actions" style="margin-top:1rem">
+      <button type="button" class="btn" id="btn-export-data">記録を書き出す</button>
+      <button type="button" class="btn" id="btn-import-data">記録を読み込む</button>
+      <button type="button" class="btn btn-ghost" id="btn-reset-stats">記録を消去する</button>
+      <input type="file" id="import-file" accept="application/json" hidden>
+    </div>
+    <p class="hint">
+      書き出した JSON には設定・成績・自己ベストが含まれます。
+      別の端末やブラウザに移すときに使ってください。
+    </p>
   </div>
 </section>
 
