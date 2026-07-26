@@ -3,7 +3,7 @@
 import { CWPlayer } from './audio.js';
 import { toMorseString, estimateDuration, tokenize } from './morse.js';
 import { ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER } from './data.js';
-import { annotateHtml, createTracker, explainText } from './explain.js';
+import { annotateHtml, createTracker, explainText, lookupTerm } from './explain.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
 import { LocalResponder, gradeField, REACTION_LABELS } from './qso.js';
 import { PHASES, PATTERN_SHEET, makeReplyOptions, readDxTurn } from './qsoguide.js';
@@ -1226,7 +1226,8 @@ function gradeCurrentProblem() {
   if (session) {
     session.done += 1;
     session.correct += result.correct;
-    session.total += result.total;
+    // 余分に打った分も分母に入れる（1 問ごとの点数と同じ数え方にそろえる）
+    session.total += result.total + (result.extra ?? 0);
     for (const [ch, c] of Object.entries(result.perChar)) {
       if (!session.perChar[ch]) session.perChar[ch] = { sent: 0, correct: 0 };
       session.perChar[ch].sent += c.sent;
@@ -2002,26 +2003,47 @@ function setPaddleActive(active) {
   });
 }
 
+/**
+ * 課題に出てくる Q 符号・略語に、短い意味を添える。
+ * 打つ前に何を送ろうとしているのか分かるように。長い解説は
+ * ホバーで全文が出るので、ここでは頭の一節だけを見せる。
+ */
+function taskTermsHtml(text) {
+  // コールサインと数字は見れば分かるので、意味を添える対象から外す
+  const terms = explainText(text).filter((t) => t.kind !== 'callsign' && t.kind !== 'number');
+  if (!terms.length) return '';
+
+  return terms.map((t) => {
+    const brief = t.ja.length > 30 ? t.ja.split(' — ')[0] : t.ja;
+    return `<span class="task-term" title="${escapeHtml(t.ja)}">
+      <span class="code">${escapeHtml(t.term)}</span>${escapeHtml(brief)}</span>`;
+  }).join('');
+}
+
 function newKeyerTask() {
   const type = settings.keyerTaskType;
   const preview = $('#keyer-task-text');
+  const terms = $('#keyer-task-terms');
 
   if (type === 'free') {
     paddle.task = null;
     preview.textContent = '自由練習モードです。好きな符号を打ってください。';
+    terms.innerHTML = '';
     $('#btn-keyer-listen').disabled = true;
-  } else if (type === 'phrase') {
-    const dx = makeProblem('callsign', {}).answer;
-    paddle.task = KEY_PHRASES[Math.floor(Math.random() * KEY_PHRASES.length)]
-      .replaceAll('{ME}', settings.callsign)
-      .replaceAll('{DX}', dx)
-      .replaceAll('{NAME}', settings.name)
-      .replaceAll('{QTH}', settings.qth);
-    preview.textContent = paddle.task;
-    $('#btn-keyer-listen').disabled = false;
   } else {
-    paddle.task = makeProblem(type, {}).answer;
-    preview.textContent = paddle.task;
+    if (type === 'phrase') {
+      const dx = makeProblem('callsign', {}).answer;
+      paddle.task = KEY_PHRASES[Math.floor(Math.random() * KEY_PHRASES.length)]
+        .replaceAll('{ME}', settings.callsign)
+        .replaceAll('{DX}', dx)
+        .replaceAll('{NAME}', settings.name)
+        .replaceAll('{QTH}', settings.qth);
+    } else {
+      paddle.task = makeProblem(type, {}).answer;
+    }
+    // 語ごとに色分けし、下に意味を並べる
+    preview.innerHTML = annotateHtml(paddle.task, escapeHtml);
+    terms.innerHTML = taskTermsHtml(paddle.task);
     $('#btn-keyer-listen').disabled = false;
   }
 
@@ -2062,6 +2084,7 @@ function gradeKeying() {
   stats = recordKeying(stats, {
     correct: result.correct,
     total: result.total,
+    extra: result.extra,
     target: paddle.task,
     wpm: settings.keyerWpm,
   });
@@ -2470,7 +2493,7 @@ init();
 // 画面の操作には使っていない。
 window.__cw = {
   player, keyer, contest, responder,
-  gradeProblem, compareSending,   // 採点そのものを検証できるように公開する
+  gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   get settings() { return settings; },
   get stats() { return stats; },
   get qsoScript() { return qso.script; },
