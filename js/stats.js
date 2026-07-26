@@ -1,5 +1,7 @@
 // 設定と学習統計の永続化（localStorage）
 
+import { clampKeyerWpm } from './keyer.js';
+
 const SETTINGS_KEY = 'cwtraining.settings.v1';
 const STATS_KEY = 'cwtraining.stats.v1';
 
@@ -104,6 +106,10 @@ export function loadSettings() {
     settings.keyerHandMigrated = true;
     delete settings.keyerSwap;
   }
+
+  // 送信速度の上限を下げた際、以前の設定値が範囲外のまま残らないようにする
+  settings.keyerWpm = clampKeyerWpm(settings.keyerWpm);
+
   return settings;
 }
 

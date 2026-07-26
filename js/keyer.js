@@ -11,6 +11,12 @@ import { decodePattern } from './morse.js';
 
 const LOOKAHEAD = 0.008; // 秒。次要素を決める前倒し量
 
+/** 送信速度の下限・上限（WPM）。画面のつまみと保存値の両方をこれで抑える。 */
+export const KEYER_WPM_MIN = 5;
+export const KEYER_WPM_MAX = 28;
+export const clampKeyerWpm = (wpm) =>
+  Math.max(KEYER_WPM_MIN, Math.min(KEYER_WPM_MAX, Number(wpm) || KEYER_WPM_MIN));
+
 export const KEYER_MODES = {
   iambicB: { label: 'アイアンビック B（一般的）', help: '両方を離した後にもう 1 要素送出します。多くの市販キーヤーの既定値です。' },
   iambicA: { label: 'アイアンビック A', help: '両方を離した時点で、送出中の要素を最後に停止します。' },
@@ -56,7 +62,7 @@ export class ElectronicKeyer extends EventTarget {
 
   setParams({ mode, wpm, weight, swap } = {}) {
     if (mode) this.mode = mode;
-    if (wpm) this.wpm = Math.max(5, Math.min(60, wpm));
+    if (wpm) this.wpm = clampKeyerWpm(wpm);
     if (weight != null) this.weight = Math.max(30, Math.min(70, weight));
     if (swap != null) this.swap = !!swap;
   }

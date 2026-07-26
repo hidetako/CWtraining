@@ -11,6 +11,7 @@
 // 待たされ続ければ諦めて去る。
 
 import { makeCallsign, pick, pickInt } from './data.js';
+import { KEYER_WPM_MAX } from './keyer.js';
 import { ContestLog, QSO_ERROR, normalizeNumber } from './contestlog.js';
 
 /** 運用モード。Morse Runner の TRunMode に対応する。 */
@@ -256,7 +257,7 @@ export class ContestRunner extends EventTarget {
       exchange: opts.exchange ?? 'serial',
       myCall: (opts.myCall || 'JA1ABC').toUpperCase(),
       myNumber: (opts.myNumber || '13H').toUpperCase(),
-      myWpm: opts.myWpm ?? 25,
+      myWpm: Math.min(KEYER_WPM_MAX, opts.myWpm ?? 25),
       conditions: hst
         ? { qrn: 0, qrm: 0, qsb: 0, flutter: false, lids: false }
         : wpx
@@ -529,7 +530,7 @@ export class ContestRunner extends EventTarget {
   /** 運用中に自局の送信速度を増減する（PgUp / PgDn 相当）。 */
   adjustWpm(delta) {
     if (!this.opts) return null;
-    this.opts.myWpm = Math.max(10, Math.min(45, this.opts.myWpm + delta));
+    this.opts.myWpm = Math.max(10, Math.min(KEYER_WPM_MAX, this.opts.myWpm + delta));
     this._emit('state');
     return this.opts.myWpm;
   }
