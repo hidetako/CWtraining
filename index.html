@@ -9,14 +9,13 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>📻</text></svg>">
 </head>
 <body>
+<div class="app-main">
 
 <header class="app-header">
   <div class="brand">
     <span class="brand-mark">・－</span>
     <h1>CW 交信トレーニング</h1>
   </div>
-
-  <button type="button" class="qa-toggle" id="qa-toggle" aria-expanded="false">▾ <span id="qa-summary">20/15 WPM・50</span></button>
 
   <div class="quick-audio" id="quick-audio">
     <label class="qa-item">
@@ -34,7 +33,10 @@
       <input type="range" id="qa-volume" min="0" max="100" step="1">
       <output id="qa-volume-out">50</output>
     </label>
-    <button type="button" id="btn-stop-all" class="btn btn-ghost" title="再生を止める">■ 停止</button>
+    <div class="transport" role="group" aria-label="再生の操作">
+      <button type="button" id="btn-pause-all" class="btn btn-ghost" title="再生を一時停止／再開（Space）">❙❙ 一時停止</button>
+      <button type="button" id="btn-stop-all" class="btn btn-ghost" title="今の練習を終了する（Esc）">■ 終了</button>
+    </div>
   </div>
 </header>
 
@@ -114,6 +116,10 @@
     <label class="beginner-toggle">
       <input type="checkbox" class="js-beginner">
       <span>初心者モード（Q 符号・略語をリアルタイム解説）</span>
+    </label>
+    <label class="beginner-toggle" id="copy-reveal-row">
+      <input type="checkbox" id="qso-copy-reveal">
+      <span>聞き取り練習で、受信中に相手の送信を表示する（答えが見えます）</span>
     </label>
   </div>
 
@@ -617,17 +623,33 @@
   </p>
 </footer>
 
-<!-- パドル入力を常時受け付ける浮きウィジェット。ここをクリックすればどのタブでも打てる -->
-<aside class="paddle-widget" id="paddle-widget">
-  <button type="button" class="pw-head" id="pw-toggle" title="パドル入力パネルの開閉">
+</div><!-- /.app-main -->
+
+<!-- 画面右 1/4 に常置するパドル欄。ここをクリックすればどのタブでも打てる -->
+<aside class="paddle-rail" id="paddle-widget" aria-label="パドル">
+  <div class="pw-head">
     <span class="pw-title">パドル</span>
     <span class="pw-mini" id="pw-mini"></span>
-  </button>
+  </div>
+
   <div class="pw-body" id="pw-body">
     <div class="pw-pad" id="pw-pad">
       <span class="pw-side" id="pw-left"></span>
       <span class="pw-side" id="pw-right"></span>
     </div>
+
+    <label class="pw-speed">
+      <span>送信速度</span>
+      <input type="range" id="pw-wpm" min="5" max="28" step="1">
+      <output id="pw-wpm-out"></output>
+    </label>
+
+    <h4 class="pw-label">打った符号</h4>
+    <div class="pw-decoded" id="pw-decoded"></div>
+    <div class="pw-actions">
+      <button type="button" class="btn btn-ghost" id="pw-clear">消す</button>
+    </div>
+
     <p class="pw-scope" id="pw-scope"></p>
   </div>
 </aside>

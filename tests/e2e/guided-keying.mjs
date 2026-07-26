@@ -102,8 +102,6 @@ if (await page.locator('.choice').count()) {
 }
 
 // パドルウィジェットのクリックでも打てること
-await page.evaluate(() => document.querySelector('#paddle-widget').classList.remove('is-closed'));
-await page.waitForTimeout(150);
 const left = page.locator('#pw-left');
 if (await left.count()) {
   const b = await left.boundingBox();

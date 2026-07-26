@@ -106,35 +106,10 @@ await page.click('#btn-wpm-down'); await page.waitForTimeout(150);
 ok('ボタンで −2', await page.evaluate(()=>window.__cw.contest.opts.myWpm)===w0);
 ok('表示も追従', (await page.textContent('#contest-wpm-out')).includes(String(w0)));
 await page.evaluate(()=>window.__cw.contest.stopSession());
+
+// ── タブ影（背景指定が効いているかだけ確認）──
+ok('タブにスクロール影の指定', (await page.evaluate(()=>getComputedStyle(document.querySelector('.tabs')).backgroundImage)).includes('radial-gradient'));
 await page.close();
-
-// ── モバイル ──
-const m = await browser.newPage({viewport:{width:390,height:844}});
-m.on('pageerror', e=>errors.push('m pageerror: '+e.message));
-await m.goto(`${BASE}/index.html`);
-await m.evaluate(()=>localStorage.clear());
-await m.reload(); await m.waitForTimeout(500);
-
-// ① ウィジェット自動折りたたみ
-ok('モバイルでウィジェット閉', await m.evaluate(()=>document.querySelector('#paddle-widget').classList.contains('is-closed')));
-// ② ヘッダー折りたたみ
-ok('モバイルで速度欄が隠れる', !(await m.locator('#quick-audio').isVisible()));
-ok('要約トグル表示', await m.locator('#qa-toggle').isVisible());
-await m.click('#qa-toggle'); await m.waitForTimeout(200);
-ok('トグルで展開', await m.locator('#quick-audio').isVisible());
-await m.screenshot({path:`${DIR}/B3-mobile.png`, fullPage:false});
-await m.click('#qa-toggle');
-// ③ タブ影（背景指定が効いているかだけ確認）
-ok('タブにスクロール影の指定', (await m.evaluate(()=>getComputedStyle(document.querySelector('.tabs')).backgroundImage)).includes('radial-gradient'));
-await m.close();
-
-// デスクトップではウィジェットが開いたまま
-const d2 = await browser.newPage({viewport:{width:1240,height:900}});
-await d2.goto(`${BASE}/index.html`);
-await d2.evaluate(()=>localStorage.clear());
-await d2.reload(); await d2.waitForTimeout(400);
-ok('デスクトップでウィジェット開', !(await d2.evaluate(()=>document.querySelector('#paddle-widget').classList.contains('is-closed'))));
-await d2.close();
 
 console.log('\n失敗:', fails.length?fails.join(' / '):'なし');
 console.log('ERRORS:', errors.length?errors.join('\n'):'(none)');

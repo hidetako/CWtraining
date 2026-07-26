@@ -38,6 +38,7 @@ export const DEFAULT_SETTINGS = {
   qsoReaction: 'normal',   // 相手の反応のゆらぎ
   showText: false,      // 送信中に本文を表示するか
   beginnerMode: true,   // Q 符号・略語の解説をリアルタイムで出すか
+  copyReveal: false,    // 聞き取り練習で、受信中に相手の送信を画面に出すか
 
   // エレクトロニックキーヤー
   keyerMode: 'iambicB',
@@ -48,7 +49,6 @@ export const DEFAULT_SETTINGS = {
   keyerGlobal: false,
   keyerTaskType: 'callsign',
   keyerFreq: 700,       // 送信側音の高さ Hz（受信の freq とは独立）
-  paddleWidgetOpen: null,  // null = 自動（画面幅で判断）
 
   // コンテスト運用
   contestMode: 'pileup',

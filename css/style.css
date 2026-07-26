@@ -22,6 +22,9 @@
    ブラウザ既定より強い指定で打ち消しておく。 */
 [hidden] { display: none !important; }
 
+/* 画面を 2 列に分ける。左が本体、右 1/4 がパドル欄。
+   狭い窓でパドルが潰れないよう、右列には下限だけ設けている。
+   （スマートフォンは対象外なので、単一段組みへの切り替えは持たない） */
 body {
   margin: 0;
   background: var(--bg);
@@ -29,7 +32,14 @@ body {
   font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
   font-size: 15px;
   line-height: 1.7;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 25vw);
+  min-height: 100vh;
 }
+
+/* フッターが中途半端な高さで浮かないよう、本文で残りを埋める */
+.app-main { min-width: 0; display: flex; flex-direction: column; }
+.app-main main { flex: 1; }
 
 h1, h2, h3, h4 { line-height: 1.35; }
 h2 { font-size: 1.25rem; margin: 0 0 .25rem; }
@@ -63,6 +73,12 @@ code { font-family: var(--mono); background: var(--bg-sunken); padding: .1em .35
 .quick-audio { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem; }
 .qa-item { display: flex; align-items: center; gap: .4rem; font-size: .78rem; color: var(--text-dim); }
 .qa-item input[type=range] { width: 100px; }
+
+.transport { display: flex; gap: .4rem; }
+.transport .btn { font-size: .78rem; padding: .3rem .8rem; white-space: nowrap; }
+.transport .btn.is-paused { border-color: var(--accent); color: var(--accent); }
+/* 一時停止中はどのタブにいても分かるよう、画面全体をわずかに沈ませる */
+body.is-paused main { opacity: .72; }
 .qa-item output { font-family: var(--mono); color: var(--text); min-width: 4.5em; font-size: .78rem; }
 
 /* ───────── タブ ───────── */
@@ -99,7 +115,7 @@ code { font-family: var(--mono); background: var(--bg-sunken); padding: .1em .35
 .tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* ───────── レイアウト ───────── */
-main { max-width: 940px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+main { max-width: 940px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
 .panel { display: none; }
 .panel.is-active { display: block; }
 .panel-head { margin-bottom: 1.25rem; }
@@ -763,72 +779,55 @@ kbd {
 }
 .app-footer p { color: var(--text-dim); font-size: .76rem; margin: 0; }
 
-.qa-toggle {
-  display: none;
-  background: var(--bg-sunken);
-  border: 1px solid var(--line);
-  border-radius: 99px;
-  color: var(--text-dim);
-  font-family: var(--mono);
-  font-size: .74rem;
-  padding: .3rem .8rem;
-  cursor: pointer;
-}
-
-@media (max-width: 720px) {
-  .app-header { flex-direction: row; align-items: center; padding: .55rem .9rem; }
-  .qa-toggle { display: inline-flex; align-items: center; gap: .3rem; }
-  .quick-audio { display: none; }
-  .quick-audio.is-open {
-    display: flex;
-    flex-basis: 100%;
-    justify-content: space-between;
-    padding-top: .5rem;
-  }
-  .qa-item input[type=range] { width: 80px; }
-  main { padding: 1rem .9rem 3rem; }
-}
-
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
 
-/* ───────── 常時表示のパドルウィジェット ───────── */
-.paddle-widget {
-  position: fixed;
-  right: 14px;
-  bottom: 14px;
-  z-index: 50;
-  width: 230px;
+/* ───────── 右 1/4 に常置するパドル欄 ───────── */
+.paddle-rail {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-raised);
-  border: 1px solid var(--accent-dim);
-  border-radius: var(--radius);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, .45);
+  border-left: 1px solid var(--accent-dim);
   user-select: none;
   -webkit-user-select: none;
 }
 
 .pw-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  width: 100%;
-  background: none;
-  border: none;
-  color: var(--text);
-  font-family: inherit;
-  padding: .5rem .8rem;
-  cursor: pointer;
+  gap: .5rem;
+  padding: .7rem 1rem;
+  border-bottom: 1px solid var(--line);
 }
 .pw-title { font-weight: 700; font-size: .8rem; letter-spacing: .06em; }
 .pw-mini { font-family: var(--mono); font-size: .72rem; color: var(--text-dim); }
 
-.pw-body { padding: 0 .7rem .7rem; }
+/* パドル本体は残りの高さを使い切る。打面をできるだけ大きく取りたい */
+.pw-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .7rem;
+  padding: .9rem 1rem 1rem;
+  overflow-y: auto;
+}
 
+/* 打面は大きいほど狙いやすいが、縦長になりすぎると
+   親指の当たる位置が定まらないので上限を設ける */
 .pw-pad {
+  flex: 1 1 auto;
+  min-height: 150px;
+  max-height: 280px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px;
+  gap: 6px;
   cursor: crosshair;
   touch-action: none;
 }
@@ -841,20 +840,38 @@ kbd {
   border-radius: 8px;
   padding: .9rem .2rem;
   font-family: var(--mono);
-  font-size: .78rem;
+  font-size: .8rem;
   color: var(--text-dim);
   transition: background .05s, color .05s;
 }
 .pw-side.on { background: var(--accent); color: #1a1205; border-color: var(--accent); font-weight: 700; }
 
-.pw-scope { margin: .5rem 0 0; font-size: .68rem; color: var(--text-dim); line-height: 1.5; }
+.pw-speed { display: flex; align-items: center; gap: .5rem; font-size: .75rem; color: var(--text-dim); }
+.pw-speed input[type=range] { flex: 1; min-width: 0; }
+.pw-speed output { font-family: var(--mono); color: var(--text); font-size: .75rem; white-space: nowrap; }
 
-.paddle-widget.is-closed .pw-body { display: none; }
-.paddle-widget.is-closed { width: auto; }
-
-@media (max-width: 720px) {
-  .paddle-widget { right: 8px; bottom: 8px; width: 190px; }
+.pw-label { margin: 0; font-size: .72rem; }
+.pw-decoded {
+  font-family: var(--mono);
+  font-size: .95rem;
+  letter-spacing: .1em;
+  background: var(--bg-sunken);
+  border-left: 3px solid var(--tx);
+  border-radius: 6px;
+  padding: .5rem .6rem;
+  min-height: 4.2rem;
+  max-height: 9rem;
+  overflow-y: auto;
+  word-break: break-all;
+  white-space: pre-wrap;
 }
+.pw-decoded .pending { color: var(--text-dim); }
+.pw-decoded .empty { font-family: inherit; font-size: .72rem; color: var(--text-dim); letter-spacing: 0; }
+
+.pw-actions { display: flex; justify-content: flex-end; }
+.pw-actions .btn { font-size: .72rem; padding: .25rem .7rem; }
+
+.pw-scope { margin: auto 0 0; font-size: .68rem; color: var(--text-dim); line-height: 1.5; }
 
 /* ───────── 実技モード ───────── */
 .live-keyed {
@@ -891,10 +908,6 @@ kbd {
   border-radius: 999px;
   padding: .1rem .5rem;
 }
-
-/* ───────── ウィジェットの折りたたみ（小型化） ───────── */
-.paddle-widget.is-closed .pw-head { padding: .35rem .7rem; }
-.paddle-widget.is-closed { opacity: .88; }
 
 /* ───────── コンテストの自局速度 ───────── */
 .wpm-adjust { display: flex; align-items: center; gap: .4rem; }

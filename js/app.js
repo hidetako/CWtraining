@@ -55,18 +55,7 @@ function init() {
 // ここでは繋がない（二重発火防止）。
 
 function initPaddleWidget() {
-  const widget = $('#paddle-widget');
   const padBody = $('#pw-pad');
-
-  // 折りたたみ状態を復元。未設定(null)なら画面幅で決める
-  // （スマートフォンでは開いたままだと入力欄に重なるため、閉じて始める）
-  const initiallyOpen = settings.paddleWidgetOpen ?? (window.innerWidth > 720);
-  widget.classList.toggle('is-closed', !initiallyOpen);
-  $('#pw-toggle').addEventListener('click', () => {
-    settings.paddleWidgetOpen = widget.classList.contains('is-closed');
-    widget.classList.toggle('is-closed', !settings.paddleWidgetOpen);
-    persist();
-  });
 
   // 最初の操作で側音ラインを開く（AudioContext はユーザー操作が必要）
   const ensureLine = () => { player.openKeyLine(); };
@@ -83,10 +72,26 @@ function initPaddleWidget() {
     },
   });
 
+  // 送信速度のつまみは initKeyer() 側で配線する（syncKeyer と一緒に扱うため）
+
+  // 打った符号を常時表示する。どのタブにいても自分の打鍵を確認できる
+  const decoded = $('#pw-decoded');
+  const showDecoded = () => {
+    const pending = keyer.buffer;
+    decoded.innerHTML = (!keyer.text && !pending)
+      ? '<span class="empty">パドルを操作すると、ここに解読結果が出ます。</span>'
+      : escapeHtml(keyer.text) + (pending ? `<span class="pending">${escapeHtml(pending)}</span>` : '');
+  };
+  keyer.addEventListener('update', showDecoded);
+  keyer.addEventListener('element', showDecoded);
+  keyer.addEventListener('char', showDecoded);
+  $('#pw-clear').addEventListener('click', () => keyer.reset());
+  showDecoded();
+
   syncPaddleWidget();
 }
 
-/** ウィジェットの表示（割り当て・入力範囲の説明）を現在の設定に合わせる。 */
+/** パドル欄の表示（割り当て・速度・入力範囲の説明）を現在の設定に合わせる。 */
 function syncPaddleWidget() {
   const widget = $('#paddle-widget');
   if (!widget) return;
@@ -95,7 +100,9 @@ function syncPaddleWidget() {
 
   $('#pw-left').textContent = label(map.left);
   $('#pw-right').textContent = label(map.right);
-  $('#pw-mini').textContent = `${settings.keyerWpm} WPM`;
+  $('#pw-mini').textContent = `${KEYER_MODES[settings.keyerMode]?.label.replace(/（.*/, '') ?? ''}`.trim();
+  $('#pw-wpm').value = settings.keyerWpm;
+  $('#pw-wpm-out').textContent = `${settings.keyerWpm} WPM`;
 
   const onKeyerTab = $('#panel-keyer')?.classList.contains('is-active');
   let scope = 'この枠内はいつでもパドル入力を受け付けます（左半分＝左ボタン扱い）。';
@@ -232,26 +239,54 @@ function initHeaderControls() {
     sync(); applyAudioSettings(); persist();
   });
 
-  $('#btn-stop-all').addEventListener('click', () => player.stop());
+  $('#btn-pause-all').addEventListener('click', togglePause);
+  $('#btn-stop-all').addEventListener('click', endCurrentMode);
 
-  // モバイルでは速度・音量を折りたたみ、要約だけ見せる
-  const qaToggle = $('#qa-toggle');
-  qaToggle.addEventListener('click', () => {
-    const open = $('#quick-audio').classList.toggle('is-open');
-    qaToggle.setAttribute('aria-expanded', String(open));
-    qaToggle.firstChild.textContent = open ? '▴ ' : '▾ ';
+  // Space で一時停止／再開、Esc で終了。
+  // 文字入力の邪魔をしないよう入力欄とボタンの上では効かせない。
+  // コンテスト運用はこの 2 つを独自に使うので除外する
+  document.addEventListener('keydown', (e) => {
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target.tagName)) return;
+    if ($('#panel-contest').classList.contains('is-active')) return;
+    if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+    else if (e.key === 'Escape') { e.preventDefault(); endCurrentMode(); }
   });
 
-  const origSync = sync;
-  const syncAll = () => {
-    origSync();
-    $('#qa-summary').textContent =
-      `${settings.charWpm}/${settings.effWpm} WPM・${Math.round(settings.volume * 100)}`;
-  };
-  charWpm.addEventListener('input', syncAll);
-  effWpm.addEventListener('input', syncAll);
-  volume.addEventListener('input', syncAll);
-  syncAll();
+  sync();
+}
+
+// ═══════════════════════════════════════════ 一時停止・再開・終了
+
+/** 一時停止と再開を切り替える。どのタブでも同じボタンで効く。 */
+async function togglePause() {
+  const ok = player.paused ? await player.resumePlay() : await player.pause();
+  if (!ok && !player.paused) return;   // 鳴っていないときは何もしない
+  syncTransport();
+}
+
+function syncTransport() {
+  const btn = $('#btn-pause-all');
+  if (!btn) return;
+  btn.textContent = player.paused ? '▶ 再開' : '❙❙ 一時停止';
+  btn.classList.toggle('is-paused', player.paused);
+  document.body.classList.toggle('is-paused', player.paused);
+}
+
+/**
+ * 今開いているタブの練習を終了する。
+ * 音を止めるだけでなく、そのモードを開始前の状態に戻す。
+ */
+function endCurrentMode() {
+  player.stop();
+  syncTransport();
+
+  const panel = $('.panel.is-active')?.id;
+  if (panel === 'panel-qso') return endQso();
+  if (panel === 'panel-drill') return endDrill();
+  if (panel === 'panel-contest') return contest.running ? contest.stopSession() : undefined;
+  if (panel === 'panel-keyer') return endKeyerTask();
+  return undefined;
 }
 
 // ═══════════════════════════════════════════ 交信シミュレーター
@@ -283,6 +318,10 @@ function initQso() {
     settings.qsoStyle = btn.dataset.style;
     persist();
     syncQsoStyle();
+  });
+
+  $('#qso-copy-reveal').addEventListener('change', (e) => {
+    settings.copyReveal = e.target.checked; persist();
   });
 
   $('#btn-pattern-toggle').addEventListener('click', () => {
@@ -347,6 +386,9 @@ function syncQsoStyle() {
   $$('#qso-style .style-option').forEach((el) => {
     el.classList.toggle('is-active', el.dataset.style === settings.qsoStyle);
   });
+  // 受信内容を出すかどうかは、聞き取り練習でしか効かない
+  $('#copy-reveal-row').hidden = settings.qsoStyle !== 'copy';
+  $('#qso-copy-reveal').checked = settings.copyReveal;
 }
 
 /** 型の早見表を描く。自局・相手局のコールサインは実際の設定を当てはめる。 */
@@ -400,6 +442,16 @@ async function startQso() {
   $('#qso-log').innerHTML = '';
   renderTurn();
   $('#qso-stage').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/** 交信を途中でやめて、開始前の状態に戻す。 */
+function endQso() {
+  if (!qso.script) return;
+  qso.script = null;
+  qso.index = 0;
+  $('#qso-stage').hidden = true;
+  $('#qso-turn').innerHTML = '';
+  $('#qso-log').innerHTML = '';
 }
 
 function appendLog(turn, { reveal }) {
@@ -483,11 +535,15 @@ function renderTurn() {
     </div>
     ${settings.showText ? `<div class="tx-preview">${escapeHtml(turn.text)}</div>` : ''}`;
 
-  const rxOpts = { explainSelector: '#qso-explain' };
-  $('#btn-turn-rx').addEventListener('click', () => playText(turn.text, '#qso-playing', rxOpts));
-  $('#btn-turn-again').addEventListener('click', () => playText(turn.text, '#qso-playing', rxOpts));
+  // 聞き取り練習では、既定では相手の送信を画面に出さない。
+  // 流れている文字や語の意味が見えると、書き取りの答えがそのまま分かってしまう
+  const reveal = settings.copyReveal;
+  const charBox = reveal ? '#qso-playing' : null;
+  const rxOpts = reveal ? { explainSelector: '#qso-explain' } : {};
+  $('#btn-turn-rx').addEventListener('click', () => playText(turn.text, charBox, rxOpts));
+  $('#btn-turn-again').addEventListener('click', () => playText(turn.text, charBox, rxOpts));
   $('#btn-turn-slow').addEventListener('click', () => {
-    playText(turn.text, '#qso-playing', {
+    playText(turn.text, charBox, {
       ...rxOpts,
       charWpm: Math.max(8, settings.charWpm - 5),
       effWpm: Math.max(6, Math.min(settings.effWpm, settings.charWpm - 5) - 3),
@@ -506,7 +562,7 @@ function renderTurn() {
   });
 
   // 自動で受信を始める
-  playText(turn.text, '#qso-playing');
+  playText(turn.text, charBox);
 }
 
 // ───────── ガイド付き模擬交信 ─────────
@@ -598,7 +654,7 @@ function answerChoice(index, turn, box) {
     <div class="try-keying">
       <h4>パドルで打ってみる<span class="optional">任意</span></h4>
       <p class="hint">
-        上の内容を自分で打てるか試せます。画面右下の「パドル」枠の左右をクリック
+        上の内容を自分で打てるか試せます。画面右のパドル欄の左右をクリック
         （パドルを接続していればそのまま打鍵）、またはキーボードの
         <kbd>Z</kbd>（短点側）/ <kbd>X</kbd>（長点側）で打てます。
         打たずに次へ進んでもかまいません。
@@ -697,7 +753,7 @@ function renderLiveTurn(turn, box) {
     ${info.tip ? `<div class="guide-tip"><strong>ここでのコツ</strong><br>${escapeHtml(info.tip)}</div>` : ''}
     <p class="hint">
       下の内容を、パドルで実際に打って送信してください。
-      画面右下の「パドル」枠の左右をクリック（パドルを接続していればそのまま打鍵）、
+      画面右のパドル欄の左右をクリック（パドルを接続していればそのまま打鍵）、
       またはキーボードの <kbd>Z</kbd>（短点側）/ <kbd>X</kbd>（長点側）でも打てます。
       <code>=</code> は BT（－…－）、<code>&lt;SK&gt;</code> はプロサインとして続けて打ちます。
     </p>
@@ -948,6 +1004,9 @@ async function playText(text, selector, override = {}) {
   const opts = { ...override };
   delete opts.explainSelector;
 
+  // 新しい再生は一時停止を解除して始まるので、ボタンの表示も戻す
+  queueMicrotask(syncTransport);
+
   return player.play(text, {
     ...opts,
     onToken: (token, index) => {
@@ -1103,6 +1162,25 @@ function updateDrillControls() {
 
   $('#drill-level-out').textContent = `${level} 文字`;
   $('#drill-alphabet').textContent = `使用文字: ${order.slice(0, level).join(' ')}`;
+}
+
+/** ドリルを途中でやめる。連続出題の途中なら、そこまでの結果を締める。 */
+function endDrill() {
+  if (!drill.problem) return;
+  if (drill.session && drill.session.done > 0) {
+    const box = $('#drill-result');
+    box.hidden = false;
+    box.innerHTML = sessionSummaryHtml(drill.session);
+  } else {
+    $('#drill-result').hidden = true;
+    $('#drill-result').innerHTML = '';
+  }
+  drill.problem = null;
+  drill.session = null;
+  drill.awaitingNext = false;
+  $('#drill-answer').value = '';
+  $('#btn-drill-replay').disabled = true;
+  $('#btn-drill-slow').disabled = true;
 }
 
 async function newProblem() {
@@ -1660,9 +1738,12 @@ function initKeyer() {
   $('#keyer-weight').addEventListener('input', (e) => {
     settings.keyerWeight = Number(e.target.value); persist(); syncKeyer(); touched('keyerWeight');
   });
-  $('#keyer-wpm').addEventListener('input', (e) => {
+  // パドル送信タブのつまみと、右のパドル欄のつまみは同じ設定を指す
+  const setKeyerWpm = (e) => {
     settings.keyerWpm = Number(e.target.value); persist(); syncKeyer(); touched('keyerWpm');
-  });
+  };
+  $('#keyer-wpm').addEventListener('input', setKeyerWpm);
+  $('#pw-wpm').addEventListener('input', setKeyerWpm);
   $('#keyer-freq').addEventListener('input', (e) => {
     settings.keyerFreq = Number(e.target.value);
     player.setSettings({ keyerFreq: settings.keyerFreq });  // 打鍵中でも即時反映
@@ -1926,6 +2007,15 @@ function newKeyerTask() {
     $('#btn-keyer-listen').disabled = false;
   }
 
+  keyer.reset();
+  paddle.elements = '';
+  $('#keyer-elements').textContent = '';
+  $('#keyer-result').innerHTML = '';
+  renderKeyedText();
+}
+
+/** パドル送信の課題をやめて、打鍵と採点結果を消す。 */
+function endKeyerTask() {
   keyer.reset();
   paddle.elements = '';
   $('#keyer-elements').textContent = '';
