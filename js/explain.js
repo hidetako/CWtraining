@@ -69,6 +69,15 @@ export function lookupTerm(word) {
     return { term: w, ja: `数字 ${w}`, kind: 'number' };
   }
 
+  // 末尾の記号を外して引き直す。QRZ? や HW? のように、疑問符を付けて
+  // 送るのが普通の語があるため（? だけの語は上で拾い済み）
+  const stripped = w.replace(/[?.,!]+$/, '');
+  if (stripped && stripped !== w) {
+    const entry = lookupTerm(stripped);
+    // 見出しは打つとおりの表記のままにする
+    if (entry) return { ...entry, term: w };
+  }
+
   return null;
 }
 

@@ -3,7 +3,7 @@
 import { CWPlayer } from './audio.js';
 import { toMorseString, estimateDuration, tokenize } from './morse.js';
 import { ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER } from './data.js';
-import { annotateHtml, createTracker, explainText } from './explain.js';
+import { annotateHtml, createTracker, explainText, lookupTerm } from './explain.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
 import { LocalResponder, gradeField, REACTION_LABELS } from './qso.js';
 import { PHASES, PATTERN_SHEET, makeReplyOptions, readDxTurn } from './qsoguide.js';
@@ -1226,7 +1226,8 @@ function gradeCurrentProblem() {
   if (session) {
     session.done += 1;
     session.correct += result.correct;
-    session.total += result.total;
+    // 余分に打った分も分母に入れる（1 問ごとの点数と同じ数え方にそろえる）
+    session.total += result.total + (result.extra ?? 0);
     for (const [ch, c] of Object.entries(result.perChar)) {
       if (!session.perChar[ch]) session.perChar[ch] = { sent: 0, correct: 0 };
       session.perChar[ch].sent += c.sent;
@@ -2083,6 +2084,7 @@ function gradeKeying() {
   stats = recordKeying(stats, {
     correct: result.correct,
     total: result.total,
+    extra: result.extra,
     target: paddle.task,
     wpm: settings.keyerWpm,
   });
@@ -2491,7 +2493,7 @@ init();
 // 画面の操作には使っていない。
 window.__cw = {
   player, keyer, contest, responder,
-  gradeProblem, compareSending,   // 採点そのものを検証できるように公開する
+  gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   get settings() { return settings; },
   get stats() { return stats; },
   get qsoScript() { return qso.script; },

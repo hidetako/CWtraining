@@ -82,6 +82,42 @@ ok('取り漏らしが色分けされる', await page.locator('#drill-result .ma
 ok('凡例が出る', (await page.textContent('#drill-result .diff-legend')).includes('取り漏らし'));
 await page.screenshot({ path: `${DIR}/g1-drill-graded.png`, fullPage: true });
 
+// ── 余分の減点が「記録」にも届くこと ──────────────
+// 画面だけ減点して通算集計が満点のままだと、余分を打つ癖が記録に残らない
+await page.evaluate(() => {
+  localStorage.removeItem('cwtraining.stats.v1');
+});
+await page.reload();
+await page.waitForTimeout(600);
+await page.click('.tab[data-panel="drill"]');
+await page.click('#btn-drill-new');
+await page.waitForTimeout(400);
+
+// 出題の全文字を含みつつ、間に余分を挟んで答える
+const ans = (await page.evaluate(() => window.__cw.drillProblem.answer)).replace(/\s/g, '');
+await page.fill('#drill-answer', ans.split('').join('X'));
+await page.press('#drill-answer', 'Enter');
+await page.waitForTimeout(500);
+
+const shownPct = Number(String(await page.textContent('#drill-result .big')).replace('%', ''));
+const saved = await page.evaluate(() => {
+  const d = window.__cw.stats.drills;
+  const h = window.__cw.stats.history.find((e) => e.kind === 'drill');
+  return { chars: d.chars, correct: d.correct, pct: Math.round((d.correct / d.chars) * 100), hist: Math.round((h?.accuracy ?? 0) * 100) };
+});
+console.log('画面:', shownPct + '%', '| 記録:', JSON.stringify(saved));
+ok('画面が減点されている', shownPct < 70, `${shownPct}%`);
+ok('通算集計にも減点が届く', saved.pct === shownPct, `画面 ${shownPct}% / 通算 ${saved.pct}%`);
+ok('履歴にも減点が届く', saved.hist === shownPct, `画面 ${shownPct}% / 履歴 ${saved.hist}%`);
+
+// 打鍵側も同じこと（採点関数の戻り値を recordKeying に通して確かめる）
+const keying = await page.evaluate(() => {
+  const r = window.__cw.compareSending('ABCDE', 'AXBXCXDXE');
+  return { pct: Math.round(r.accuracy * 100), correct: r.correct, total: r.total, extra: r.extra };
+});
+console.log('打鍵の採点:', JSON.stringify(keying));
+ok('打鍵も余分を数える', keying.extra === 4 && keying.pct < 70, JSON.stringify(keying));
+
 console.log('\n失敗:', fails.length ? fails.join(' / ') : 'なし');
 console.log('ERRORS:', errors.length ? errors.join('\n') : '(none)');
 await browser.close();

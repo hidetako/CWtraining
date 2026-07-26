@@ -159,7 +159,8 @@ export function resetStats() {
 /** ドリル 1 回分の結果を統計に反映する。 */
 export function recordDrill(stats, { type, result, level }) {
   stats.drills.attempts += 1;
-  stats.drills.chars += result.total;
+  // 余分に打った分も分母に入れる。画面の点数と通算の集計をそろえるため
+  stats.drills.chars += result.total + (result.extra ?? 0);
   stats.drills.correct += result.correct;
 
   for (const [ch, counts] of Object.entries(result.perChar)) {
@@ -197,17 +198,19 @@ export function recordQso(stats, { correct, total, station, wpm }) {
 }
 
 /** パドル送信練習 1 回分の結果を統計に反映する。 */
-export function recordKeying(stats, { correct, total, target, wpm }) {
+export function recordKeying(stats, { correct, total, extra = 0, target, wpm }) {
   if (!stats.keying) stats.keying = { attempts: 0, chars: 0, correct: 0 };
+  // 余分に打った分も分母に入れる。画面の点数・履歴・通算をそろえるため
+  const denominator = total + extra;
   stats.keying.attempts += 1;
-  stats.keying.chars += total;
+  stats.keying.chars += denominator;
   stats.keying.correct += correct;
 
   pushHistory(stats, {
     kind: 'keying',
     target,
     wpm,
-    accuracy: total ? correct / total : 0,
+    accuracy: denominator ? correct / denominator : 0,
     total,
     at: Date.now(),
   });

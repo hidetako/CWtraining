@@ -69,6 +69,22 @@ ok('自由練習では意味欄が空', free.terms.length === 0);
 ok('自由練習の案内が出る', free.task.includes('自由練習'));
 ok('自由練習では手本を聞けない', await page.isDisabled('#btn-keyer-listen'));
 
+// ── 疑問符付きの語も拾えること ────────────────────
+// QRZ? や HW? は「?」を付けて送るのが普通なので、
+// 記号ごと引いて見つからない、では意味が付かない
+const punct = await page.evaluate(() => {
+  const t = (w) => {
+    const e = window.__cw.lookupTerm(w);
+    return e ? { term: e.term, ja: e.ja } : null;
+  };
+  return { qrz: t('QRZ?'), hw: t('HW?'), qrl: t('QRL?'), q: t('?') };
+});
+console.log('疑問符付き:', JSON.stringify(punct));
+ok('QRZ? に意味が付く', punct.qrz?.ja?.includes('呼び'), JSON.stringify(punct.qrz));
+ok('HW? に意味が付く', !!punct.hw?.ja, JSON.stringify(punct.hw));
+ok('QRZ? の見出しは記号込みのまま', punct.qrz?.term === 'QRZ?', punct.qrz?.term);
+ok('? だけの語は従来どおり', punct.q?.ja?.includes('もう一度'), JSON.stringify(punct.q));
+
 // ── 意味が長すぎないこと（簡単に添えるのが趣旨）────
 await newTask('phrase');
 const lens = await page.locator('#keyer-task-terms .task-term').evaluateAll(
