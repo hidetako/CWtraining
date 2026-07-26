@@ -67,6 +67,13 @@
           返事を選択肢から選びます。相手の反応の読み方も解説します。
         </span>
       </button>
+      <button type="button" class="style-option" data-style="live">
+        <span class="style-name">実技（パドルで打つ）</span>
+        <span class="style-desc">
+          解説を見ながら、自分の送信は実際にパドルで打ちます。
+          呼び出しから 73 までを通しで運用する練習です。
+        </span>
+      </button>
       <button type="button" class="style-option" data-style="copy">
         <span class="style-name">聞き取り練習</span>
         <span class="style-desc">
@@ -408,6 +415,11 @@
           <option value="left">左手用</option>
         </select>
       </label>
+      <label class="field">
+        <span>送信音の高さ</span>
+        <input type="range" id="keyer-freq" min="400" max="1000" step="10">
+        <output id="keyer-freq-out"></output>
+      </label>
     </div>
     <p class="hint" id="keyer-mode-help"></p>
     <p class="hint" id="keyer-hand-help"></p>
@@ -557,6 +569,21 @@
     <a href="https://github.com/VE3NEA/MorseRunner" rel="noopener" target="_blank">Morse Runner</a>
   </p>
 </footer>
+
+<!-- パドル入力を常時受け付ける浮きウィジェット。ここをクリックすればどのタブでも打てる -->
+<aside class="paddle-widget" id="paddle-widget">
+  <button type="button" class="pw-head" id="pw-toggle" title="パドル入力パネルの開閉">
+    <span class="pw-title">パドル</span>
+    <span class="pw-mini" id="pw-mini"></span>
+  </button>
+  <div class="pw-body" id="pw-body">
+    <div class="pw-pad" id="pw-pad">
+      <span class="pw-side" id="pw-left"></span>
+      <span class="pw-side" id="pw-right"></span>
+    </div>
+    <p class="pw-scope" id="pw-scope"></p>
+  </div>
+</aside>
 
 <script type="module" src="js/app.js"></script>
 </body>

@@ -359,8 +359,12 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
   pad.addEventListener('touchstart', onTouchStart, { passive: false });
   pad.addEventListener('touchend', onTouchEnd, { passive: false });
   pad.addEventListener('touchcancel', onTouchEnd, { passive: false });
-  document.addEventListener('keydown', onKeyDown);
-  document.addEventListener('keyup', onKeyUp);
+  // 常時表示ウィジェットなど、複数箇所から接続するときに
+  // キーボードの二重発火を避けられるよう、opts.keyboard === false で無効化できる
+  if (opts.keyboard !== false) {
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+  }
 
   return function detach() {
     target.removeEventListener('mousedown', onDown);
@@ -369,8 +373,10 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
     pad.removeEventListener('touchstart', onTouchStart);
     pad.removeEventListener('touchend', onTouchEnd);
     pad.removeEventListener('touchcancel', onTouchEnd);
-    document.removeEventListener('keydown', onKeyDown);
-    document.removeEventListener('keyup', onKeyUp);
+    if (opts.keyboard !== false) {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keyup', onKeyUp);
+    }
   };
 }
 

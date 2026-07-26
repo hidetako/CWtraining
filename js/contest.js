@@ -383,7 +383,7 @@ export class ContestRunner extends EventTarget {
       charWpm: this.opts.myWpm,
       effWpm: this.opts.myWpm,
       level: 1,
-      freq: this.player.settings.freq,
+      freq: this.player.settings.keyerFreq ?? this.player.settings.freq,
     });
 
     this._myVoice = voice;

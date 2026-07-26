@@ -13,7 +13,8 @@ export class CWPlayer {
     this.settings = {
       charWpm: 20,   // 各文字を打つ速度
       effWpm: 15,    // 実効速度（ファーンズワース）
-      freq: 700,     // 側音周波数 Hz
+      freq: 700,     // 受信側音の周波数 Hz
+      keyerFreq: 700, // 打鍵（送信）側音の周波数 Hz
       volume: 0.5,
       qrn: 0,        // 空電ノイズ 0..1
       qsb: 0,        // フェージング 0..1
@@ -131,6 +132,11 @@ export class CWPlayer {
       f.Q.setTargetAtTime(q, now, 0.02);
     });
 
+    // 打鍵側音のラインが開いていれば、高さの変更を即時反映する
+    if (this._keyLine) {
+      this._keyLine.osc.frequency.setTargetAtTime(s.keyerFreq, now, 0.02);
+    }
+
     // 深さ d のとき振幅は (1 - 2d)〜1 の範囲で揺れる
     const depth = s.qsb * 0.45;
     this.qsbGain.gain.setTargetAtTime(1 - depth, now, 0.05);
@@ -157,7 +163,7 @@ export class CWPlayer {
 
     const osc = ctx.createOscillator();
     osc.type = 'sine';
-    osc.frequency.value = this.settings.freq;
+    osc.frequency.value = opts.freq ?? this.settings.freq;
 
     const keyGain = ctx.createGain();
     keyGain.gain.value = 0;
@@ -463,13 +469,13 @@ export class CWPlayer {
   async openKeyLine() {
     await this.resume();
     if (this._keyLine) {
-      this._keyLine.osc.frequency.setValueAtTime(this.settings.freq, this.ctx.currentTime);
+      this._keyLine.osc.frequency.setValueAtTime(this.settings.keyerFreq, this.ctx.currentTime);
       return this._keyLine;
     }
     const ctx = this.ctx;
     const osc = ctx.createOscillator();
     osc.type = 'sine';
-    osc.frequency.value = this.settings.freq;
+    osc.frequency.value = this.settings.keyerFreq;
     const gain = ctx.createGain();
     gain.gain.value = 0;
     osc.connect(gain);
@@ -515,7 +521,7 @@ export class CWPlayer {
     const ctx = this.ctx;
     const osc = ctx.createOscillator();
     osc.type = 'sine';
-    osc.frequency.value = this.settings.freq;
+    osc.frequency.value = this.settings.keyerFreq;
     const gain = ctx.createGain();
     gain.gain.value = 0;
     osc.connect(gain);
