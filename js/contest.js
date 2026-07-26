@@ -526,6 +526,14 @@ export class ContestRunner extends EventTarget {
     return entry;
   }
 
+  /** 運用中に自局の送信速度を増減する（PgUp / PgDn 相当）。 */
+  adjustWpm(delta) {
+    if (!this.opts) return null;
+    this.opts.myWpm = Math.max(10, Math.min(45, this.opts.myWpm + delta));
+    this._emit('state');
+    return this.opts.myWpm;
+  }
+
   /** F4: 自局コールサイン。 */
   async myCall() {
     if (this.running) await this._send(this.opts.myCall);

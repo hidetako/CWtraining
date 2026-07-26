@@ -20,6 +20,7 @@ export const DRILL_TYPES = {
   abbrev: { label: '略語・Q 符号', help: '交信で頻出する略語。答え合わせで意味も表示' },
   number: { label: '数字・RST', help: 'RST や番号などの数字列' },
   word: { label: '頻出単語', help: '交信でよく使う短い単語' },
+  weak: { label: '苦手集中', help: '正答率の低い文字を重点的に出題します（記録から自動選択）' },
 };
 
 /**
@@ -30,6 +31,14 @@ export const DRILL_TYPES = {
  */
 export function makeProblem(type, opts = {}) {
   switch (type) {
+    case 'weak': {
+      // 呼び出し側が苦手文字の配列（重み付けで重複あり）を渡す。
+      // 記録が足りなければコッホ法の文字で代替する
+      const alphabet = (opts.alphabet && opts.alphabet.length >= 2)
+        ? opts.alphabet
+        : KOCH_ORDER.slice(0, Math.max(2, opts.level || 2));
+      return groupsFromAlphabet(alphabet, opts);
+    }
     case 'koch':
       return charGroups(KOCH_ORDER, opts);
     case 'frequency':
@@ -65,7 +74,10 @@ export function makeProblem(type, opts = {}) {
 
 function charGroups(order, opts) {
   const level = Math.min(Math.max(2, opts.level || 2), order.length);
-  const alphabet = order.slice(0, level);
+  return groupsFromAlphabet(order.slice(0, level), opts);
+}
+
+function groupsFromAlphabet(alphabet, opts) {
   const groupSize = opts.groupSize || 5;
   const groupCount = opts.groupCount || 5;
 
