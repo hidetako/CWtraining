@@ -594,10 +594,40 @@ function answerChoice(index, turn, box) {
     <div class="annotated">${annotateHtml(correctText, escapeHtml)}</div>
     <div class="playing-char" id="qso-playing"></div>
     <div class="explain-live" id="qso-explain"></div>
+
+    <div class="try-keying">
+      <h4>パドルで打ってみる<span class="optional">任意</span></h4>
+      <p class="hint">
+        上の内容を自分で打てるか試せます。画面右下の「パドル」枠の左右をクリック
+        （パドルを接続していればそのまま打鍵）、またはキーボードの
+        <kbd>Z</kbd>（短点側）/ <kbd>X</kbd>（長点側）で打てます。
+        打たずに次へ進んでもかまいません。
+      </p>
+      <div class="live-keyed" id="qso-keyed"><span class="empty hint">パドルで打ち始めてください。</span></div>
+      <div class="turn-actions">
+        <button type="button" class="btn btn-ghost" id="btn-guide-clear">打ち直す</button>
+        <button type="button" class="btn" id="btn-guide-check">お手本と照合する</button>
+      </div>
+      <div id="qso-guide-keyed-result"></div>
+    </div>
+
     <div class="turn-actions">
       <button type="button" class="btn btn-primary" id="btn-guide-send">送信して次へ</button>
       <button type="button" class="btn btn-ghost" id="btn-guide-skip">音を飛ばして次へ</button>
     </div>`);
+
+  // 打鍵を受け付ける準備（側音のラインを開き、前のターンの符号を消す）
+  player.openKeyLine();
+  keyer.reset();
+
+  $('#btn-guide-clear').addEventListener('click', () => {
+    keyer.reset();
+    $('#qso-guide-keyed-result').innerHTML = '';
+  });
+  $('#btn-guide-check').addEventListener('click', () => {
+    const sent = keyer.flush();
+    $('#qso-guide-keyed-result').innerHTML = sendingDiffHtml(correctText, sent);
+  });
 
   $('#btn-guide-send').addEventListener('click', async (e) => {
     e.target.disabled = true;
@@ -694,20 +724,17 @@ function renderLiveTurn(turn, box) {
   $('#btn-live-grade').addEventListener('click', () => gradeLiveTurn(turn));
 }
 
-function gradeLiveTurn(turn) {
-  if (qso.graded) return;
-  qso.graded = true;
-  player.stop();
-
-  const sent = keyer.flush();
-  const result = compareSending(turn.text, sent);
-  qso.liveScores.push(result.accuracy);
-
+/**
+ * 手本と打った符号の照合結果を HTML にする。
+ * 実技モードの採点と、ガイド付きの「お手本と照合する」で共通に使う。
+ */
+function sendingDiffHtml(target, sent) {
+  const result = compareSending(target, sent);
   const diff = result.marks
     .map((m) => `<span class="${m.type}">${escapeHtml(m.char === ' ' ? '␣' : m.char)}</span>`)
     .join('');
 
-  $('#qso-live-result').innerHTML = `
+  return `
     <div class="score-line">
       <span class="big">${Math.round(result.accuracy * 100)}%</span>
       <span class="hint">${result.correct} / ${result.total} 文字一致</span>
@@ -717,7 +744,20 @@ function gradeLiveTurn(turn) {
       <span><span class="diff"><span class="ok">■</span></span> 一致</span>
       <span><span class="diff"><span class="missing">■</span></span> 打ち漏らし</span>
       <span><span class="diff"><span class="extra">■</span></span> 余分・誤り</span>
-    </div>
+    </div>`;
+}
+
+function gradeLiveTurn(turn) {
+  if (qso.graded) return;
+  qso.graded = true;
+  player.stop();
+
+  const sent = keyer.flush();
+  const result = compareSending(turn.text, sent);
+  qso.liveScores.push(result.accuracy);
+
+  $('#qso-live-result').innerHTML = `
+    ${sendingDiffHtml(turn.text, sent)}
     <div class="turn-actions">
       <button type="button" class="btn" id="btn-live-retry">もう一度打つ</button>
       <button type="button" class="btn btn-primary" id="btn-live-next">この内容で送信して次へ</button>

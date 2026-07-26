@@ -445,6 +445,8 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 .term-number   { color: var(--text-dim); background: var(--bg-raised); }
 
 .explain-live { margin-top: .9rem; display: grid; gap: .4rem; }
+/* 解説が無いときに余白だけ残らないようにする */
+.explain-live:empty { display: none; }
 
 .explain-card {
   display: grid;
@@ -870,6 +872,25 @@ kbd {
 }
 .live-keyed .pending { color: var(--text-dim); }
 .live-keyed .empty { font-family: inherit; }
+
+/* ガイド付きの中の「パドルで打ってみる」欄。本筋（選択肢と送信）と
+   区別がつくよう、囲って一段引いた見た目にする */
+.try-keying {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  padding: .2rem .9rem .9rem;
+  margin: 1rem 0;
+}
+.try-keying h4 { display: flex; align-items: center; gap: .5rem; }
+.try-keying .optional {
+  font-size: .68rem;
+  font-weight: 500;
+  letter-spacing: .04em;
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: .1rem .5rem;
+}
 
 /* ───────── ウィジェットの折りたたみ（小型化） ───────── */
 .paddle-widget.is-closed .pw-head { padding: .35rem .7rem; }
