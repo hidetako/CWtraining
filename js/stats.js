@@ -55,6 +55,8 @@ export const DEFAULT_SETTINGS = {
   contestExchange: 'serial',
   contestMinutes: 5,
   contestActivity: 3,
+  contestDxWpm: 22,      // 相手局の速度の基準（WPM）
+  contestDxSpread: 6,    // 相手局どうしの速度のばらつき（±WPM、0 でそろう）
   contestMyNumber: '13H',
   contestRecord: false,
 

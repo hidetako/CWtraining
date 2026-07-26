@@ -1317,6 +1317,22 @@ function initContest() {
         : 'HST 競技では妨害の無い理想的な条件で 10 分間行います。')
       : 'LID は、呼び回しの割り込み・符号の打ち間違い・おかしな RST などを起こす局です。';
 
+    $('#contest-dx-wpm').value = settings.contestDxWpm;
+    $('#contest-dx-wpm-out').textContent = `${settings.contestDxWpm} WPM`;
+    $('#contest-dx-spread').value = settings.contestDxSpread;
+    $('#contest-dx-spread-out').textContent = settings.contestDxSpread === 0
+      ? 'そろえる' : `±${settings.contestDxSpread} WPM`;
+
+    // 相手局の速度は HST 競技だけ全局そろう規定なので、そのときは触らせない
+    const evenSpeed = settings.contestMode === 'hst';
+    $('#contest-dx-spread').disabled = evenSpeed;
+    const lo = Math.max(10, settings.contestDxWpm - (evenSpeed ? 0 : settings.contestDxSpread));
+    const hi = Math.min(45, settings.contestDxWpm + (evenSpeed ? 0 : settings.contestDxSpread));
+    $('#contest-dx-wpm-help').textContent = evenSpeed
+      ? `HST 競技では全局が ${settings.contestDxWpm} WPM でそろいます。`
+      : `呼んでくる局は ${lo}〜${hi} WPM の範囲に散らばります。`
+        + '運用中に変えると、そのあと現れる局から反映されます（呼んでいる最中の局は変わりません）。';
+
     $('#contest-rit').value = String(settings.rit ?? 0);
     $('#contest-rit-out').textContent = `${settings.rit ?? 0} Hz`;
     $('#contest-bandwidth').value = String(settings.bandwidth);
@@ -1329,6 +1345,17 @@ function initContest() {
   $('#contest-activity').addEventListener('input', (e) => { settings.contestActivity = Number(e.target.value); persist(); sync(); });
   $('#contest-mynumber').addEventListener('input', (e) => { settings.contestMyNumber = e.target.value.toUpperCase(); persist(); });
   $('#contest-record').addEventListener('change', (e) => { settings.contestRecord = e.target.checked; persist(); });
+
+  $('#contest-dx-wpm').addEventListener('input', (e) => {
+    settings.contestDxWpm = Number(e.target.value);
+    persist(); sync();
+    if (contest.running) contest.setDxWpm(settings.contestDxWpm);
+  });
+  $('#contest-dx-spread').addEventListener('input', (e) => {
+    settings.contestDxSpread = Number(e.target.value);
+    persist(); sync();
+    if (contest.running) contest.setDxSpread(settings.contestDxSpread);
+  });
 
   CONDITION_KEYS.forEach((k) => {
     $(`#cond-${k}`).addEventListener('change', (e) => {
@@ -1473,6 +1500,8 @@ async function startContest() {
     myCall: settings.callsign,
     myNumber: settings.contestMyNumber,
     myWpm: settings.charWpm,
+    dxWpm: settings.contestDxWpm,
+    dxSpread: settings.contestDxSpread,
     conditions: {
       qrn: settings.condQrn ? 0.5 : 0,
       qrm: settings.condQrm ? 0.5 : 0,

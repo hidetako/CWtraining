@@ -249,7 +249,18 @@
         <span>自局が送るナンバー（JARL 形式）</span>
         <input type="text" id="contest-mynumber" autocapitalize="characters" placeholder="13H">
       </label>
+      <label class="field">
+        <span>相手局の速度</span>
+        <input type="range" id="contest-dx-wpm" min="10" max="45" step="1">
+        <output id="contest-dx-wpm-out"></output>
+      </label>
+      <label class="field">
+        <span>相手局の速度のばらつき</span>
+        <input type="range" id="contest-dx-spread" min="0" max="12" step="1">
+        <output id="contest-dx-spread-out"></output>
+      </label>
     </div>
+    <p class="hint" id="contest-dx-wpm-help"></p>
     <p class="hint" id="contest-mode-help"></p>
     <p class="hint" id="contest-exchange-help"></p>
 
