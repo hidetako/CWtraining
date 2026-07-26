@@ -257,6 +257,18 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
   line-height: 1.9;
 }
 
+/* 課題に出てくる Q 符号・略語の意味。打つ前に何を送るのか分かるように */
+.task-terms { display: flex; flex-wrap: wrap; gap: .4rem .8rem; margin: -.4rem 0 .3rem; }
+.task-terms:empty { display: none; }
+.task-term { font-size: .76rem; color: var(--text-dim); }
+.task-term .code {
+  font-family: var(--mono);
+  color: var(--accent);
+  background: none;
+  padding: 0;
+  margin-right: .35em;
+}
+
 .playing-char {
   font-family: var(--mono);
   font-size: 1.6rem;

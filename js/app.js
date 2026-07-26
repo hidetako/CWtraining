@@ -2002,26 +2002,47 @@ function setPaddleActive(active) {
   });
 }
 
+/**
+ * 課題に出てくる Q 符号・略語に、短い意味を添える。
+ * 打つ前に何を送ろうとしているのか分かるように。長い解説は
+ * ホバーで全文が出るので、ここでは頭の一節だけを見せる。
+ */
+function taskTermsHtml(text) {
+  // コールサインと数字は見れば分かるので、意味を添える対象から外す
+  const terms = explainText(text).filter((t) => t.kind !== 'callsign' && t.kind !== 'number');
+  if (!terms.length) return '';
+
+  return terms.map((t) => {
+    const brief = t.ja.length > 30 ? t.ja.split(' — ')[0] : t.ja;
+    return `<span class="task-term" title="${escapeHtml(t.ja)}">
+      <span class="code">${escapeHtml(t.term)}</span>${escapeHtml(brief)}</span>`;
+  }).join('');
+}
+
 function newKeyerTask() {
   const type = settings.keyerTaskType;
   const preview = $('#keyer-task-text');
+  const terms = $('#keyer-task-terms');
 
   if (type === 'free') {
     paddle.task = null;
     preview.textContent = '自由練習モードです。好きな符号を打ってください。';
+    terms.innerHTML = '';
     $('#btn-keyer-listen').disabled = true;
-  } else if (type === 'phrase') {
-    const dx = makeProblem('callsign', {}).answer;
-    paddle.task = KEY_PHRASES[Math.floor(Math.random() * KEY_PHRASES.length)]
-      .replaceAll('{ME}', settings.callsign)
-      .replaceAll('{DX}', dx)
-      .replaceAll('{NAME}', settings.name)
-      .replaceAll('{QTH}', settings.qth);
-    preview.textContent = paddle.task;
-    $('#btn-keyer-listen').disabled = false;
   } else {
-    paddle.task = makeProblem(type, {}).answer;
-    preview.textContent = paddle.task;
+    if (type === 'phrase') {
+      const dx = makeProblem('callsign', {}).answer;
+      paddle.task = KEY_PHRASES[Math.floor(Math.random() * KEY_PHRASES.length)]
+        .replaceAll('{ME}', settings.callsign)
+        .replaceAll('{DX}', dx)
+        .replaceAll('{NAME}', settings.name)
+        .replaceAll('{QTH}', settings.qth);
+    } else {
+      paddle.task = makeProblem(type, {}).answer;
+    }
+    // 語ごとに色分けし、下に意味を並べる
+    preview.innerHTML = annotateHtml(paddle.task, escapeHtml);
+    terms.innerHTML = taskTermsHtml(paddle.task);
     $('#btn-keyer-listen').disabled = false;
   }
 
