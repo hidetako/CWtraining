@@ -125,10 +125,11 @@ await page.waitForTimeout(400);
 ok('受信ターンまで進める', await toRxTurn());
 await page.click('#btn-turn-rx');
 await page.waitForTimeout(1600);
-const shown = (await page.textContent('#qso-playing')).trim();
-console.log('受信中の表示:', JSON.stringify(shown));
-ok('受信中に文字が出ない', shown === '', shown);
-ok('意味の解説も出ない', (await page.textContent('#qso-explain')).trim() === '');
+// 表示しない設定では、空欄を置くのではなく表示欄ごと出さない
+// （空のまま残すと書き取り欄がその分だけ下に押し下げられる）
+console.log('受信中の表示欄:', await page.locator('#qso-playing').count(), '個');
+ok('受信中に文字が出ない', await page.locator('#qso-playing').count() === 0);
+ok('意味の解説も出ない', await page.locator('#qso-explain').count() === 0);
 await page.screenshot({ path: `${DIR}/L2-copy-hidden.png` });
 
 // 入にすると出る

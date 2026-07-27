@@ -138,6 +138,19 @@
     </label>
   </div>
 
+  <!-- 交信開始のすぐ下に操作する場所が来るよう、今のターンを先に置く。
+       交信ログと型の早見表は参照用なので後ろへ回す -->
+  <div class="qso-stage" id="qso-stage" hidden>
+    <div class="card qso-turn-card" id="qso-turn">
+      <!-- 進行に応じて app.js が中身を差し替える -->
+    </div>
+
+    <div class="card qso-log-card">
+      <h3>交信ログ</h3>
+      <div class="qso-log" id="qso-log"></div>
+    </div>
+  </div>
+
   <div class="card pattern-card" id="pattern-card">
     <div class="tutorial-head">
       <h3>ラバースタンプ交信の型</h3>
@@ -148,17 +161,6 @@
       あとは相手が変わるだけで中身はほぼ同じです。
     </p>
     <div id="pattern-body" hidden></div>
-  </div>
-
-  <div class="qso-stage" id="qso-stage" hidden>
-    <div class="card qso-log-card">
-      <h3>交信ログ</h3>
-      <div class="qso-log" id="qso-log"></div>
-    </div>
-
-    <div class="card qso-turn-card" id="qso-turn">
-      <!-- 進行に応じて app.js が中身を差し替える -->
-    </div>
   </div>
 </section>
 

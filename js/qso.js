@@ -22,6 +22,22 @@ export const FIELD_LABELS = {
   wx: '天気',
 };
 
+/**
+ * 各欄に何を入れるのかを、入力欄の中に薄く出す。
+ * 本文を丸ごと入れてしまう間違いが起きやすいので、
+ * 「その項目だけ」と分かる書き方にしている。
+ */
+export const FIELD_HINTS = {
+  callsign: '聞き取ったコールサインを入力',
+  rst: '聞き取った RST を入力（599 など）',
+  name: '聞き取った名前を入力',
+  qth: '聞き取った QTH を入力',
+  rig: '聞き取ったリグ名を入力',
+  pwr: '聞き取った出力を入力',
+  ant: '聞き取ったアンテナを入力',
+  wx: '聞き取った天気を入力',
+};
+
 /** 相手局のプロフィールをランダムに作る。 */
 export function makeStation(options = {}) {
   const callsign = options.callsign || makeCallsign(options.region);
