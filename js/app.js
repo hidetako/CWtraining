@@ -781,7 +781,10 @@ function renderLiveTurn(turn, box) {
 function sendingDiffHtml(target, sent) {
   const result = compareSending(target, sent);
   const diff = result.marks
-    .map((m) => `<span class="${m.type}">${escapeHtml(m.char === ' ' ? '␣' : m.char)}</span>`)
+    // 空白は採点に使っていないので、色を付けず語の切れ目としてだけ出す
+    .map((m) => (m.type === 'space'
+      ? '<span class="gap"> </span>'
+      : `<span class="${m.type}">${escapeHtml(m.char)}</span>`))
     .join('');
 
   return `
@@ -2092,7 +2095,10 @@ function gradeKeying() {
   renderStats();
 
   const diff = result.marks
-    .map((m) => `<span class="${m.type}">${escapeHtml(m.char === ' ' ? '␣' : m.char)}</span>`)
+    // 空白は採点に使っていないので、色を付けず語の切れ目としてだけ出す
+    .map((m) => (m.type === 'space'
+      ? '<span class="gap"> </span>'
+      : `<span class="${m.type}">${escapeHtml(m.char)}</span>`))
     .join('');
 
   box.innerHTML = `

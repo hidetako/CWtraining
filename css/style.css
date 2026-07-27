@@ -715,6 +715,8 @@ kbd {
 .diff .ok { color: var(--ok); }
 .diff .missing { color: var(--ng); text-decoration: line-through; }
 .diff .extra { color: var(--accent); text-decoration: underline wavy var(--accent); }
+/* 語の切れ目。採点対象ではないので色を付けず、幅だけ取る */
+.diff .gap { display: inline-block; width: .7em; }
 
 .diff-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .75rem; color: var(--text-dim); margin-top: .6rem; align-items: center; }
 /* 凡例の色見本は色だけ示したいので、取り消し線や波線は付けない */
