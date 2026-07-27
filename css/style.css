@@ -524,6 +524,27 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 .term-callsign { color: #ff9fb0; background: #3a1620; }
 .term-number   { color: var(--text-dim); background: var(--bg-raised); }
 
+/* 聞き直しているとき、今どの語を送っているかを示す。
+   用語ごとの色分けを潰さないよう、色を塗り替えるのではなく
+   枠と明るさで浮かせる */
+.word {
+  border-radius: 4px;
+  padding: .08em .3em;
+  transition: box-shadow .08s, filter .08s;
+}
+.word.is-playing {
+  box-shadow: 0 0 0 2px var(--accent), 0 0 12px rgba(255, 183, 77, .45);
+  filter: brightness(1.45);
+  position: relative;
+  z-index: 1;
+}
+/* 用語ではない素の語は、色が無いぶん背景でも示す */
+.word.is-playing:not(.term) { background: var(--accent); color: #1a1205; filter: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .word { transition: none; }
+}
+
 .explain-live { margin-top: .9rem; display: grid; gap: .4rem; }
 /* 解説が無いときに余白だけ残らないようにする */
 .explain-live:empty { display: none; }

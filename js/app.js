@@ -687,6 +687,7 @@ function answerChoice(index, turn, box) {
     e.target.disabled = true;
     await playText(correctText, '#qso-playing', {
       explainSelector: '#qso-explain',
+      highlightSelector: '.annotated',
       freq: settings.keyerFreq,
       ...(turn.slow ? { charWpm: Math.max(8, settings.charWpm - 6), effWpm: Math.max(6, settings.effWpm - 4) } : {}),
     });
@@ -727,7 +728,8 @@ function revealDxTurn(turn, box) {
       <button type="button" class="btn btn-primary" id="btn-guide-next">次へ</button>
     </div>`;
 
-  $('#btn-guide-relisten').addEventListener('click', () => playText(turn.text, '#qso-playing'));
+  $('#btn-guide-relisten').addEventListener('click', () =>
+    playText(turn.text, '#qso-playing', { highlightSelector: '.annotated' }));
   $('#btn-guide-next').addEventListener('click', () => advanceTurn(turn, { reveal: true }));
 
   if (isTwist) qso.hadTwist = true;
@@ -768,7 +770,12 @@ function renderLiveTurn(turn, box) {
     <div id="qso-live-result"></div>`;
 
   $('#btn-live-example').addEventListener('click', () => {
-    playText(turn.text, null, { freq: settings.keyerFreq, charWpm: settings.keyerWpm, effWpm: settings.keyerWpm });
+    playText(turn.text, null, {
+      freq: settings.keyerFreq,
+      charWpm: settings.keyerWpm,
+      effWpm: settings.keyerWpm,
+      highlightSelector: '.annotated',
+    });
   });
   $('#btn-live-clear').addEventListener('click', () => keyer.reset());
   $('#btn-live-skip').addEventListener('click', () => {
@@ -906,7 +913,8 @@ function gradeTurn(turn, box) {
       <button type="button" class="btn btn-primary" id="btn-turn-next">次へ</button>
     </div>`;
 
-  $('#btn-turn-relisten').addEventListener('click', () => playText(turn.text, '#qso-playing'));
+  $('#btn-turn-relisten').addEventListener('click', () =>
+    playText(turn.text, '#qso-playing', { highlightSelector: '.annotated' }));
   $('#btn-turn-next').addEventListener('click', () => advanceTurn(turn, { reveal: true }));
 }
 
@@ -993,10 +1001,13 @@ function renderGuidedSummary() {
 async function playText(text, selector, override = {}) {
   const display = selector ? $(selector) : null;
   const explain = override.explainSelector ? $(override.explainSelector) : null;
+  // 本文を並べてある欄。今どこを送っているかを語ごとに光らせる
+  const highlight = override.highlightSelector ? $(override.highlightSelector) : null;
   if (display) display.innerHTML = '';
+  clearWordHighlight(highlight);
 
   const live = explain && settings.beginnerMode;
-  const tracker = live ? createTracker(text) : null;
+  const tracker = (live || highlight) ? createTracker(text) : null;
   if (explain) {
     explain.innerHTML = live
       ? '<p class="explain-empty">送信中の語をここに解説します。</p>'
@@ -1005,11 +1016,12 @@ async function playText(text, selector, override = {}) {
 
   const opts = { ...override };
   delete opts.explainSelector;
+  delete opts.highlightSelector;
 
   // 新しい再生は一時停止を解除して始まるので、ボタンの表示も戻す
   queueMicrotask(syncTransport);
 
-  return player.play(text, {
+  const done = await player.play(text, {
     ...opts,
     onToken: (token, index) => {
       if (display) {
@@ -1021,6 +1033,12 @@ async function playText(text, selector, override = {}) {
 
       const hit = tracker.step(index);
       if (!hit) return;
+
+      if (highlight) {
+        clearWordHighlight(highlight);
+        $(`.word[data-w="${hit.index}"]`, highlight)?.classList.add('is-playing');
+      }
+      if (!live) return;
 
       // 直前の語の強調を外し、新しい語を先頭に足す
       $$('.explain-card.is-current', explain).forEach((el) => el.classList.remove('is-current'));
@@ -1040,6 +1058,16 @@ async function playText(text, selector, override = {}) {
       while (explain.children.length > 8) explain.lastElementChild.remove();
     },
   });
+
+  // 鳴り終わったら光を消す。止められた場合も同じ
+  clearWordHighlight(highlight);
+  return done;
+}
+
+/** 本文欄の「今ここ」の強調を消す。 */
+function clearWordHighlight(box) {
+  if (!box) return;
+  $$('.word.is-playing', box).forEach((el) => el.classList.remove('is-playing'));
 }
 
 /** 本文に出てきた用語を一覧にした HTML を返す。 */
@@ -2162,21 +2190,28 @@ function initTools() {
   $('#btn-tool-play').addEventListener('click', () => {
     const tokens = tokenize(text.value);
     const patterns = tokens.map((t) => (t.type === 'space' ? '/' : t.pattern));
-    const tracker = settings.beginnerMode ? createTracker(text.value) : null;
+    // 語の追跡は、初心者モードが切でも本文の強調のために使う
+    const tracker = createTracker(text.value);
+    const live = settings.beginnerMode;
+    const annotated = $('#tool-annotated');
     const explain = $('#tool-explain');
-    explain.innerHTML = tracker
+    explain.innerHTML = live
       ? '<p class="explain-empty">送信中の語をここに解説します。</p>'
       : '<p class="explain-empty">初心者モードをオンにすると、送信中の語を順に解説します。</p>';
+    clearWordHighlight(annotated);
 
     player.play(text.value, {
       onToken: (token, index) => {
         $('#tool-morse').innerHTML = patterns
           .map((p, n) => (n === index ? `<span class="cur">${p}</span>` : p))
           .join(' ');
-        if (!tracker) return;
-
         const hit = tracker.step(index);
         if (!hit) return;
+
+        clearWordHighlight(annotated);
+        $(`.word[data-w="${hit.index}"]`, annotated)?.classList.add('is-playing');
+        if (!live) return;
+
         $$('.explain-card.is-current', explain).forEach((el) => el.classList.remove('is-current'));
         if (!hit.entry) return;
 
@@ -2189,7 +2224,11 @@ function initTools() {
         explain.prepend(card);
         while (explain.children.length > 10) explain.lastElementChild.remove();
       },
-    }).then(() => refresh());
+    }).then((finished) => {
+      // 途中で別の再生に差し替えられた場合は触らない。
+      // ここで本文を組み直すと、始まったばかりの再生の強調を消してしまう
+      if (finished) { clearWordHighlight(annotated); refresh(); }
+    });
   });
   $('#btn-tool-stop').addEventListener('click', () => { player.stop(); refresh(); });
 

@@ -131,12 +131,13 @@ export function createTracker(text) {
 
   return {
     spans,
-    /** @returns {{ span, entry } | null} 新しい語に入ったときだけ返す */
+    /** @returns {{ span, entry, index } | null} 新しい語に入ったときだけ返す */
     step(index) {
-      const span = spans.find((s) => index >= s.from && index <= s.to);
+      const at = spans.findIndex((s) => index >= s.from && index <= s.to);
+      const span = spans[at];
       if (!span || span === lastSpan) return null;
       lastSpan = span;
-      return { span, entry: lookupTerm(span.text) };
+      return { span, entry: lookupTerm(span.text), index: at };
     },
     reset() { lastSpan = null; },
   };
@@ -147,13 +148,29 @@ export function createTracker(text) {
  * escape は呼び出し側の関数を渡す（app.js と同じ実装を使うため）。
  */
 export function annotateHtml(text, escape) {
+  // 再生中の語を光らせられるよう、すべての語を span で包んで通し番号を振る。
+  // 番号は wordSpans() と揃える（再生側はトークン位置から語を特定するため）。
+  // 万一ずれたら番号を振らないでおく — 光らないだけで表示は壊れない
+  const spans = wordSpans(text);
+  let wi = 0;
+
   return String(text)
     .split(/(\s+)/)
     .map((chunk) => {
       if (/^\s+$/.test(chunk)) return chunk;
+
+      // tokenize() は大文字に直すので、対応付けも大文字どうしで比べる
+      // （変換・電鍵タブには小文字のまま入力できる）
+      const index = spans[wi]?.text === chunk.toUpperCase() ? wi++ : null;
       const entry = lookupTerm(chunk);
-      if (!entry) return escape(chunk);
-      return `<span class="term term-${entry.kind}" title="${escape(entry.ja)}">${escape(chunk)}</span>`;
+      const cls = entry ? `word term term-${entry.kind}` : 'word';
+      const attrs = [
+        `class="${cls}"`,
+        index != null ? `data-w="${index}"` : '',
+        entry ? `title="${escape(entry.ja)}"` : '',
+      ].filter(Boolean).join(' ');
+
+      return `<span ${attrs}>${escape(chunk)}</span>`;
     })
     .join('');
 }
