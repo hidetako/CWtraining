@@ -24,7 +24,10 @@ if [ "${1:-}" = "--remote" ]; then
   REMOTE="${BASE:?--remote には BASE=公開URL が必要です}"
   ROOT="$(mktemp -d)"
   mkdir -p "$ROOT/css" "$ROOT/js"
-  for f in index.html css/style.css $(ls js/*.js); do
+  # 画面を動かすファイルに加えて、アイコンなど配信されている静的ファイルも取り寄せる。
+  # これが抜けていると、公開側は正しいのにテストだけ落ちる
+  for f in index.html css/style.css $(ls js/*.js) \
+           favicon.svg icon.svg apple-touch-icon.png icon-512.png; do
     curl -fsS -o "$ROOT/$f" "$REMOTE/$f" || { echo "取得失敗: $f"; exit 1; }
   done
   echo "公開中のファイルを $ROOT に取得しました"
