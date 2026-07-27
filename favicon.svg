@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="CW">
+  <title>CW 交信トレーニング</title>
+  <!--
+    タブに出る 16〜32px 用の簡略版。icon.svg と同じ意匠だが、
+    小さいサイズで潰れないよう滲みを外し、弧を 2 本に減らして
+    線を太くしてある。中央はモールスの CW（－・－・ ・－－）のまま。
+  -->
+  <defs>
+    <linearGradient id="fvGlow" gradientUnits="userSpaceOnUse" x1="0" y1="64" x2="0" y2="448">
+      <stop offset="0" stop-color="#ffb020"/>
+      <stop offset="0.5" stop-color="#ff8c1a"/>
+      <stop offset="1" stop-color="#ff6a00"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="96" ry="96" fill="#050505"/>
+
+  <g fill="none" stroke="url(#fvGlow)" stroke-width="26" stroke-linecap="round">
+    <!-- 電波は上下 2 本ずつ -->
+    <path d="M 188.1 188.1 A 96.0 96.0 0 0 1 323.9 188.1"/>
+    <path d="M 120.0 160.8 A 166.0 166.0 0 0 1 392.0 160.8"/>
+    <path d="M 323.9 323.9 A 96.0 96.0 0 0 1 188.1 323.9"/>
+    <path d="M 392.0 351.2 A 166.0 166.0 0 0 1 120.0 351.2"/>
+
+    <!-- C ＝ －・－・ -->
+    <path d="M 47 256 H 85"/>
+    <path d="M 123 256 H 123"/>
+    <path d="M 161 256 H 199"/>
+    <path d="M 237 256 H 237"/>
+
+    <!-- W ＝ ・－－ -->
+    <path d="M 313 256 H 313"/>
+    <path d="M 351 256 H 389"/>
+    <path d="M 427 256 H 465"/>
+  </g>
+</svg>

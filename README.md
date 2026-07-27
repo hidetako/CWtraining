@@ -256,6 +256,9 @@ ARRL 方式のファーンズワース・タイミングで、**各文字は速�
 
 ```
 index.html          画面構成
+icon.svg            アイコン（原本）— 中央はモールスの CW、上下は広がる電波
+favicon.svg         タブ用の簡略版（16〜32px で潰れないよう弧を減らし滲みを外した）
+apple-touch-icon.png / icon-512.png   icon.svg から書き出した PNG
 css/style.css       スタイル
 js/
   morse.js          符号表、トークン化、ファーンズワース・タイミング計算
@@ -338,6 +341,7 @@ BASE=https://hidetako.github.io/CWtraining tests/run-e2e.sh --remote
 | `contest-dx-wpm` | コンテストの相手局速度（基準・ばらつき・運用中の変更・HST） |
 | `grading` | 採点の妥当性（取り漏らしで以降がずれない・余分を見逃さない） |
 | `keyer-task-terms` | パドル送信の課題に添える Q 符号・略語の意味 |
+| `icons` | アイコンの配信と描画（SVG が壊れていないか） |
 | `improvements` | タブのキーボード操作、記録の書き出し・読み込み、推移グラフ、苦手集中ドリル |
 
 ## 動作環境
