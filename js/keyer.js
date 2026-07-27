@@ -401,49 +401,71 @@ export function compareSending(target, sent) {
   const a = norm(target);
   const b = norm(sent);
 
-  // 差分を取りやすいよう、単純な LCS ベースで並べ直す
-  const at = a.split('');
-  const bt = b.split('');
-  const dp = Array.from({ length: at.length + 1 }, () => new Uint32Array(bt.length + 1));
+  // 空白は照合に使わない。打鍵の解読では手が一瞬止まっただけで語間が入るため、
+  // 空白まで採点すると符号そのものの正誤が見えなくなる。
+  // さらに悪いことに、空白どうしが一致すると対応付けがそこに引っ張られ、
+  // 同じ語が繰り返される手本（JA1ABC JA1ABC …）では、打った 1 文字が
+  // 離れた繰り返しの側に対応づけられて、読めない差分になっていた。
+  const at = [];                        // { ch, at: 手本の中での位置 }
+  for (let k = 0; k < a.length; k++) if (a[k] !== ' ') at.push({ ch: a[k], at: k });
+  const bt = b.split('').filter((ch) => ch !== ' ');
 
+  const dp = Array.from({ length: at.length + 1 }, () => new Uint32Array(bt.length + 1));
   for (let i = at.length - 1; i >= 0; i--) {
     for (let j = bt.length - 1; j >= 0; j--) {
-      dp[i][j] = at[i] === bt[j]
+      dp[i][j] = at[i].ch === bt[j]
         ? dp[i + 1][j + 1] + 1
         : Math.max(dp[i + 1][j], dp[i][j + 1]);
     }
   }
 
-  const marks = [];
+  const ops = [];
   let i = 0;
   let j = 0;
   let correct = 0;
 
   while (i < at.length && j < bt.length) {
-    if (at[i] === bt[j]) {
-      marks.push({ type: 'ok', char: at[i] });
+    if (at[i].ch === bt[j]) {
+      ops.push({ type: 'ok', char: at[i].ch, pos: at[i].at });
       correct += 1;
       i += 1; j += 1;
     } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-      marks.push({ type: 'missing', char: at[i] });
+      ops.push({ type: 'missing', char: at[i].ch, pos: at[i].at });
       i += 1;
     } else {
-      marks.push({ type: 'extra', char: bt[j] });
+      ops.push({ type: 'extra', char: bt[j] });
       j += 1;
     }
   }
-  while (i < at.length) marks.push({ type: 'missing', char: at[i++] });
-  while (j < bt.length) marks.push({ type: 'extra', char: bt[j++] });
+  while (i < at.length) { ops.push({ type: 'missing', char: at[i].ch, pos: at[i].at }); i += 1; }
+  while (j < bt.length) { ops.push({ type: 'extra', char: bt[j] }); j += 1; }
+
+  // 表示は手本の語の切れ目が分かるほうが読みやすいので、
+  // 採点には使わない空白を type:'space' として差し戻す
+  const marks = [];
+  let cursor = 0;
+  const fillSpaces = (upto) => {
+    while (cursor < upto) {
+      if (a[cursor] === ' ') marks.push({ type: 'space', char: ' ' });
+      cursor += 1;
+    }
+  };
+  for (const op of ops) {
+    if (op.pos != null) { fillSpaces(op.pos); cursor = op.pos + 1; }
+    marks.push({ type: op.type, char: op.char });
+  }
+  fillSpaces(a.length);
 
   // 余分に打った分も分母に入れる。そうしないと、手本の文字さえ含まれていれば
   // どれだけ余計に打っても 100% になってしまう
-  const extra = marks.filter((m) => m.type === 'extra').length;
-  const denominator = at.length + extra;
+  const extra = ops.filter((m) => m.type === 'extra').length;
+  const total = at.length;
+  const denominator = total + extra;
   return {
     marks,
     correct,
     extra,
-    total: at.length,
+    total,
     accuracy: denominator ? correct / denominator : 0,
   };
 }

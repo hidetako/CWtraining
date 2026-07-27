@@ -110,6 +110,43 @@ ok('画面が減点されている', shownPct < 70, `${shownPct}%`);
 ok('通算集計にも減点が届く', saved.pct === shownPct, `画面 ${shownPct}% / 通算 ${saved.pct}%`);
 ok('履歴にも減点が届く', saved.hist === shownPct, `画面 ${shownPct}% / 履歴 ${saved.hist}%`);
 
+// ── 打鍵の照合は空白に引きずられないこと ──────────
+// 打鍵の解読では手が止まっただけで語間が入る。空白まで照合すると、
+// 同じ語が繰り返される手本で、打った 1 文字が離れた繰り返しに
+// 対応づけられて読めない差分になっていた
+const sp = (target, sent) => page.evaluate(([t, s]) => {
+  const r = window.__cw.compareSending(t, s);
+  return {
+    pct: Math.round(r.accuracy * 100), correct: r.correct, total: r.total, extra: r.extra,
+    diff: r.marks.map((m) => (m.type === 'space' ? ' '
+      : (m.type === 'ok' ? '' : m.type === 'missing' ? '-' : '+') + m.char)).join(''),
+  };
+}, [target, sent]);
+
+const CQ = 'CQ CQ CQ DE JA1ABC JA1ABC JA1ABC PSE K';
+
+// 報告された例: JA1ABC を JABC と打ち、途中で手が止まって語間が入った
+const reported = await sp(CQ, 'C Q CQ CQ D E J A B C');
+console.log('報告例:', JSON.stringify(reported));
+ok('空白は分母に数えない', reported.total === 30, `total=${reported.total}`);
+ok('前半はすべて一致する', reported.diff.startsWith('CQ CQ CQ DE JA'), reported.diff.slice(0, 20));
+ok('打っていない文字が余分にならない', reported.extra === 0, `余分 ${reported.extra}`);
+ok('離れた繰り返しに飛ばない', !/\+/.test(reported.diff), reported.diff);
+
+// 空白の入れ方だけが違っても満点
+const spacing = await sp('CQ DE JA1ABC', 'CQDE JA1 ABC');
+console.log('空白の位置違い:', JSON.stringify(spacing));
+ok('空白の位置は問わない（打鍵）', spacing.pct === 100, JSON.stringify(spacing));
+
+// 語の中の脱落は、その文字だけの減点
+const inner = await sp('JA1ABC', 'JABC');
+console.log('JA1ABC を JABC:', JSON.stringify(inner));
+ok('JABC は 4/6', inner.correct === 4 && inner.total === 6, JSON.stringify(inner));
+ok('脱落は 1A の 2 文字だけ', inner.diff === 'JA-1-ABC', inner.diff);
+
+// 表示には語の切れ目が残る
+ok('差分に語の切れ目が出る', reported.diff.includes(' '), reported.diff.slice(0, 20));
+
 // 打鍵側も同じこと（採点関数の戻り値を recordKeying に通して確かめる）
 const keying = await page.evaluate(() => {
   const r = window.__cw.compareSending('ABCDE', 'AXBXCXDXE');
