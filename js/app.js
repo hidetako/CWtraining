@@ -5,7 +5,7 @@ import { toMorseString, estimateDuration, tokenize } from './morse.js';
 import { ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER } from './data.js';
 import { annotateHtml, createTracker, explainText, lookupTerm } from './explain.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
-import { LocalResponder, gradeField, REACTION_LABELS } from './qso.js';
+import { LocalResponder, gradeField, REACTION_LABELS, FIELD_HINTS } from './qso.js';
 import { PHASES, PATTERN_SHEET, makeReplyOptions, readDxTurn } from './qsoguide.js';
 import { ElectronicKeyer, KEYER_MODES, attachPaddleInput, compareSending } from './keyer.js';
 import { ContestRunner, EXCHANGE_TYPES, RUN_MODES } from './contest.js';
@@ -435,7 +435,8 @@ async function startQso() {
   $('#qso-stage').hidden = false;
   $('#qso-log').innerHTML = '';
   renderTurn();
-  $('#qso-stage').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // 開始したらすぐ操作できるよう、今のターンを画面の先頭に出す
+  $('#qso-turn').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /** 交信を途中でやめて、開始前の状態に戻す。 */
@@ -507,17 +508,26 @@ function renderTurn() {
     <label class="field">
       <span>${escapeHtml(f.label)}</span>
       <input type="text" data-key="${escapeHtml(f.key)}" autocomplete="off"
-             autocapitalize="characters" spellcheck="false">
+             autocapitalize="characters" spellcheck="false"
+             placeholder="${escapeHtml(FIELD_HINTS[f.key] || '聞き取った内容を入力')}">
     </label>`).join('');
+
+  // 聞き取り練習では、既定では相手の送信を画面に出さない。
+  // 流れている文字や語の意味が見えると、書き取りの答えがそのまま分かってしまう。
+  // 出さないときは表示欄ごと省く。空のまま置くと、書き取り欄が
+  // その分だけ下に押し下げられて操作しにくくなる
+  const reveal = settings.copyReveal;
+  const charBox = reveal ? '#qso-playing' : null;
+  const rxOpts = reveal ? { explainSelector: '#qso-explain' } : {};
 
   box.innerHTML = `
     <div class="turn-head">
       <h3>相手局の送信 (${qso.index + 1}/${qso.script.turns.length})</h3>
       <span class="turn-badge rx">受信 RX</span>
     </div>
-    <p class="hint">「受信する」を押して聞き取り、ログシートに書き取ってください。</p>
-    <div class="playing-char" id="qso-playing"></div>
-    <div class="explain-live" id="qso-explain"></div>
+    <p class="hint">「受信する」を押して聞き取り、下の欄に書き取ってください。</p>
+    ${reveal ? '<div class="playing-char" id="qso-playing"></div>' : ''}
+    ${reveal ? '<div class="explain-live" id="qso-explain"></div>' : ''}
     <div class="turn-actions">
       <button type="button" class="btn btn-primary" id="btn-turn-rx">受信する</button>
       <button type="button" class="btn" id="btn-turn-again">もう一度</button>
@@ -528,12 +538,6 @@ function renderTurn() {
       <button type="button" class="btn btn-primary" id="btn-turn-grade">答え合わせして次へ</button>
     </div>
     ${settings.showText ? `<div class="tx-preview">${escapeHtml(turn.text)}</div>` : ''}`;
-
-  // 聞き取り練習では、既定では相手の送信を画面に出さない。
-  // 流れている文字や語の意味が見えると、書き取りの答えがそのまま分かってしまう
-  const reveal = settings.copyReveal;
-  const charBox = reveal ? '#qso-playing' : null;
-  const rxOpts = reveal ? { explainSelector: '#qso-explain' } : {};
   $('#btn-turn-rx').addEventListener('click', () => playText(turn.text, charBox, rxOpts));
   $('#btn-turn-again').addEventListener('click', () => playText(turn.text, charBox, rxOpts));
   $('#btn-turn-slow').addEventListener('click', () => {
