@@ -83,7 +83,7 @@ function initPaddleWidget() {
   keyer.addEventListener('update', showDecoded);
   keyer.addEventListener('element', showDecoded);
   keyer.addEventListener('char', showDecoded);
-  $('#pw-clear').addEventListener('click', () => keyer.reset());
+  $('#pw-clear').addEventListener('click', redoKeying);
   showDecoded();
 
   syncPaddleWidget();
@@ -103,6 +103,8 @@ function syncPaddleWidget() {
   $('#pw-wpm-out').textContent = `${settings.keyerWpm} WPM`;
 
   const onKeyerTab = $('#panel-keyer')?.classList.contains('is-active');
+  syncRedoLabel();
+
   $('#pw-scope').textContent = (onKeyerTab && settings.keyerGlobal)
     ? '現在は画面全体でパドル入力を受け付けています（ボタンや入力欄の上を除く）。'
     : 'この枠内はいつでもパドル入力を受け付けます（左半分＝左ボタン扱い）。';
@@ -244,7 +246,14 @@ function initHeaderControls() {
     if (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target.tagName)) return;
     if ($('#panel-contest').classList.contains('is-active')) return;
     if (e.code === 'Space') { e.preventDefault(); togglePause(); }
-    else if (e.key === 'Escape') { e.preventDefault(); endCurrentMode(); }
+    else if (e.key === 'Escape') {
+      e.preventDefault();
+      // 打った符号が残っていれば、まず打ち直し。残っていなければ練習を終了する。
+      // パドルから手を離さずに打ち直せるようにするため。パドル欄はどのタブでも
+      // 使えるので、課題が出ていない場面でも消せるようにしておく
+      if (keyer.text || keyer.buffer) redoKeying();
+      else endCurrentMode();
+    }
   });
 
   sync();
@@ -285,7 +294,9 @@ function endCurrentMode() {
 
 // ═══════════════════════════════════════════ 交信シミュレーター
 
-const qso = { script: null, index: 0, results: [], graded: false };
+// scored は「今のターンの採点で liveScores に点を積んだか」。打ち直しで
+// 取り消す対象を、点を積んだターンだけに限るために持つ
+const qso = { script: null, index: 0, results: [], graded: false, scored: false };
 
 function initQso() {
   $('#qso-mode').value = settings.qsoMode;
@@ -431,6 +442,7 @@ async function startQso() {
   qso.results = [];
   qso.choices = [];
   qso.liveScores = [];
+  qso.scored = false;
 
   $('#qso-stage').hidden = false;
   $('#qso-log').innerHTML = '';
@@ -447,6 +459,7 @@ function endQso() {
   $('#qso-stage').hidden = true;
   $('#qso-turn').innerHTML = '';
   $('#qso-log').innerHTML = '';
+  syncRedoLabel();
 }
 
 function appendLog(turn, { reveal }) {
@@ -463,12 +476,16 @@ function appendLog(turn, { reveal }) {
 }
 
 function renderTurn() {
+  // 描き終わったあとに、パドル欄のボタンの見出しを今の状況へ合わせる
+  queueMicrotask(syncRedoLabel);
+
   const box = $('#qso-turn');
   const turn = qso.script.turns[qso.index];
 
   if (!turn) return renderQsoSummary();
 
   qso.graded = false;
+  qso.scored = false;
 
   if (settings.qsoStyle === 'guided') return renderGuidedTurn(turn, box);
   if (settings.qsoStyle === 'live') return renderLiveTurn(turn, box);
@@ -659,7 +676,8 @@ function answerChoice(index, turn, box) {
       </p>
       <div class="live-keyed" id="qso-keyed"><span class="empty hint">パドルで打ち始めてください。</span></div>
       <div class="turn-actions">
-        <button type="button" class="btn btn-ghost" id="btn-guide-clear">打ち直す</button>
+        <button type="button" class="btn btn-ghost" id="btn-guide-clear"
+                title="打った符号を消して打ち直す（Esc）">打ち直す</button>
         <button type="button" class="btn" id="btn-guide-check">お手本と照合する</button>
       </div>
       <div id="qso-guide-keyed-result"></div>
@@ -673,11 +691,9 @@ function answerChoice(index, turn, box) {
   // 打鍵を受け付ける準備（側音のラインを開き、前のターンの符号を消す）
   player.openKeyLine();
   keyer.reset();
+  syncRedoLabel();
 
-  $('#btn-guide-clear').addEventListener('click', () => {
-    keyer.reset();
-    $('#qso-guide-keyed-result').innerHTML = '';
-  });
+  $('#btn-guide-clear').addEventListener('click', redoKeying);
   $('#btn-guide-check').addEventListener('click', () => {
     const sent = keyer.flush();
     $('#qso-guide-keyed-result').innerHTML = sendingDiffHtml(correctText, sent);
@@ -763,7 +779,8 @@ function renderLiveTurn(turn, box) {
     <div class="live-keyed" id="qso-keyed"><span class="empty hint">パドルで打ち始めてください。</span></div>
     <div class="turn-actions">
       <button type="button" class="btn" id="btn-live-example">お手本を聞く</button>
-      <button type="button" class="btn btn-ghost" id="btn-live-clear">打ち直す</button>
+      <button type="button" class="btn btn-ghost" id="btn-live-clear"
+              title="打った符号を消して打ち直す（Esc）">打ち直す</button>
       <button type="button" class="btn btn-primary" id="btn-live-grade">送信を終える（採点）</button>
       <button type="button" class="btn btn-ghost" id="btn-live-skip">この送信を飛ばす</button>
     </div>
@@ -777,7 +794,7 @@ function renderLiveTurn(turn, box) {
       highlightSelector: '.annotated',
     });
   });
-  $('#btn-live-clear').addEventListener('click', () => keyer.reset());
+  $('#btn-live-clear').addEventListener('click', redoKeying);
   $('#btn-live-skip').addEventListener('click', () => {
     player.stop();
     advanceTurn(turn, { reveal: true });
@@ -820,6 +837,7 @@ function gradeLiveTurn(turn) {
   const sent = keyer.flush();
   const result = compareSending(turn.text, sent);
   qso.liveScores.push(result.accuracy);
+  qso.scored = true;
 
   $('#qso-live-result').innerHTML = `
     ${sendingDiffHtml(turn.text, sent)}
@@ -832,6 +850,7 @@ function gradeLiveTurn(turn) {
     // 直前の採点は取り消して打ち直す
     qso.liveScores.pop();
     qso.graded = false;
+    qso.scored = false;
     keyer.reset();
     $('#qso-live-result').innerHTML = '';
   });
@@ -1062,6 +1081,51 @@ async function playText(text, selector, override = {}) {
   // 鳴り終わったら光を消す。止められた場合も同じ
   clearWordHighlight(highlight);
   return done;
+}
+
+/**
+ * 打った符号を消して、打ち直せる状態に戻す。
+ * パドル欄の「打ち直す」、各パネルの同名ボタン、Esc から共通で呼ぶ。
+ * 打鍵に付随する採点結果も一緒に片付ける（残っていると、
+ * これから打つ符号の採点だと勘違いする）。
+ */
+function redoKeying() {
+  keyer.reset();
+  paddle.elements = '';
+  const el = $('#keyer-elements');
+  if (el) el.textContent = '';
+
+  // 打鍵の採点結果を出している欄。開いていないものは触らない
+  ['#keyer-result', '#qso-guide-keyed-result', '#qso-live-result']
+    .forEach((sel) => { const box = $(sel); if (box) box.innerHTML = ''; });
+
+  // 打鍵の採点で点を積んでいたときだけ、採点前の状態に戻す。
+  // 聞き取りターンの採点は liveScores に積まないので、ここで取り消すと
+  // 直前の打鍵ターンの点が消えてしまう
+  if (qso.scored) {
+    qso.liveScores.pop();
+    qso.scored = false;
+    qso.graded = false;
+  }
+
+  renderKeyedText();
+  syncRedoLabel();
+}
+
+/** 打鍵の課題が出ているかどうか。Esc の意味を切り替えるのに使う。 */
+function keyingActive() {
+  return !!($('#qso-keyed') || $('#panel-keyer').classList.contains('is-active'));
+}
+
+/** パドル欄のボタンの見出しを、今できることに合わせる。 */
+function syncRedoLabel() {
+  const btn = $('#pw-clear');
+  if (!btn) return;
+  const active = keyingActive();
+  btn.textContent = active ? '打ち直す' : '消す';
+  btn.title = active
+    ? '打った符号を消して打ち直す（Esc）'
+    : '打った符号の表示を消す（Esc）';
 }
 
 /** 本文欄の「今ここ」の強調を消す。 */
@@ -1839,13 +1903,7 @@ function initKeyer() {
     if (paddle.task) player.play(paddle.task);
   });
   $('#btn-keyer-grade').addEventListener('click', gradeKeying);
-  $('#btn-keyer-clear').addEventListener('click', () => {
-    keyer.reset();
-    paddle.elements = '';
-    $('#keyer-elements').textContent = '';
-    $('#keyer-result').innerHTML = '';
-    renderKeyedText();
-  });
+  $('#btn-keyer-clear').addEventListener('click', redoKeying);
 
   keyer.addEventListener('element', (e) => {
     paddle.elements = (paddle.elements + e.detail.element).slice(-60);
@@ -2548,6 +2606,7 @@ window.__cw = {
   get qsoScript() { return qso.script; },
   get qsoTurn() { return qso.script?.turns[qso.index] ?? null; },
   get qsoOptions() { return qso.currentOptions ?? null; },
+  get qsoScores() { return qso.liveScores ? [...qso.liveScores] : null; },
   get drillProblem() { return drill.problem; },
   get keyerTask() { return paddle.task; },
 };
