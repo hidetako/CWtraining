@@ -8,7 +8,10 @@ import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.
 import { LocalResponder, gradeField, REACTION_LABELS, FIELD_HINTS } from './qso.js';
 import { PHASES, PATTERN_SHEET, makeReplyOptions, readDxTurn } from './qsoguide.js';
 import { ElectronicKeyer, KEYER_MODES, attachPaddleInput, compareSending } from './keyer.js';
-import { ContestRunner, EXCHANGE_TYPES, RUN_MODES } from './contest.js';
+import {
+  ContestRunner, EXCHANGE_TYPES, RUN_MODES,
+  HINT_LEVELS, HINT_MASK, clampHint, hintMask,
+} from './contest.js';
 import {
   QSO_ERROR, QSO_ERROR_LABEL, loadHighScores, saveHighScore,
 } from './contestlog.js';
@@ -239,13 +242,19 @@ function initHeaderControls() {
   $('#btn-stop-all').addEventListener('click', endCurrentMode);
 
   // Space で一時停止／再開、Esc で終了。
-  // 文字入力の邪魔をしないよう入力欄とボタンの上では効かせない。
+  // 文字入力の邪魔をしないよう入力欄の上では効かせない。
   // コンテスト運用はこの 2 つを独自に使うので除外する
   document.addEventListener('keydown', (e) => {
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target.tagName)) return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     if ($('#panel-contest').classList.contains('is-active')) return;
-    if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+    // Space はボタンを押す操作と衝突するので、ボタンの上では譲る。
+    // Esc はボタンの既定動作と衝突しないため、譲らない（「打ち直す」を
+    // クリックすると焦点がボタンに残り、そのあと Esc が効かなくなる）
+    if (e.code === 'Space') {
+      if (e.target.tagName === 'BUTTON') return;
+      e.preventDefault(); togglePause();
+    }
     else if (e.key === 'Escape') {
       e.preventDefault();
       // 打った符号が残っていれば、まず打ち直し。残っていなければ練習を終了する。
@@ -1403,9 +1412,15 @@ function initContest() {
   exchangeSel.innerHTML = Object.entries(EXCHANGE_TYPES)
     .map(([key, v]) => `<option value="${key}">${v.label}</option>`).join('');
 
+  const hintSel = $('#contest-hint');
+  hintSel.innerHTML = Object.entries(HINT_LEVELS)
+    .map(([key, v]) => `<option value="${key}">${v.label}</option>`).join('');
+
   const sync = () => {
     modeSel.value = settings.contestMode;
     exchangeSel.value = settings.contestExchange;
+    hintSel.value = settings.contestHint;
+    $('#contest-hint-help').textContent = HINT_LEVELS[settings.contestHint]?.help || '';
     $('#contest-minutes').value = String(settings.contestMinutes);
     $('#contest-activity').value = settings.contestActivity;
     $('#contest-activity-out').textContent = `${settings.contestActivity} / 9`;
@@ -1454,6 +1469,15 @@ function initContest() {
   $('#contest-activity').addEventListener('input', (e) => { settings.contestActivity = Number(e.target.value); persist(); sync(); });
   $('#contest-mynumber').addEventListener('input', (e) => { settings.contestMyNumber = e.target.value.toUpperCase(); persist(); });
   $('#contest-record').addEventListener('change', (e) => { settings.contestRecord = e.target.checked; persist(); });
+
+  // 難易度は運用中に変えても、その場から効く。表示の決まりが変わるので、
+  // 前の段階で出ていた行はいったん片付けて、次の送信から新しい決まりで出す
+  hintSel.addEventListener('change', () => {
+    settings.contestHint = clampHint(hintSel.value);
+    persist(); sync();
+    clearHintLines();
+    if (contest.running) startHintBoard(); else stopHintBoard();
+  });
 
   $('#contest-dx-wpm').addEventListener('input', (e) => {
     settings.contestDxWpm = Number(e.target.value);
@@ -1513,8 +1537,12 @@ function initContest() {
 
   contest.addEventListener('tick', renderContestScore);
   contest.addEventListener('state', renderContestScore);
-  contest.addEventListener('qso', () => { renderContestScore(); renderContestLog(); });
-  contest.addEventListener('end', (e) => finishContest(e.detail.score));
+  contest.addEventListener('qso', () => {
+    clearHintLines();
+    renderContestScore(); renderContestLog();
+  });
+  contest.addEventListener('end', (e) => { stopHintBoard(); finishContest(e.detail.score); });
+  contest.addEventListener('rxvoice', (e) => addHintLine(e.detail));
 
   sync();
 }
@@ -1635,9 +1663,118 @@ async function startContest() {
   $('#contest-call').focus();
 
   $('#contest-wpm-out').textContent = `${contest.opts.myWpm} WPM`;
+  startHintBoard();
   renderContestScore();
   renderContestLog();
   contest.cq();
+}
+
+// ───────── 受信ヘルプ（難易度） ─────────
+//
+// 相手局の送信を、難易度に応じて画面に出す。音は voice() が予約済みなので、
+// 1 文字ずつの時刻表を AudioContext の時計と見比べるだけで追える。
+// 混信局（QRM）は表示しない。妨害として鳴っているだけで、読む対象ではない。
+
+/** 表示中の送信。1 送信につき 1 行。 */
+const hintBoard = { lines: [], raf: null };
+
+// 中級は「いま打たれている文字」を見せるだけなので、打ち終わったら消す。
+// 初級は打ち終わってからが本番（読んでログに打ち込む）なので、残す。
+// 交信が終わる（TU）か、次の CQ を出したところで片付ける
+const HINT_LINGER = 1.6;   // 中級で打ち終わってから消えるまでの秒数
+const HINT_MAX_LINES = 4;  // 初級で残す行数の上限
+
+function startHintBoard() {
+  const board = $('#contest-hint-board');
+  const on = settings.contestHint !== 'none';
+  board.hidden = !on;
+  $('#contest-hint-legend').textContent = on
+    ? `${HINT_MASK} は自分で聞き取る部分です（相手のコールサイン）。`
+    : '';
+  if (!on) return stopHintBoard({ keepBoard: true });
+  if (!hintBoard.raf) hintBoard.raf = requestAnimationFrame(drawHintBoard);
+}
+
+function stopHintBoard({ keepBoard = false } = {}) {
+  if (hintBoard.raf) cancelAnimationFrame(hintBoard.raf);
+  hintBoard.raf = null;
+  hintBoard.lines = [];
+  const lines = $('#contest-hint-lines');
+  if (lines) lines.innerHTML = '';
+  if (!keepBoard) $('#contest-hint-board').hidden = true;
+}
+
+function addHintLine({ station, chars, qrm, startsAt, endsAt }) {
+  if (settings.contestHint === 'none' || qrm || !chars?.length) return;
+
+  hintBoard.lines.push({
+    station, chars, startsAt, endsAt, qrm,
+    mask: hintMask(chars, { myCall: contest.opts?.myCall }),
+  });
+  while (hintBoard.lines.length > HINT_MAX_LINES) hintBoard.lines.shift();
+  startHintBoard();
+}
+
+/** 表示を片付ける。交信の確定と、次の CQ で呼ぶ。 */
+function clearHintLines() {
+  hintBoard.lines = [];
+  const box = $('#contest-hint-lines');
+  if (box) box.innerHTML = '';
+}
+
+/**
+ * 初級: 打たれた文字を順に足していく。伏せる語は、その語が始まった時点で
+ * 印ひとつに置き換える（文字数も伏せるため）。
+ */
+function hintTextSeq(line, now) {
+  let out = '';
+  let maskedWord = -1;
+  for (let i = 0; i < line.chars.length; i++) {
+    if (line.chars[i].at > now) break;
+    const { hidden, word } = line.mask[i];
+    if (!hidden) { out += line.chars[i].text; maskedWord = -1; continue; }
+    if (word !== maskedWord) { out += HINT_MASK; maskedWord = word; }
+  }
+  return out;
+}
+
+/**
+ * 中級: いま打たれている 1 文字だけ。文字と文字のあいだは直前の文字を残す
+ * （消えては点くの繰り返しになると、かえって読みにくい）。
+ */
+function hintTextChar(line, now) {
+  let shown = '';
+  for (let i = 0; i < line.chars.length; i++) {
+    if (line.chars[i].at > now) break;
+    const ch = line.chars[i];
+    if (ch.text === ' ') continue;
+    shown = line.mask[i].hidden ? HINT_MASK : ch.text;
+  }
+  return shown;
+}
+
+function drawHintBoard() {
+  hintBoard.raf = null;
+  if (!contest.running || settings.contestHint === 'none') return stopHintBoard();
+
+  const now = player.currentTime;
+  const seq = settings.contestHint === 'seq';
+  // 中級は打ち終わったものを消す。初級は読み終わるまで残す
+  if (!seq) hintBoard.lines = hintBoard.lines.filter((l) => now < l.endsAt + HINT_LINGER);
+  const html = hintBoard.lines
+    .slice()
+    .sort((a, b) => a.startsAt - b.startsAt)
+    .map((l) => {
+      const text = seq ? hintTextSeq(l, now) : hintTextChar(l, now);
+      const done = now >= l.endsAt;
+      return `<div class="hint-line${done ? ' is-done' : ''}">${escapeHtml(text)}</div>`;
+    })
+    .join('');
+
+  const box = $('#contest-hint-lines');
+  if (box.innerHTML !== html) box.innerHTML = html;
+
+  hintBoard.raf = requestAnimationFrame(drawHintBoard);
 }
 
 async function runContestAction(action) {
@@ -1654,6 +1791,7 @@ async function runContestAction(action) {
     case 'cq':
       $('#contest-call').value = '';
       $('#contest-exch').value = '';
+      clearHintLines();   // 入力欄と同じく、受信ヘルプも次の交信に備えて空にする
       await contest.cq();
       break;
     case 'exchange':
@@ -2601,6 +2739,8 @@ init();
 window.__cw = {
   player, keyer, contest, responder,
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
+  hintMask, HINT_LEVELS, HINT_MASK,          // 受信ヘルプの伏せ方を検証できるように
+  get hintLines() { return hintBoard.lines.map((l) => ({ ...l })); },
   get settings() { return settings; },
   get stats() { return stats; },
   get qsoScript() { return qso.script; },

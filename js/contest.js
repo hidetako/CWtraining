@@ -46,6 +46,78 @@ export const EXCHANGE_TYPES = {
   jarl: { label: 'RST + 都府県支庁ナンバー', help: 'JARL 系コンテスト。599 + 地域番号を交換します。' },
 };
 
+/**
+ * 受信ヘルプの段階。相手が何を送っているかを、どこまで画面に出すか。
+ * 相手のコールサインはどの段階でも伏せる（それが聞き取るべき答えなので、
+ * 出してしまうと採点の意味が無くなる）。伏せた語は長さも隠すため、
+ * 何文字であっても HINT_MASK ひとつに置き換える。
+ */
+export const HINT_MASK = '？';
+
+export const HINT_LEVELS = {
+  seq: {
+    label: '初級 — 送られた内容を順に表示',
+    help: `相手のコールサイン以外を、打たれた順に表示します。交換の型（何がどの順で飛んでくるか）を覚える段階です。コールサインは ${HINT_MASK} で伏せます。`,
+  },
+  char: {
+    label: '中級 — いま打たれている 1 文字だけ表示',
+    help: '文字は残らず、打たれているものだけが見えます。耳で追いながら答え合わせをする段階です。',
+  },
+  none: {
+    label: '上級 — 表示なし',
+    help: '画面には何も出ません。実際のコンテストと同じ条件です。',
+  },
+};
+
+/** 段階の順序。難易度の上下を UI と説明で共有する。 */
+export const HINT_ORDER = ['seq', 'char', 'none'];
+
+export const clampHint = (level) => (HINT_LEVELS[level] ? level : 'none');
+
+// 伏せなくてよい語。交換で使う定型と、自局のコールサインだけを見せる。
+// ここに無い語は伏せる側に倒す（コールサインを漏らすほうが害が大きい）
+const SAFE_WORDS = new Set([
+  'CQ', 'TEST', 'DE', 'R', 'RR', 'TU', 'QSO', 'B4', 'NIL', 'AGN', 'K', 'KN',
+  'QRZ', 'QRZ?', 'NR?', '?', 'EE', '<SK>', '<BK>', '<AR>', '<AS>',
+]);
+
+/** RST やコンテストナンバーらしい語か。599・5NN・001・13H などを通す。 */
+const isExchangeWord = (w) =>
+  /^[0-9]+$/.test(w) || /^[0-9NAT]{3}$/.test(w) || /^[0-9]{1,3}[A-Z]$/.test(w);
+
+/**
+ * 1 文字ずつの時刻表に、伏せるかどうかの印を付ける。
+ * 語ごとに判断し、その語に属する文字すべてに同じ印を付ける。
+ *
+ * @param {{text: string}[]} chars audio.voice() が返す時刻表
+ * @param {{myCall?: string}} opts
+ * @returns {{hidden: boolean, word: number}[]} chars と同じ長さ
+ */
+export function hintMask(chars, { myCall = '' } = {}) {
+  const marks = chars.map(() => ({ hidden: false, word: -1 }));
+  const me = String(myCall || '').toUpperCase();
+
+  let word = 0;
+  let from = 0;
+  const settle = (upto) => {
+    const text = chars.slice(from, upto).map((c) => c.text).join('');
+    if (!text) return;
+    const hidden = !(SAFE_WORDS.has(text) || isExchangeWord(text) || text === me);
+    for (let i = from; i < upto; i++) marks[i] = { hidden, word };
+    word += 1;
+  };
+
+  for (let i = 0; i < chars.length; i++) {
+    if (chars[i].text !== ' ') continue;
+    settle(i);
+    marks[i] = { hidden: false, word: -1 };   // 語間そのものは伏せない
+    from = i + 1;
+  }
+  settle(chars.length);
+
+  return marks;
+}
+
 /** 相手オペレーターの状態。DxOper.pas の TOperatorState。 */
 export const OP_STATE = {
   NEED_PREV_END: 'osNeedPrevEnd', // 前の交信が終わるのを待っている
@@ -358,14 +430,14 @@ export class ContestRunner extends EventTarget {
       if (st.voice && now < st.voice.endsAt) continue;
       if (!st.nextAt) st.nextAt = now + Math.random() * 5;
       if (now >= st.nextAt) {
-        this._transmit(st, st.render(MSG.CQ, this.opts.myCall), { ignoreTx: true });
+        this._transmit(st, st.render(MSG.CQ, this.opts.myCall), { ignoreTx: true, qrm: true });
         st.nextAt = now + 4 + Math.random() * 8;
       }
     }
   }
 
   /** 相手局に 1 送信させる。 */
-  _transmit(station, text, { ignoreTx = false, gap = 0.25 } = {}) {
+  _transmit(station, text, { ignoreTx = false, gap = 0.25, qrm = false } = {}) {
     if (!text) return;
     const base = ignoreTx ? this.player.currentTime : Math.max(this.player.currentTime, this.txBusyUntil);
     const startAt = base + gap + Math.random() * 0.35;
@@ -382,9 +454,17 @@ export class ContestRunner extends EventTarget {
     }).then((voice) => {
       station.voice = voice;
       station.busyUntil = voice.endsAt;
+      // 予約が済んで初めて 1 文字ずつの時刻が分かる。受信ヘルプはこれを見て
+      // 「いま打たれている文字」を追う
+      this._emit('rxvoice', {
+        station, text, qrm,
+        chars: voice.chars ?? [],
+        startsAt: voice.startsAt,
+        endsAt: voice.endsAt,
+      });
     });
 
-    this._emit('rx', { station, text });
+    this._emit('rx', { station, text, qrm });
   }
 
   /** 自局の送信。終わったタイミングで各局にイベントを配る。 */

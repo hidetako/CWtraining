@@ -79,14 +79,29 @@ ok('パドル欄のボタンで消える', (await keyed()) === '', JSON.stringif
 await page.screenshot({ path: `${DIR}/r1-redo.png` });
 
 // ── Esc で打ち直せる（交信は続く）────────────────
+// ボタンを押した直後は焦点がボタンに残る。マウスやパドルで打ち直しても
+// 焦点は動かないので、その状態でも Esc が効かなければ意味がない
+ok('ボタンに焦点が残っている',
+  await page.evaluate(() => document.activeElement?.id) === 'pw-clear',
+  await page.evaluate(() => document.activeElement?.id));
 await key(2);
 const second = await keyed();
 ok('打ち直したあとも打てる', second.trim().length > 0, second);
-await page.evaluate(() => document.activeElement?.blur());
-await page.keyboard.press('Escape');
+ok('打鍵しても焦点はボタンのまま',
+  await page.evaluate(() => document.activeElement?.id) === 'pw-clear',
+  await page.evaluate(() => document.activeElement?.id));
+await page.keyboard.press('Escape');   // blur せずに押す
 await page.waitForTimeout(300);
-ok('Esc で符号が消える', (await keyed()) === '', JSON.stringify(await keyed()));
+ok('ボタンに焦点があっても Esc が効く', (await keyed()) === '', JSON.stringify(await keyed()));
 ok('Esc では交信が終わらない', await page.evaluate(() => !!window.__cw.qsoScript));
+
+// Space はボタンの上では譲る（押す操作と衝突するため）
+await page.evaluate(() => { window.__cw.player.stop(); });
+const paused = () => page.evaluate(() => window.__cw.player.paused);
+await page.focus('#pw-clear');
+await page.keyboard.press('Space');
+await page.waitForTimeout(250);
+ok('Space はボタンの上では一時停止に使わない', (await paused()) === false, String(await paused()));
 
 // 何も打っていなければ Esc は終了として働く
 await page.keyboard.press('Escape');

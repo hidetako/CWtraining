@@ -1,6 +1,7 @@
 // 設定と学習統計の永続化（localStorage）
 
 import { clampKeyerWpm } from './keyer.js';
+import { clampHint } from './contest.js';
 
 const SETTINGS_KEY = 'cwtraining.settings.v1';
 const STATS_KEY = 'cwtraining.stats.v1';
@@ -59,6 +60,9 @@ export const DEFAULT_SETTINGS = {
   contestDxSpread: 6,    // 相手局どうしの速度のばらつき（±WPM、0 でそろう）
   contestMyNumber: '13H',
   contestRecord: false,
+  // 受信ヘルプの段階。seq → char → none の順に難しくなる。
+  // 既定は none（実戦どおり。従来の動きと同じ）
+  contestHint: 'none',
 
   // バンドコンディション（コンテスト用）
   condQrn: true,
@@ -111,6 +115,8 @@ export function loadSettings() {
 
   // 送信速度の上限を下げた際、以前の設定値が範囲外のまま残らないようにする
   settings.keyerWpm = clampKeyerWpm(settings.keyerWpm);
+  // 知らない段階名が保存されていても、いちばん厳しい none に寄せる
+  settings.contestHint = clampHint(settings.contestHint);
 
   return settings;
 }
