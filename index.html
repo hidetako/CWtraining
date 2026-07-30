@@ -273,7 +273,12 @@
         <input type="range" id="contest-dx-spread" min="0" max="12" step="1">
         <output id="contest-dx-spread-out"></output>
       </label>
+      <label class="field">
+        <span>難易度（受信ヘルプ）</span>
+        <select id="contest-hint"></select>
+      </label>
     </div>
+    <p class="hint" id="contest-hint-help"></p>
     <p class="hint" id="contest-dx-wpm-help"></p>
     <p class="hint" id="contest-mode-help"></p>
     <p class="hint" id="contest-exchange-help"></p>
@@ -301,6 +306,12 @@
   <div class="contest-run" id="contest-run" hidden>
     <div class="card score-board">
       <div class="stat-grid" id="contest-score"></div>
+    </div>
+
+    <!-- 受信ヘルプ。上級（表示なし）では枠ごと隠す -->
+    <div class="card hint-board" id="contest-hint-board" hidden>
+      <div class="hint-lines" id="contest-hint-lines"></div>
+      <p class="hint hint-legend" id="contest-hint-legend"></p>
     </div>
 
     <div class="card">

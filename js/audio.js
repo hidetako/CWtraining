@@ -405,19 +405,26 @@ export class CWPlayer {
     let t = start;
     let prevWasSpace = true;
 
+    // 1 文字ずつの時刻表。コンテストの受信ヘルプが「いま何を打っているか」を
+    // 追うのに使う。音は予約済みなので、あとから時計と見比べるだけで済む
+    const chars = [];
+
     for (const token of tokens) {
       if (token.type === 'space') {
+        chars.push({ text: ' ', at: t, until: t + timing.wordGap });
         t += timing.wordGap;
         prevWasSpace = true;
         continue;
       }
       if (!prevWasSpace) t += timing.charGap;
+      const charAt = t;
       for (let i = 0; i < token.pattern.length; i++) {
         const len = token.pattern[i] === '-' ? timing.dah : timing.dit;
         this._keyDown(keyGain, t, t + len, timing.dit);
         t += len;
         if (i < token.pattern.length - 1) t += timing.elementGap;
       }
+      chars.push({ text: token.text, at: charAt, until: t });
       prevWasSpace = false;
     }
 
@@ -429,6 +436,7 @@ export class CWPlayer {
       startsAt: start,
       endsAt: t,
       duration: t - start,
+      chars,
       stop: () => {
         if (stopped) return;
         stopped = true;
