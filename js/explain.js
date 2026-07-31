@@ -4,7 +4,7 @@
 // RST・コールサインなどに解説を付ける。
 
 import { ABBREVIATIONS } from './data.js';
-import { PROSIGN_LABEL, tokenize } from './morse.js';
+import { PROSIGN_LABEL, prettyCode, tokenize } from './morse.js';
 
 const ABBREV_MAP = new Map(ABBREVIATIONS.map((a) => [a.code, a.ja]));
 
@@ -108,6 +108,18 @@ export function wordSpans(text) {
 }
 
 /** 本文に含まれる用語を、重複を除いて出現順に返す。 */
+/**
+ * 語の符号を ・－ 表記で返す（FER → "・・－・　・　・－・"）。
+ * 意味だけでなく「どう打つか」まで見せるために、解説と並べて使う。
+ */
+export const termCode = (term) => prettyCode(term);
+
+/** マウスを載せたときに出す説明文。意味に符号を添える。 */
+export const termTitle = (entry) => {
+  const code = termCode(entry.term);
+  return code ? `${entry.ja}　${code}` : entry.ja;
+};
+
 export function explainText(text) {
   const seen = new Set();
   const terms = [];
@@ -167,7 +179,7 @@ export function annotateHtml(text, escape) {
       const attrs = [
         `class="${cls}"`,
         index != null ? `data-w="${index}"` : '',
-        entry ? `title="${escape(entry.ja)}"` : '',
+        entry ? `title="${escape(termTitle(entry))}"` : '',
       ].filter(Boolean).join(' ');
 
       return `<span ${attrs}>${escape(chunk)}</span>`;

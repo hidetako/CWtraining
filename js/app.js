@@ -3,7 +3,7 @@
 import { CWPlayer } from './audio.js';
 import { toMorseString, estimateDuration, tokenize } from './morse.js';
 import { ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER } from './data.js';
-import { annotateHtml, createTracker, explainText, lookupTerm } from './explain.js';
+import { annotateHtml, createTracker, explainText, lookupTerm, termCode, termTitle } from './explain.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
 import { LocalResponder, gradeField, REACTION_LABELS, FIELD_HINTS } from './qso.js';
 import { PHASES, PATTERN_SHEET, makeReplyOptions, readDxTurn } from './qsoguide.js';
@@ -1079,7 +1079,8 @@ async function playText(text, selector, override = {}) {
       card.className = 'explain-card is-current';
       card.innerHTML =
         `<span class="code">${escapeHtml(hit.entry.term)}</span>` +
-        `<span class="desc">${escapeHtml(hit.entry.ja)}</span>`;
+        `<span class="desc">${escapeHtml(hit.entry.ja)}</span>` +
+        `<span class="morse">${escapeHtml(termCode(hit.entry.term))}</span>`;
       explain.prepend(card);
 
       // 増えすぎないよう直近 8 件だけ残す
@@ -1154,6 +1155,7 @@ function termListHtml(text) {
         <div class="explain-card">
           <span class="code">${escapeHtml(t.term)}</span>
           <span class="desc">${escapeHtml(t.ja)}</span>
+          <span class="morse">${escapeHtml(termCode(t.term))}</span>
         </div>`).join('')}
     </div>`;
 }
@@ -2246,8 +2248,9 @@ function taskTermsHtml(text) {
 
   return terms.map((t) => {
     const brief = t.ja.length > 30 ? t.ja.split(' — ')[0] : t.ja;
-    return `<span class="task-term" title="${escapeHtml(t.ja)}">
-      <span class="code">${escapeHtml(t.term)}</span>${escapeHtml(brief)}</span>`;
+    return `<span class="task-term" title="${escapeHtml(termTitle(t))}">
+      <span class="code">${escapeHtml(t.term)}</span>${escapeHtml(brief)}` +
+      `<span class="morse">${escapeHtml(termCode(t.term))}</span></span>`;
   }).join('');
 }
 
@@ -2740,6 +2743,7 @@ window.__cw = {
   player, keyer, contest, responder,
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   hintMask, HINT_LEVELS, HINT_MASK,          // 受信ヘルプの伏せ方を検証できるように
+  termCode, termTitle,                       // 説明に添える符号を検証できるように
   get hintLines() { return hintBoard.lines.map((l) => ({ ...l })); },
   get settings() { return settings; },
   get stats() { return stats; },

@@ -7,7 +7,7 @@
 // setTimeout で駆動する。判定は要素の終わり LOOKAHEAD 秒前に行うので、
 // setTimeout のばらつきが符号のリズムに乗らない。
 
-import { decodePattern } from './morse.js';
+import { codeUnits, decodePattern } from './morse.js';
 
 const LOOKAHEAD = 0.008; // 秒。次要素を決める前倒し量
 
@@ -397,23 +397,25 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
  * 打った文字列と手本を比べる。文字単位で照合し、余分／欠落も見えるようにする。
  */
 export function compareSending(target, sent) {
-  const norm = (s) => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
-  const a = norm(target);
-  const b = norm(sent);
+  // 文字の見た目ではなく、符号そのもので突き合わせる。
+  // 表記が違っても符号が同じものは打てば区別が付かないので、
+  // 同じものとして数えなければならない（= と <BT> はどちらも －・・・－）
+  const a = codeUnits(target);
+  const b = codeUnits(sent);
 
   // 空白は照合に使わない。打鍵の解読では手が一瞬止まっただけで語間が入るため、
   // 空白まで採点すると符号そのものの正誤が見えなくなる。
   // さらに悪いことに、空白どうしが一致すると対応付けがそこに引っ張られ、
   // 同じ語が繰り返される手本（JA1ABC JA1ABC …）では、打った 1 文字が
   // 離れた繰り返しの側に対応づけられて、読めない差分になっていた。
-  const at = [];                        // { ch, at: 手本の中での位置 }
-  for (let k = 0; k < a.length; k++) if (a[k] !== ' ') at.push({ ch: a[k], at: k });
-  const bt = b.split('').filter((ch) => ch !== ' ');
+  const at = [];                        // { ch, key, at: 手本の中での位置 }
+  a.forEach((u, k) => { if (!u.space) at.push({ ch: u.text, key: u.key, at: k }); });
+  const bt = b.filter((u) => !u.space);
 
   const dp = Array.from({ length: at.length + 1 }, () => new Uint32Array(bt.length + 1));
   for (let i = at.length - 1; i >= 0; i--) {
     for (let j = bt.length - 1; j >= 0; j--) {
-      dp[i][j] = at[i].ch === bt[j]
+      dp[i][j] = at[i].key === bt[j].key
         ? dp[i + 1][j + 1] + 1
         : Math.max(dp[i + 1][j], dp[i][j + 1]);
     }
@@ -425,7 +427,9 @@ export function compareSending(target, sent) {
   let correct = 0;
 
   while (i < at.length && j < bt.length) {
-    if (at[i].ch === bt[j]) {
+    if (at[i].key === bt[j].key) {
+      // 一致した文字は手本側の表記で見せる。打った側が <BT>、手本が = のように
+      // 表記だけ違う場合に、手本と並べて読めるようにするため
       ops.push({ type: 'ok', char: at[i].ch, pos: at[i].at });
       correct += 1;
       i += 1; j += 1;
@@ -433,12 +437,12 @@ export function compareSending(target, sent) {
       ops.push({ type: 'missing', char: at[i].ch, pos: at[i].at });
       i += 1;
     } else {
-      ops.push({ type: 'extra', char: bt[j] });
+      ops.push({ type: 'extra', char: bt[j].text });
       j += 1;
     }
   }
   while (i < at.length) { ops.push({ type: 'missing', char: at[i].ch, pos: at[i].at }); i += 1; }
-  while (j < bt.length) { ops.push({ type: 'extra', char: bt[j] }); j += 1; }
+  while (j < bt.length) { ops.push({ type: 'extra', char: bt[j].text }); j += 1; }
 
   // 表示は手本の語の切れ目が分かるほうが読みやすいので、
   // 採点には使わない空白を type:'space' として差し戻す
@@ -446,7 +450,7 @@ export function compareSending(target, sent) {
   let cursor = 0;
   const fillSpaces = (upto) => {
     while (cursor < upto) {
-      if (a[cursor] === ' ') marks.push({ type: 'space', char: ' ' });
+      if (a[cursor]?.space) marks.push({ type: 'space', char: ' ' });
       cursor += 1;
     }
   };
