@@ -135,6 +135,66 @@ export function estimateDuration(text, charWpm, effWpm) {
   return total;
 }
 
+/** 符号を読みやすい表記にする（".-" → "・－"）。 */
+export const prettyPattern = (pattern) =>
+  String(pattern || '').replace(/\./g, '・').replace(/-/g, '－');
+
+/**
+ * 文字列を、文字ごとに区切った ・－ 表記にする。
+ * 説明に符号を添えるために使う（FER → "・・－・　・　・－・"）。
+ * 語間は "／" で示す。
+ */
+export function prettyCode(text) {
+  return tokenize(text)
+    .map((token) => (token.type === 'space' ? '／' : prettyPattern(token.pattern)))
+    .join('　');
+}
+
+/**
+ * 照合用に、文字列を「符号の並び」へ分解する。
+ *
+ * 鍵に符号そのものを使うのが要点。表記が違っても符号が同じものは
+ * 同じ打鍵なので、同じものとして数える必要がある（= と <BT> は
+ * どちらも －・・・－ で、打てば区別が付かない）。
+ * 符号を持たない文字は、その文字自身を鍵にして取りこぼさないようにする。
+ *
+ * @returns {{text: string, key: string, space?: boolean}[]}
+ */
+export function codeUnits(text) {
+  const src = String(text ?? '').toUpperCase();
+  const units = [];
+  let i = 0;
+
+  while (i < src.length) {
+    const ch = src[i];
+
+    if (ch === '<') {
+      const end = src.indexOf('>', i);
+      const name = end > i ? src.slice(i + 1, end) : null;
+      if (name && PROSIGNS[name]) {
+        units.push({ text: `<${name}>`, key: PROSIGNS[name] });
+        i = end + 1;
+        continue;
+      }
+    }
+
+    if (ch === ' ' || ch === '\n' || ch === '\t') {
+      if (units.length && !units[units.length - 1].space) {
+        units.push({ text: ' ', key: ' ', space: true });
+      }
+      i += 1;
+      continue;
+    }
+
+    // 符号の無い文字（解読できなかった印の ＊ など）も、そのまま 1 個と数える
+    units.push({ text: ch, key: MORSE_TABLE[ch] ?? `?${ch}` });
+    i += 1;
+  }
+
+  while (units.length && units[units.length - 1].space) units.pop();
+  return units;
+}
+
 /** 文字列を ".-  -..." 形式の可読なモールス表記に変換する。 */
 export function toMorseString(text) {
   return tokenize(text)

@@ -258,7 +258,8 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 }
 
 /* 課題に出てくる Q 符号・略語の意味。打つ前に何を送るのか分かるように */
-.task-terms { display: flex; flex-wrap: wrap; gap: .4rem .8rem; margin: -.4rem 0 .3rem; }
+/* 符号を添えて 1 件が長くなったので、語どうしの間を広めに取る */
+.task-terms { display: flex; flex-wrap: wrap; gap: .4rem 1.5rem; margin: -.4rem 0 .3rem; }
 .task-terms:empty { display: none; }
 .task-term { font-size: .76rem; color: var(--text-dim); }
 .task-term .code {
@@ -267,6 +268,13 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
   background: none;
   padding: 0;
   margin-right: .35em;
+}
+.task-term .morse {
+  font-family: var(--mono);
+  color: var(--accent);
+  opacity: .7;
+  margin-left: .45em;
+  letter-spacing: .08em;
 }
 
 .playing-char {
@@ -565,6 +573,16 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 .explain-card .code { font-family: var(--mono); font-weight: 700; color: var(--accent); }
 .explain-card.is-current .code { color: var(--rx); }
 .explain-card .desc { color: var(--text-dim); }
+/* 意味の下に、実際にどう打つかを添える。
+   1 列目（語）の下ではなく本文側に置き、意味と縦に並べて読ませる */
+.explain-card .morse {
+  grid-column: 2;
+  font-family: var(--mono);
+  font-size: .9em;
+  letter-spacing: .08em;
+  color: var(--accent);
+  opacity: .75;
+}
 
 @keyframes explain-in {
   from { opacity: 0; transform: translateY(-4px); }
