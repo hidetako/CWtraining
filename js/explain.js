@@ -23,6 +23,17 @@ const RST_TONE = {
 
 const CALLSIGN_RE = /^[A-Z0-9]{1,3}[0-9][A-Z]{1,4}$/;
 
+/** ローマ字・数字以外の記号の意味。交信でどう使うかまで書く。 */
+const PUNCT_JA = {
+  '=': '区切り（BT）— 話題の切れ目',
+  '?': '「もう一度」「何ですか」の意味',
+  '/': '斜線 — 移動運用の地域を添える（JA1ABC/1 など）',
+  '.': 'ピリオド — 文の区切り',
+  ',': 'コンマ',
+  '-': 'ハイフン — 型番などで使う（IC-7300 など）',
+  '@': 'アットマーク — メールアドレスで使う',
+};
+
 /**
  * 語ひとつを解説する。該当が無ければ null。
  * @returns {{ term, ja, kind } | null}
@@ -38,9 +49,8 @@ export function lookupTerm(word) {
     if (label) return { term: w, ja: label, kind: 'prosign' };
   }
 
-  // 区切り記号
-  if (w === '=') return { term: '=', ja: '区切り（BT）— 話題の切れ目', kind: 'prosign' };
-  if (w === '?') return { term: '?', ja: '「もう一度」「何ですか」の意味', kind: 'prosign' };
+  // ローマ字・数字以外の記号
+  if (PUNCT_JA[w]) return { term: w, ja: PUNCT_JA[w], kind: 'prosign' };
 
   // 略語・Q 符号
   if (ABBREV_MAP.has(w)) {
