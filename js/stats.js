@@ -49,6 +49,7 @@ export const DEFAULT_SETTINGS = {
   keyerThumb: 'dit',    // 'dit' | 'dah'   — 親指側のレバーが出す要素
   keyerGlobal: false,
   keyerTaskType: 'callsign',
+  keyerTopic: '',        // 交信の定型文の話題。空ならすべての話題から選ぶ
   keyerFreq: 700,       // 送信側音の高さ Hz（受信の freq とは独立）
 
   // コンテスト運用
