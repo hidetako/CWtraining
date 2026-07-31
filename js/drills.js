@@ -1,7 +1,8 @@
 // 聞き取りドリルの問題生成と採点
 
+import { codeUnits } from './morse.js';
 import {
-  ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER, RST_POOL,
+  ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER, RST_POOL, SYMBOL_ORDER,
   makeCallsign, pick, pickInt,
 } from './data.js';
 
@@ -20,6 +21,10 @@ export const DRILL_TYPES = {
   abbrev: { label: '略語・Q 符号', help: '交信で頻出する略語。答え合わせで意味も表示' },
   number: { label: '数字・RST', help: 'RST や番号などの数字列' },
   word: { label: '頻出単語', help: '交信でよく使う短い単語' },
+  symbol: {
+    label: '記号・プロサイン',
+    help: '= / ? . , や <AR> <SK> など、ローマ字以外の符号だけを出題します',
+  },
   weak: { label: '苦手集中', help: '正答率の低い文字を重点的に出題します（記録から自動選択）' },
 };
 
@@ -43,6 +48,8 @@ export function makeProblem(type, opts = {}) {
       return charGroups(KOCH_ORDER, opts);
     case 'frequency':
       return charGroups(FREQUENCY_ORDER, opts);
+    case 'symbol':
+      return charGroups(SYMBOL_ORDER, opts);
     case 'callsign': {
       const call = makeCallsign(opts.region);
       return { text: call, answer: call, chars: call.split('') };
@@ -102,8 +109,8 @@ function groupsFromAlphabet(alphabet, opts) {
  *   marks は [{ type: 'ok'|'missing'|'extra', expected, actual, ok }] の配列（表示用）
  */
 export function gradeProblem(problem, input) {
-  const expected = String(problem.answer).toUpperCase().replace(/\s+/g, '');
-  const actual = String(input || '').toUpperCase().replace(/\s+/g, '');
+  const expected = String(problem.answer).toUpperCase();
+  const actual = String(input || '').toUpperCase();
 
   const marks = align(expected, actual);
   const perChar = {};
@@ -121,7 +128,8 @@ export function gradeProblem(problem, input) {
     }
   }
 
-  const total = expected.length;
+  // 出題の長さは符号の個数で数える。プロサインは <AR> で 1 個
+  const total = marks.filter((m) => m.type !== 'extra').length;
   // 余分に打った分も分母に入れる。そうしないと、当てずっぽうに多く打つほど
   // 得をしてしまう（出題文字さえ含まれていれば 100% になる）
   const denominator = total + extra;
@@ -140,14 +148,17 @@ export function gradeProblem(problem, input) {
  * @returns {Array<{ type: 'ok'|'missing'|'extra', expected: string, actual: string, ok: boolean }>}
  */
 function align(expected, actual) {
-  const a = expected.split('');
-  const b = actual.split('');
+  // 文字ではなく符号の単位で並べる。<AR> のようなプロサインは 1 個として
+  // 数え、= と <BT> のように同じ符号を持つ表記は同じものとして扱う
+  // （耳では区別が付かないので、どちらで書いても正解にする）
+  const a = codeUnits(expected).filter((u) => !u.space);
+  const b = codeUnits(actual).filter((u) => !u.space);
 
   // dp[i][j] = a[i..] と b[j..] の最長共通部分列の長さ
   const dp = Array.from({ length: a.length + 1 }, () => new Uint32Array(b.length + 1));
   for (let i = a.length - 1; i >= 0; i--) {
     for (let j = b.length - 1; j >= 0; j--) {
-      dp[i][j] = a[i] === b[j]
+      dp[i][j] = a[i].key === b[j].key
         ? dp[i + 1][j + 1] + 1
         : Math.max(dp[i + 1][j], dp[i][j + 1]);
     }
@@ -158,19 +169,20 @@ function align(expected, actual) {
   let j = 0;
 
   while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      marks.push({ type: 'ok', expected: a[i], actual: b[j], ok: true });
+    if (a[i].key === b[j].key) {
+      // 表記が違っても符号が同じなら正解。表示は出題側の表記に揃える
+      marks.push({ type: 'ok', expected: a[i].text, actual: a[i].text, ok: true });
       i += 1; j += 1;
     } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-      marks.push({ type: 'missing', expected: a[i], actual: '', ok: false });
+      marks.push({ type: 'missing', expected: a[i].text, actual: '', ok: false });
       i += 1;
     } else {
-      marks.push({ type: 'extra', expected: '', actual: b[j], ok: false });
+      marks.push({ type: 'extra', expected: '', actual: b[j].text, ok: false });
       j += 1;
     }
   }
-  while (i < a.length) marks.push({ type: 'missing', expected: a[i++], actual: '', ok: false });
-  while (j < b.length) marks.push({ type: 'extra', expected: '', actual: b[j++], ok: false });
+  while (i < a.length) marks.push({ type: 'missing', expected: a[i++].text, actual: '', ok: false });
+  while (j < b.length) marks.push({ type: 'extra', expected: '', actual: b[j++].text, ok: false });
 
   return marks;
 }

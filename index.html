@@ -182,7 +182,7 @@
       </label>
       <label class="field" id="drill-level-field">
         <span>レベル（使う文字数）</span>
-        <input type="range" id="drill-level" min="2" max="41" step="1">
+        <input type="range" id="drill-level" min="2" max="47" step="1">
         <output id="drill-level-out"></output>
       </label>
       <label class="field">
@@ -219,6 +219,14 @@
       <input type="text" id="drill-answer" autocomplete="off" autocapitalize="characters"
              spellcheck="false" placeholder="聞こえたまま入力して Enter">
     </label>
+
+    <!-- 記号やプロサインを使うレベルのときだけ出す入力補助 -->
+    <div class="symbol-pad" id="drill-symbol-pad" hidden>
+      <span class="pad-label">記号・プロサイン</span>
+      <div class="pad-keys" id="drill-symbol-keys"></div>
+      <p class="hint">プロサインは <code>&lt;AR&gt;</code> のように山かっこで書きます。
+        キーボードから打っても、上のボタンで入れてもかまいません。</p>
+    </div>
 
     <div class="drill-result" id="drill-result" hidden></div>
   </div>

@@ -175,6 +175,26 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 .check input { accent-color: var(--accent); }
 
 .answer-field { display: block; margin: 1rem 0 0; }
+
+/* 記号・プロサインの入力補助。山かっこの書き方を知らなくても入れられるように、
+   使うレベルのときだけ答案欄の下に出す */
+.symbol-pad { margin-top: .7rem; }
+.symbol-pad .pad-label {
+  display: block;
+  font-size: .74rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin-bottom: .35rem;
+}
+.pad-keys { display: flex; flex-wrap: wrap; gap: .35rem; }
+.pad-key {
+  font-family: var(--mono);
+  font-size: .85rem;
+  padding: .3rem .6rem;
+  min-width: 2.6rem;
+  color: var(--accent);
+}
+.symbol-pad .hint { margin-top: .45rem; }
 .answer-field > span { display: block; font-size: .78rem; font-weight: 600; color: var(--text-dim); margin-bottom: .3rem; }
 
 /* ───────── ボタン ───────── */
@@ -846,6 +866,17 @@ kbd {
 .gloss-item:hover { border-color: var(--accent-dim); }
 .gloss-item .code { font-family: var(--mono); font-weight: 700; color: var(--accent); min-width: 3.5em; }
 .gloss-item .ja { color: var(--text-dim); }
+/* 符号は右端にそろえる。意味と並べて「どう打つか」まで見えるように */
+.gloss-item .morse {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: .82rem;
+  letter-spacing: .06em;
+  color: var(--accent);
+  opacity: .7;
+  white-space: nowrap;
+}
+.gloss-item.is-symbol .code { color: var(--rx); }
 
 /* ───────── 統計 ───────── */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .8rem; }

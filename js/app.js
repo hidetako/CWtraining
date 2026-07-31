@@ -3,7 +3,7 @@
 import { CWPlayer } from './audio.js';
 import { toMorseString, estimateDuration, tokenize } from './morse.js';
 import {
-  ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER,
+  ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER, SYMBOL_ORDER,
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES,
 } from './data.js';
 import { annotateHtml, createTracker, explainText, lookupTerm, termCode, termTitle } from './explain.js';
@@ -1192,6 +1192,21 @@ function initDrill() {
   typeSel.addEventListener('change', () => {
     settings.drillType = typeSel.value; persist(); updateDrillControls();
   });
+  // 記号ボタンは、答案欄のカーソル位置に差し込む。押しても欄の焦点は保つ
+  $('#drill-symbol-keys').addEventListener('mousedown', (e) => e.preventDefault());
+  $('#drill-symbol-keys').addEventListener('click', (e) => {
+    const btn = e.target.closest('.pad-key');
+    if (!btn) return;
+    const input = $('#drill-answer');
+    const token = btn.dataset.insert;
+    const at = input.selectionStart ?? input.value.length;
+    const to = input.selectionEnd ?? at;
+    input.value = input.value.slice(0, at) + token + input.value.slice(to);
+    const caret = at + token.length;
+    input.focus();
+    input.setSelectionRange(caret, caret);
+  });
+
   $('#drill-level').addEventListener('input', (e) => {
     settings.kochLevel = Number(e.target.value); persist(); updateDrillControls();
   });
@@ -1234,7 +1249,7 @@ function initDrill() {
 }
 
 function isCharDrill(type) {
-  return type === 'koch' || type === 'frequency';
+  return type === 'koch' || type === 'frequency' || type === 'symbol';
 }
 
 function describeWeakDrill() {
@@ -1244,10 +1259,36 @@ function describeWeakDrill() {
     : 'まだ十分な記録がありません。ドリルを数回解くと苦手文字が集まります（それまではコッホ法の文字で代替）。';
 }
 
+/** ドリルの種類ごとに、出題に使う文字の並びを返す。 */
+function drillOrder(type) {
+  if (type === 'frequency') return FREQUENCY_ORDER;
+  if (type === 'symbol') return SYMBOL_ORDER;
+  return KOCH_ORDER;
+}
+
+/**
+ * 記号・プロサインの入力ボタンを出すかどうかを決めて描く。
+ *
+ * 判断は「今のレベルで使う文字の並び」に記号が含まれるかで行う。
+ * 出題された答えの中身では決めない — 答えに記号があるときだけ出したら、
+ * ボタンが出ていること自体が答えの手がかりになってしまう。
+ */
+function updateSymbolPad(alphabet) {
+  const symbols = [...new Set(alphabet)].filter((u) => !/^[A-Z0-9]$/.test(u));
+  const pad = $('#drill-symbol-pad');
+  pad.hidden = symbols.length === 0;
+  if (pad.hidden) return;
+
+  $('#drill-symbol-keys').innerHTML = symbols
+    .map((u) => `<button type="button" class="btn pad-key" data-insert="${escapeHtml(u)}"
+      title="${escapeHtml(termCode(u))}">${escapeHtml(u)}</button>`)
+    .join('');
+}
+
 function updateDrillControls() {
   const type = settings.drillType;
   const charDrill = isCharDrill(type);
-  const order = type === 'frequency' ? FREQUENCY_ORDER : KOCH_ORDER;
+  const order = drillOrder(type);
 
   $('#drill-level-field').hidden = !charDrill;
   $('#drill-groupsize').closest('.field').hidden = !charDrill;
@@ -1256,10 +1297,12 @@ function updateDrillControls() {
 
   if (type === 'weak') {
     $('#drill-alphabet').textContent = describeWeakDrill();
+    updateSymbolPad(weakAlphabet());
     return;
   }
   if (!charDrill) {
     $('#drill-alphabet').textContent = '';
+    updateSymbolPad([]);
     return;
   }
 
@@ -1270,6 +1313,7 @@ function updateDrillControls() {
 
   $('#drill-level-out').textContent = `${level} 文字`;
   $('#drill-alphabet').textContent = `使用文字: ${order.slice(0, level).join(' ')}`;
+  updateSymbolPad(order.slice(0, level));
 }
 
 /** ドリルを途中でやめる。連続出題の途中なら、そこまでの結果を締める。 */
@@ -1316,9 +1360,13 @@ function gradeCurrentProblem() {
   const input = $('#drill-answer').value;
   const result = gradeProblem(drill.problem, input);
   const pct = Math.round(result.accuracy * 100);
+  // 上げられるレベルが残っているときだけ勧める。種類ごとに使う文字の並びが
+  // 違うので、上限もその並びで見る（記号は 11 種しかない）
+  const levelOrder = drillOrder(settings.drillType);
   const levelUp = isCharDrill(settings.drillType)
     && shouldLevelUp(result.accuracy)
-    && result.total >= 10;
+    && result.total >= 10
+    && Math.min(settings.kochLevel, levelOrder.length) < levelOrder.length;
 
   stats = recordDrill(stats, {
     type: settings.drillType,
@@ -1395,8 +1443,11 @@ function gradeCurrentProblem() {
   const levelBtn = $('#btn-levelup');
   if (levelBtn) {
     levelBtn.addEventListener('click', () => {
-      const order = settings.drillType === 'frequency' ? FREQUENCY_ORDER : KOCH_ORDER;
-      settings.kochLevel = Math.min(settings.kochLevel + 1, order.length);
+      // 今の種類の並びで上限を見る。ここを取り違えると、上限に達した種類でも
+      // 保存値だけが増え続け、別の種類に戻したときに一気に飛んでしまう
+      const order = drillOrder(settings.drillType);
+      const level = Math.min(settings.kochLevel, order.length);
+      settings.kochLevel = Math.min(level + 1, order.length);
       persist();
       updateDrillControls();
       newProblem();
@@ -2480,16 +2531,25 @@ function initTools() {
 function initGlossary() {
   const list = $('#glossary-list');
 
+  // 略語・Q 符号に、記号とプロサインも並べる。
+  // ローマ字以外も覚える対象なので、同じ場所で引けて音も聞けるようにする
+  const entries = [
+    ...ABBREVIATIONS,
+    ...SYMBOL_ORDER.map((u) => ({ code: u, ja: lookupTerm(u)?.ja ?? '', symbol: true })),
+  ];
+
   const render = (query = '') => {
     const q = query.trim().toLowerCase();
-    const items = ABBREVIATIONS.filter(
+    const items = entries.filter(
       (a) => !q || a.code.toLowerCase().includes(q) || a.ja.toLowerCase().includes(q),
     );
     list.innerHTML = items.length
       ? items.map((a) => `
-          <button type="button" class="gloss-item" data-code="${escapeHtml(a.code)}">
+          <button type="button" class="gloss-item${a.symbol ? ' is-symbol' : ''}"
+                  data-code="${escapeHtml(a.code)}">
             <span class="code">${escapeHtml(a.code)}</span>
             <span class="ja">${escapeHtml(a.ja)}</span>
+            <span class="morse">${escapeHtml(termCode(a.code))}</span>
           </button>`).join('')
       : '<p class="empty">該当する略語がありません。</p>';
   };
@@ -2759,6 +2819,7 @@ window.__cw = {
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   hintMask, HINT_LEVELS, HINT_MASK,          // 受信ヘルプの伏せ方を検証できるように
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES,        // 定型文の話題を検証できるように
+  SYMBOL_ORDER,                              // 記号・プロサインの並びを検証できるように
   termCode, termTitle,                       // 説明に添える符号を検証できるように
   get hintLines() { return hintBoard.lines.map((l) => ({ ...l })); },
   get settings() { return settings; },
