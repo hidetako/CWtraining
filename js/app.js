@@ -2,7 +2,10 @@
 
 import { CWPlayer } from './audio.js';
 import { toMorseString, estimateDuration, tokenize } from './morse.js';
-import { ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER } from './data.js';
+import {
+  ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER,
+  KEY_PHRASE_TOPICS, ALL_KEY_PHRASES,
+} from './data.js';
 import { annotateHtml, createTracker, explainText, lookupTerm, termCode, termTitle } from './explain.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
 import { LocalResponder, gradeField, REACTION_LABELS, FIELD_HINTS } from './qso.js';
@@ -1952,18 +1955,11 @@ async function finishContest(score) {
 const paddle = { detach: null, task: null, elements: '' };
 
 /** 交信の中で実際に打つことの多い定型文。 */
-const KEY_PHRASES = [
-  'CQ CQ CQ DE {ME} {ME} K',
-  '{DX} DE {ME} GE OM TNX FER CALL',
-  'UR RST 599 599 = NAME {NAME} {NAME}',
-  'QTH {QTH} {QTH} = HW?',
-  'R R FB OM ALL SOLID',
-  'TNX FER NICE QSO ES 73',
-  '{DX} DE {ME} TU 73 <SK>',
-  'PSE AGN AGN',
-  'QRZ? DE {ME} K',
-  'SRI QRM PSE QRS',
-];
+/** いま選ばれている話題の定型文。「おまかせ」なら全話題から選ぶ。 */
+function keyPhrasePool() {
+  const topic = KEY_PHRASE_TOPICS[settings.keyerTopic];
+  return topic ? topic.phrases : ALL_KEY_PHRASES;
+}
 
 // initKeyer が設定同期関数をここに登録する（チュートリアルの警告からも呼ぶため）
 let syncKeyerControls = () => {};
@@ -2034,10 +2030,25 @@ function initKeyer() {
     setPaddleActive(true);
   });
 
+  // 話題は「交信の定型文」のときだけ意味を持つので、そのときだけ出す
+  const topicSel = $('#keyer-topic');
+  topicSel.innerHTML = '<option value="">おまかせ（すべての話題）</option>'
+    + Object.entries(KEY_PHRASE_TOPICS)
+      .map(([key, t]) => `<option value="${key}">${t.label}</option>`).join('');
+
+  const syncTopicField = () => {
+    $('#keyer-topic-field').hidden = settings.keyerTaskType !== 'phrase';
+    topicSel.value = KEY_PHRASE_TOPICS[settings.keyerTopic] ? settings.keyerTopic : '';
+  };
+
   $('#keyer-task-type').value = settings.keyerTaskType;
   $('#keyer-task-type').addEventListener('change', (e) => {
-    settings.keyerTaskType = e.target.value; persist(); newKeyerTask();
+    settings.keyerTaskType = e.target.value; persist(); syncTopicField(); newKeyerTask();
   });
+  topicSel.addEventListener('change', (e) => {
+    settings.keyerTopic = e.target.value; persist(); newKeyerTask();
+  });
+  syncTopicField();
   $('#btn-keyer-task').addEventListener('click', newKeyerTask);
   $('#btn-keyer-listen').addEventListener('click', () => {
     if (paddle.task) player.play(paddle.task);
@@ -2266,12 +2277,16 @@ function newKeyerTask() {
     $('#btn-keyer-listen').disabled = true;
   } else {
     if (type === 'phrase') {
+      const pool = keyPhrasePool();
       const dx = makeProblem('callsign', {}).answer;
-      paddle.task = KEY_PHRASES[Math.floor(Math.random() * KEY_PHRASES.length)]
+      paddle.task = pool[Math.floor(Math.random() * pool.length)]
         .replaceAll('{ME}', settings.callsign)
         .replaceAll('{DX}', dx)
         .replaceAll('{NAME}', settings.name)
-        .replaceAll('{QTH}', settings.qth);
+        .replaceAll('{QTH}', settings.qth)
+        .replaceAll('{RIG}', settings.rig)
+        .replaceAll('{PWR}', settings.pwr)
+        .replaceAll('{ANT}', settings.ant);
     } else {
       paddle.task = makeProblem(type, {}).answer;
     }
@@ -2743,6 +2758,7 @@ window.__cw = {
   player, keyer, contest, responder,
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   hintMask, HINT_LEVELS, HINT_MASK,          // 受信ヘルプの伏せ方を検証できるように
+  KEY_PHRASE_TOPICS, ALL_KEY_PHRASES,        // 定型文の話題を検証できるように
   termCode, termTitle,                       // 説明に添える符号を検証できるように
   get hintLines() { return hintBoard.lines.map((l) => ({ ...l })); },
   get settings() { return settings; },

@@ -145,7 +145,166 @@ export const ABBREVIATIONS = [
   { code: 'QSY', ja: '周波数を変更してください' },
   { code: 'QTR', ja: '正確な時刻' },
   { code: 'QRG', ja: '正確な周波数' },
+
+  // 天気・時刻・場所・電波の状況の話題で使う語
+  { code: 'CLD', ja: '寒い (cold)' },
+  { code: 'CLDY', ja: '曇り (cloudy)' },
+  { code: 'SIG', ja: '信号 (signal)' },
+  { code: 'SIGS', ja: '信号 (signals)' },
+  { code: 'CONDX', ja: '伝搬状況 (conditions)' },
+  { code: 'CPY', ja: '受信する・コピーする (copy)' },
+  { code: 'RPRT', ja: 'レポート (report)' },
+  { code: 'RPT', ja: '繰り返す (repeat)' },
+  { code: 'STN', ja: '局 (station)' },
+  { code: 'HVY', ja: '強い・激しい (heavy)' },
+  { code: 'NR', ja: '〜の近く (near)／番号 (number)' },
+  { code: 'ASL', ja: '海抜 (above sea level)' },
+  { code: 'JCC', ja: 'JARL の市郡番号' },
+  { code: 'JST', ja: '日本標準時' },
+  { code: 'UTC', ja: '協定世界時' },
+  { code: 'PCT', ja: '％ (percent)' },
+  { code: 'DB', ja: 'デシベル（信号の強さ）' },
+  { code: 'BURO', ja: 'QSL ビューロー（転送組織）' },
+  { code: 'VIA', ja: '〜経由で' },
+  { code: 'B4', ja: '以前に (before)' },
+  { code: 'DWN', ja: '下がる (down)' },
 ];
+
+/**
+ * パドル送信の「交信の定型文」。話題ごとにまとめてある。
+ *
+ * {ME} {DX} {NAME} {QTH} {RIG} {PWR} {ANT} は自局の設定に差し替わる。
+ * 実際の交信で打たれる書き方に寄せてあり、記号は = （BT・区切り）と
+ * ? のみを使う。文の長さは 20〜40 文字程度に収め、1 回で打ち切れるようにした。
+ */
+export const KEY_PHRASE_TOPICS = {
+  call: {
+    label: '呼び出し・応答',
+    phrases: [
+      'CQ CQ CQ DE {ME} {ME} K',
+      'CQ CQ DE {ME} {ME} PSE K',
+      '{DX} DE {ME} {ME} K',
+      '{DX} DE {ME} GE OM TNX FER CALL',
+      'QRZ? DE {ME} K',
+      'QRL? DE {ME}',
+      '{DX} DE {ME} = R R GE OM',
+    ],
+  },
+
+  basic: {
+    label: '基本の交換（RST・名前・QTH）',
+    phrases: [
+      'UR RST 599 599 = NAME {NAME} {NAME}',
+      'QTH {QTH} {QTH} = HW?',
+      'R R FB OM ALL SOLID',
+      'UR RST 579 579 = OP {NAME} {NAME}',
+      'RIG HR {RIG} ES PWR {PWR}',
+      'ANT HR {ANT} = HW CPY?',
+      'TNX FER RPRT = UR RST 589 HR',
+    ],
+  },
+
+  wx: {
+    label: '天気',
+    phrases: [
+      'WX HR FINE ES TEMP 25C',
+      'WX CLOUDY ES TEMP 18C = HW?',
+      'HR WX RAIN NW ES WINDY',
+      'WX SNOW HR = VY CLD TEMP -3C',
+      'WX FB HR SUNNY ES WARM',
+      'HR WX HOT ES HUMID TEMP 33C',
+      'WX HR CLDY = TEMP 12C ES QRN',
+      'RAIN STOPPED NW ES SUN OUT HI',
+      'WX HR FOGGY = VY DAMP TODAY',
+      'TNX FER WX INFO = HR SAME WX',
+    ],
+  },
+
+  time: {
+    label: '時刻',
+    phrases: [
+      'QTR HR 1430 JST',
+      'QTR? = HR 0930 UTC',
+      'HR TIME 2100 JST = GE OM',
+      'NW 0600 JST ES SUN UP HR',
+      'TIME HR 1200 JST = LUNCH TIME HI',
+      'QTR 1800 JST = GE ES TNX QSO',
+      'SRI MUST QRT = 2300 JST HR',
+      'UR QTR PSE? = MY QTR 0745',
+    ],
+  },
+
+  qth: {
+    label: '場所・地理',
+    phrases: [
+      'QTH HR {QTH} {QTH}',
+      'MY QTH {QTH} = ABT 50 KM N OF TOKYO',
+      'QTH {QTH} = JCC 1001',
+      'HR QTH NR THE SEA = VY QUIET',
+      'QTH {QTH} = 100 M ASL',
+      'UR QTH PSE AGN? = QRM HR',
+      'QTH {QTH} ES OP {NAME} = HW?',
+      'FB QTH = NR WKD UR AREA B4',
+    ],
+  },
+
+  condx: {
+    label: '電波の状況',
+    phrases: [
+      'UR SIGS 579 HR = SOME QRN',
+      'CONDX FB TODAY ES BAND OPEN',
+      'UR SIG STRONG ES SOLID CPY',
+      'CONDX POOR HR = BAND NOISY',
+      'UR RST 449 = QRN HVY HR',
+      'SRI QRM DE OTHER STN PSE AGN',
+      'BAND CLOSING NW = SIGS DOWN',
+      'FB SIGS HR = 599 PLUS 20 DB',
+      'CONDX UP ES DWN = HW UR SIDE?',
+    ],
+  },
+
+  qsb: {
+    label: 'フェージング',
+    phrases: [
+      'QSB HR PSE AGN',
+      'UR SIG QSB DEEP = PSE RPT NAME',
+      'SRI QSB = UR CALL AGN PSE',
+      'QSB NW BUT CPY OK',
+      'DEEP QSB HR = PSE QRS',
+      'SIG FADING = PSE RPT UR QTH',
+      'QSB ES QRN = CPY ABT 70 PCT',
+      'QSB GONE NW = UR 599 AGN',
+    ],
+  },
+
+  close: {
+    label: '締めくくり',
+    phrases: [
+      'TNX FER NICE QSO ES 73',
+      '{DX} DE {ME} TU 73 <SK>',
+      'TNX QSO = HPE CUAGN ES 73',
+      'GB OM ES GL = 73 73 <SK>',
+      'QSL VIA BURO = TU 73',
+      'MNI TNX FB QSO = 73 ES GB',
+    ],
+  },
+
+  trouble: {
+    label: '聞き返し・トラブル',
+    phrases: [
+      'PSE AGN AGN',
+      'SRI QRM PSE QRS',
+      'UR CALL AGN PSE = QRN HR',
+      'PSE QRS = I AM BEGINNER HI',
+      'SRI OM PSE RPT ALL AFTER RST',
+      'QRX PSE = QRL HR = 5 MIN',
+    ],
+  },
+};
+
+/** 話題を指定せず、すべての定型文をひとつの配列にしたもの。 */
+export const ALL_KEY_PHRASES =
+  Object.values(KEY_PHRASE_TOPICS).flatMap((t) => t.phrases);
 
 export function pick(array) {
   return array[Math.floor(Math.random() * array.length)];
