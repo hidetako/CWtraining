@@ -1165,7 +1165,10 @@ function termListHtml(text) {
 
 // ═══════════════════════════════════════════ 聞き取りドリル
 
-const drill = { problem: null, session: null, awaitingNext: false };
+const drill = { problem: null, session: null, awaitingNext: false, countdown: null };
+
+/** 出題までの間（秒）。構える時間を作るためのもの。 */
+const DRILL_COUNTDOWN = 3;
 
 /** 苦手文字を重み付きの出題アルファベットに変換する。正答率が低いほど多く混ぜる。 */
 function weakAlphabet() {
@@ -1341,6 +1344,7 @@ function endDrill() {
     $('#drill-result').hidden = true;
     $('#drill-result').innerHTML = '';
   }
+  cancelCountdown();
   drill.problem = null;
   drill.session = null;
   drill.awaitingNext = false;
@@ -1349,7 +1353,54 @@ function endDrill() {
   $('#btn-drill-slow').disabled = true;
 }
 
+/** 数え終わりを待たずに次へ進むとき、走っている数えを止める。 */
+function cancelCountdown() {
+  const state = drill.countdown;
+  if (!state) return;
+  clearTimeout(state.timer);
+  drill.countdown = null;
+  state.resolve(false);      // 待っている側に「取り消された」と伝える
+
+  const el = $('#drill-countdown');
+  if (el) { el.hidden = true; el.textContent = ''; }
+}
+
+/**
+ * 出題までを 3 秒数える。数え終われば true、途中で取り消されれば false。
+ * 押してすぐ鳴ると身構える間が無いので、その間を作るためのもの。
+ */
+function runCountdown(seconds = DRILL_COUNTDOWN) {
+  cancelCountdown();
+  const el = $('#drill-countdown');
+
+  return new Promise((resolve) => {
+    const state = { resolve, timer: null };
+    drill.countdown = state;
+    let left = seconds;
+
+    const tick = () => {
+      if (drill.countdown !== state) return;   // 取り消し済み
+      if (left <= 0) {
+        drill.countdown = null;
+        el.hidden = true;
+        el.textContent = '';
+        resolve(true);
+        return;
+      }
+      el.hidden = false;
+      el.textContent = String(left);
+      left -= 1;
+      state.timer = setTimeout(tick, 1000);
+    };
+    tick();
+  });
+}
+
 async function newProblem() {
+  // 音を出す許可はクリックと同じ処理の流れで取っておく。数え終わってから
+  // 呼ぶと操作から離れてしまい、ブラウザに拒まれて無音になることがある
+  const ready = player.resume();
+
   drill.awaitingNext = false;
   drill.problem = makeProblem(settings.drillType, {
     level: effectiveDrillLevel(),
@@ -1363,6 +1414,10 @@ async function newProblem() {
   $('#drill-answer').focus();
   $('#btn-drill-replay').disabled = false;
   $('#btn-drill-slow').disabled = false;
+
+  await ready.catch(() => {});
+  if (!await runCountdown()) return;   // 途中で終了・出題し直しになった
+  if (!drill.problem) return;
 
   await player.play(drill.problem.text);
 }
