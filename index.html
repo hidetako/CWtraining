@@ -214,6 +214,9 @@
       <button type="button" class="btn btn-ghost" id="btn-drill-slow" disabled>ゆっくり再生</button>
     </div>
 
+    <!-- 出題までの数え。押してすぐ鳴ると構える間が無いため -->
+    <div class="countdown" id="drill-countdown" hidden aria-live="polite"></div>
+
     <label class="answer-field">
       <span>聞き取った内容</span>
       <input type="text" id="drill-answer" autocomplete="off" autocapitalize="characters"
