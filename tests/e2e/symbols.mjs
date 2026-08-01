@@ -197,6 +197,45 @@ await page.evaluate(() => {
 await page.fill('#drill-groupsize', '3');
 await page.waitForTimeout(250);
 
+// 記録に残るレベルも、その種類で実際に使った数にそろえる。
+// レベルの保存値は種類をまたいで 1 つしかないので、コッホ法で進めたあとに
+// 記号へ来ると、丸めないまま記録して「記号 Lv41」のような値が残ってしまう
+await page.selectOption('#drill-type', 'koch');
+await page.evaluate(() => {
+  const s = document.querySelector('#drill-level');
+  s.value = s.max; s.dispatchEvent(new Event('input'));
+});
+await page.waitForTimeout(200);
+const kochMax = Number(await page.inputValue('#drill-level'));
+await page.selectOption('#drill-type', 'symbol');
+await page.waitForTimeout(250);
+const saved = await page.evaluate(() => window.__cw.settings.kochLevel);
+console.log('コッホ法の保存値:', saved, '/ 記号の上限:', max);
+ok('コッホ法の進み具合は保たれる', saved === kochMax && saved > max, String(saved));
+ok('表示は記号の上限に丸まる', Number(await page.inputValue('#drill-level')) === max,
+  await page.inputValue('#drill-level'));
+
+await page.fill('#drill-groupsize', '3');
+await page.fill('#drill-groupcount', '2');
+await page.click('#btn-drill-new');
+await page.waitForTimeout(800);
+const symbolAns = await page.evaluate(() => window.__cw.drillProblem?.answer ?? '');
+await page.fill('#drill-answer', symbolAns);
+await page.press('#drill-answer', 'Enter');
+await page.waitForTimeout(450);
+await page.evaluate(() => window.__cw.player.stop());
+const recorded = await page.evaluate(() => window.__cw.stats.history[0]);
+console.log('記録:', JSON.stringify(recorded));
+ok('記録のレベルが上限を超えない', recorded.type === 'symbol' && recorded.level === max,
+  JSON.stringify(recorded));
+
+await page.evaluate(() => {
+  const s = document.querySelector('#drill-level');
+  s.value = s.max; s.dispatchEvent(new Event('input'));
+});
+await page.fill('#drill-groupsize', '3');
+await page.waitForTimeout(250);
+
 // ═══════════════ 入力ボタンは答えを漏らさない ═══════════════
 // 出す・出さないは「そのレベルで使う文字」で決める。出題の中身では決めない。
 // 答えに記号があるときだけ出したら、出ていること自体が手がかりになる
