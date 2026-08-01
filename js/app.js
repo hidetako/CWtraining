@@ -1267,6 +1267,20 @@ function drillOrder(type) {
 }
 
 /**
+ * 今の種類で実際に使うレベル。
+ *
+ * レベルの保存値は種類をまたいで 1 つしか持っていない。コッホ法で 41 まで
+ * 進めたあと記号ドリル（11 種）に切り替えると、保存値だけが範囲外に残る。
+ * 出題も表示も記録も、必ずこの丸めた値を使う（記録に「記号 Lv41」のような
+ * ありえない値が残らないようにするため）。保存値そのものは丸めない —
+ * 丸めてしまうと、コッホ法に戻ったときに進み具合が失われる。
+ */
+function effectiveDrillLevel(type = settings.drillType) {
+  const order = drillOrder(type);
+  return Math.min(Math.max(2, settings.kochLevel), order.length);
+}
+
+/**
  * 記号・プロサインの入力ボタンを出すかどうかを決めて描く。
  *
  * 判断は「今のレベルで使う文字の並び」に記号が含まれるかで行う。
@@ -1308,7 +1322,7 @@ function updateDrillControls() {
 
   const slider = $('#drill-level');
   slider.max = String(order.length);
-  const level = Math.min(settings.kochLevel, order.length);
+  const level = effectiveDrillLevel(type);
   if (Number(slider.value) !== level) slider.value = String(level);
 
   $('#drill-level-out').textContent = `${level} 文字`;
@@ -1338,7 +1352,7 @@ function endDrill() {
 async function newProblem() {
   drill.awaitingNext = false;
   drill.problem = makeProblem(settings.drillType, {
-    level: settings.kochLevel,
+    level: effectiveDrillLevel(),
     groupSize: settings.groupSize,
     groupCount: settings.groupCount,
     alphabet: settings.drillType === 'weak' ? weakAlphabet() : undefined,
@@ -1362,16 +1376,15 @@ function gradeCurrentProblem() {
   const pct = Math.round(result.accuracy * 100);
   // 上げられるレベルが残っているときだけ勧める。種類ごとに使う文字の並びが
   // 違うので、上限もその並びで見る（記号は 11 種しかない）
-  const levelOrder = drillOrder(settings.drillType);
   const levelUp = isCharDrill(settings.drillType)
     && shouldLevelUp(result.accuracy)
     && result.total >= 10
-    && Math.min(settings.kochLevel, levelOrder.length) < levelOrder.length;
+    && effectiveDrillLevel() < drillOrder(settings.drillType).length;
 
   stats = recordDrill(stats, {
     type: settings.drillType,
     result,
-    level: settings.kochLevel,
+    level: effectiveDrillLevel(),
   });
   saveStats(stats);
   renderStats();
@@ -1446,8 +1459,7 @@ function gradeCurrentProblem() {
       // 今の種類の並びで上限を見る。ここを取り違えると、上限に達した種類でも
       // 保存値だけが増え続け、別の種類に戻したときに一気に飛んでしまう
       const order = drillOrder(settings.drillType);
-      const level = Math.min(settings.kochLevel, order.length);
-      settings.kochLevel = Math.min(level + 1, order.length);
+      settings.kochLevel = Math.min(effectiveDrillLevel() + 1, order.length);
       persist();
       updateDrillControls();
       newProblem();
@@ -2106,6 +2118,9 @@ function initKeyer() {
   });
   $('#btn-keyer-grade').addEventListener('click', gradeKeying);
   $('#btn-keyer-clear').addEventListener('click', redoKeying);
+  // 採点しなくても次へ進めるようにする。打ってみて手応えが無いときに、
+  // わざわざ採点を通す必要はない
+  $('#btn-keyer-next').addEventListener('click', newKeyerTask);
 
   keyer.addEventListener('element', (e) => {
     paddle.elements = (paddle.elements + e.detail.element).slice(-60);
@@ -2326,6 +2341,8 @@ function newKeyerTask() {
     preview.textContent = '自由練習モードです。好きな符号を打ってください。';
     terms.innerHTML = '';
     $('#btn-keyer-listen').disabled = true;
+    // 自由練習には「次の課題」が無いので、進むボタンは押せなくする
+    $('#btn-keyer-next').disabled = true;
   } else {
     if (type === 'phrase') {
       const pool = keyPhrasePool();
@@ -2345,6 +2362,7 @@ function newKeyerTask() {
     preview.innerHTML = annotateHtml(paddle.task, escapeHtml);
     terms.innerHTML = taskTermsHtml(paddle.task);
     $('#btn-keyer-listen').disabled = false;
+    $('#btn-keyer-next').disabled = false;
   }
 
   keyer.reset();
@@ -2411,12 +2429,10 @@ function gradeKeying() {
       <span><span class="diff"><span class="extra">■</span></span> 余分・誤り</span>
     </div>
     <p class="hint">手本: <code>${escapeHtml(paddle.task)}</code></p>
-    <p class="hint">あなたの符号: <code>${escapeHtml(sent)}</code></p>
-    <div class="drill-actions" style="margin-top:.9rem">
-      <button type="button" class="btn btn-primary" id="btn-keyer-next">次の課題</button>
-    </div>`;
+    <p class="hint">あなたの符号: <code>${escapeHtml(sent)}</code></p>`;
 
-  $('#btn-keyer-next').addEventListener('click', newKeyerTask);
+  // 次へ進む導線は「採点する・打ち直す」と同じ段に常設してあるので、
+  // ここには置かない（同じ操作のボタンが 2 つあると迷う）
 }
 
 /** 連続出題のまとめ。平均正答率と、このセッションで崩れた文字を示す。 */
