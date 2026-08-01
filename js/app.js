@@ -2318,17 +2318,37 @@ function setPaddleActive(active) {
  * 打つ前に何を送ろうとしているのか分かるように。長い解説は
  * ホバーで全文が出るので、ここでは頭の一節だけを見せる。
  */
+/** 1 語に割く長さの上限（見出し＋意味＋符号）。横に何語も並ぶので短く保つ。 */
+const TASK_TERM_BUDGET = 40;
+
+/**
+ * 意味を、その語の符号と並べても収まる長さに詰める。
+ *
+ * 補足は「— 」「（」「 (」のうしろに置いてあるので、そこで切れば
+ * 頭の一言だけが残る。符号の長さは語によって違うため、固定の文字数では
+ * なく、実際に並べたときの長さで判断する。
+ */
+function briefMeaning(entry) {
+  const room = TASK_TERM_BUDGET - entry.term.length - termCode(entry.term).length;
+  const forms = [
+    entry.ja,
+    entry.ja.split(' — ')[0],
+    entry.ja.split('（')[0],
+    entry.ja.split(' (')[0],
+  ];
+  return forms.find((f) => f.length <= room)
+    // どれも収まらなければ、いちばん短い形を出す（切り詰めて意味を壊さない）
+    ?? forms.reduce((a, b) => (b.length < a.length ? b : a));
+}
+
 function taskTermsHtml(text) {
   // コールサインと数字は見れば分かるので、意味を添える対象から外す
   const terms = explainText(text).filter((t) => t.kind !== 'callsign' && t.kind !== 'number');
   if (!terms.length) return '';
 
-  return terms.map((t) => {
-    const brief = t.ja.length > 30 ? t.ja.split(' — ')[0] : t.ja;
-    return `<span class="task-term" title="${escapeHtml(termTitle(t))}">
-      <span class="code">${escapeHtml(t.term)}</span>${escapeHtml(brief)}` +
-      `<span class="morse">${escapeHtml(termCode(t.term))}</span></span>`;
-  }).join('');
+  return terms.map((t) => `<span class="task-term" title="${escapeHtml(termTitle(t))}">
+      <span class="code">${escapeHtml(t.term)}</span>${escapeHtml(briefMeaning(t))}` +
+      `<span class="morse">${escapeHtml(termCode(t.term))}</span></span>`).join('');
 }
 
 function newKeyerTask() {
@@ -2834,9 +2854,9 @@ window.__cw = {
   player, keyer, contest, responder,
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   hintMask, HINT_LEVELS, HINT_MASK,          // 受信ヘルプの伏せ方を検証できるように
-  KEY_PHRASE_TOPICS, ALL_KEY_PHRASES,        // 定型文の話題を検証できるように
+  KEY_PHRASE_TOPICS, ALL_KEY_PHRASES, ABBREVIATIONS,  // 定型文・語彙を検証できるように
   SYMBOL_ORDER,                              // 記号・プロサインの並びを検証できるように
-  termCode, termTitle,                       // 説明に添える符号を検証できるように
+  termCode, termTitle, taskTermsHtml,        // 説明に添える符号を検証できるように
   get hintLines() { return hintBoard.lines.map((l) => ({ ...l })); },
   get settings() { return settings; },
   get stats() { return stats; },
