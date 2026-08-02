@@ -109,6 +109,63 @@ console.log('終了して 3 秒後:', JSON.stringify(afterStop));
 ok('終了後に鳴り出さない', afterStop.playing === false && afterStop.hidden === true,
   JSON.stringify(afterStop));
 
+// ═══════════════ 数えている途中に離れる・答える ═══════════════
+// 数えは 3 秒あとに鳴らす予約なので、その間に何をされても
+// 「あとから勝手に鳴る」「聞く前に採点される」が起きてはいけない
+
+// 別のタブへ移ったら、その画面で鳴り出さないこと
+await page.click('.tab[data-panel="drill"]');
+await page.waitForTimeout(300);
+await page.click('#btn-drill-new');
+await page.waitForTimeout(900);
+await page.click('.tab[data-panel="glossary"]');
+await page.waitForTimeout(3200);
+const strayed = await page.evaluate(() => ({
+  playing: window.__cw.player.isPlaying,
+  panel: document.querySelector('.panel.is-active').id,
+}));
+console.log('別タブへ移ったあと:', JSON.stringify(strayed));
+ok('タブを移ったら鳴り出さない', strayed.playing === false, JSON.stringify(strayed));
+await page.evaluate(() => window.__cw.player.stop());
+
+// 聞く前に Enter を押しても、採点も記録もしないこと
+await page.click('.tab[data-panel="drill"]');
+await page.waitForTimeout(300);
+const attemptsBefore = await page.evaluate(() => window.__cw.stats.drills.attempts);
+await page.click('#btn-drill-new');
+await page.waitForTimeout(900);
+await page.press('#drill-answer', 'Enter');
+await page.waitForTimeout(400);
+const early = await page.evaluate((b) => ({
+  shown: !document.querySelector('#drill-result').hidden,
+  added: window.__cw.stats.drills.attempts - b,
+  revealed: (document.querySelector('#drill-result').textContent || '').includes('正解'),
+}), attemptsBefore);
+console.log('聞く前の Enter:', JSON.stringify(early));
+ok('聞く前は採点しない', early.shown === false, JSON.stringify(early));
+ok('聞く前の記録を残さない', early.added === 0, String(early.added));
+ok('聞く前に答えを見せない', early.revealed === false);
+
+// そのあと普通に鳴ること（採点を止めたせいで出題が消えては困る）
+const stillPlays = await watch(async () => {}, 6000);
+ok('そのあと普通に鳴る', stillPlays.startedAt !== null, `${stillPlays.startedAt}ms`);
+await page.evaluate(() => window.__cw.player.stop());
+
+// 「もう一度聞く」を押したら、残りを待たずに鳴ること
+await page.click('#btn-drill-new');
+await page.waitForTimeout(700);
+const skipped = await watch(() => page.click('#btn-drill-replay'), 2500);
+console.log('数えている途中の「もう一度聞く」:', skipped.startedAt, 'ms');
+ok('聞き直しで待ちを飛ばせる', skipped.startedAt !== null && skipped.startedAt < 1200,
+  `${skipped.startedAt}ms`);
+ok('飛ばしたら数えも消える', (await state()).hidden === true, JSON.stringify(await state()));
+
+// 飛ばしたあとに、もう一度勝手に鳴り出さないこと
+await page.waitForTimeout(2600);
+await page.evaluate(() => window.__cw.player.stop());
+await page.waitForTimeout(900);
+ok('飛ばしたあと二重に鳴らない', (await state()).playing === false, JSON.stringify(await state()));
+
 // ═══════════════ 連続出題でも毎回数える ═══════════════
 await page.selectOption('#drill-count', '5');
 await page.waitForTimeout(200);

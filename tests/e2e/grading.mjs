@@ -13,6 +13,17 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + 
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 
 await page.goto(`${BASE}/index.html`);
+/** 出題の数え（3 秒）が終わるのを待つ。終わる前に答えても採点されない。 */
+const waitDrillReady = async () => {
+  const cd = () => page.waitForFunction(
+    (want) => document.querySelector('#drill-countdown').hidden === want,
+    null, { timeout: 15000 });
+  await page.waitForFunction(() => document.querySelector('#drill-countdown').hidden === false,
+    null, { timeout: 4000 }).catch(() => {});   // 数えが出る前に終わっていることもある
+  await page.waitForFunction(() => document.querySelector('#drill-countdown').hidden === true,
+    null, { timeout: 15000 });
+};
+
 await page.waitForTimeout(600);
 
 // ── 採点ロジックを直接確かめる ────────────────────
@@ -65,7 +76,7 @@ ok('空白の位置は問わない', spaced.pct === 100, JSON.stringify(spaced))
 // ── 画面でも確かめる ──────────────────────────────
 await page.click('.tab[data-panel="drill"]');
 await page.click('#btn-drill-new');
-await page.waitForTimeout(400);
+await waitDrillReady();
 
 // 出題の先頭 1 文字を落として答える
 const answer = await page.evaluate(() => window.__cw.drillProblem.answer);
@@ -91,7 +102,7 @@ await page.reload();
 await page.waitForTimeout(600);
 await page.click('.tab[data-panel="drill"]');
 await page.click('#btn-drill-new');
-await page.waitForTimeout(400);
+await waitDrillReady();
 
 // 出題の全文字を含みつつ、間に余分を挟んで答える
 const ans = (await page.evaluate(() => window.__cw.drillProblem.answer)).replace(/\s/g, '');

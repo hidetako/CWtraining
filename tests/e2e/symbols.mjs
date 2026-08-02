@@ -13,6 +13,17 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + 
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 
 await page.goto(`${BASE}/index.html`);
+/** 出題の数え（3 秒）が終わるのを待つ。終わる前に答えても採点されない。 */
+const waitDrillReady = async () => {
+  const cd = () => page.waitForFunction(
+    (want) => document.querySelector('#drill-countdown').hidden === want,
+    null, { timeout: 15000 });
+  await page.waitForFunction(() => document.querySelector('#drill-countdown').hidden === false,
+    null, { timeout: 4000 }).catch(() => {});   // 数えが出る前に終わっていることもある
+  await page.waitForFunction(() => document.querySelector('#drill-countdown').hidden === true,
+    null, { timeout: 15000 });
+};
+
 await page.waitForTimeout(600);
 
 // ═══════════════ 記号の並び ═══════════════
@@ -112,7 +123,7 @@ await page.fill('#drill-answer', '');
 
 // ═══════════════ 出題と採点 ═══════════════
 await page.click('#btn-drill-new');
-await page.waitForTimeout(900);
+await waitDrillReady();
 const problem = await page.evaluate(() => window.__cw.drillProblem?.answer ?? '');
 console.log('出題:', JSON.stringify(problem));
 ok('記号だけが出題される', problem.length > 0 && !/[A-Z0-9]/.test(problem.replace(/<[A-Z]+>/g, '')),
@@ -162,7 +173,7 @@ const levelUpAt = async (level, groups = 4) => {
   await page.fill('#drill-groupcount', String(groups));
   await page.waitForTimeout(200);
   await page.click('#btn-drill-new');
-  await page.waitForTimeout(800);
+  await waitDrillReady();
   const ans = await page.evaluate(() => window.__cw.drillProblem?.answer ?? '');
   await page.fill('#drill-answer', ans);
   await page.press('#drill-answer', 'Enter');
