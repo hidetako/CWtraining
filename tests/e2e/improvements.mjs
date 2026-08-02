@@ -12,6 +12,17 @@ const page = await browser.newPage({viewport:{width:1240,height:1000}});
 page.on('pageerror', e=>errors.push('pageerror: '+e.message));
 page.on('console', m=>{ if(m.type()==='error') errors.push('console: '+m.text()); });
 await page.goto(`${BASE}/index.html`);
+/** 出題の数え（3 秒）が終わるのを待つ。終わる前に答えても採点されない。 */
+const waitDrillReady = async () => {
+  const cd = () => page.waitForFunction(
+    (want) => document.querySelector('#drill-countdown').hidden === want,
+    null, { timeout: 15000 });
+  await page.waitForFunction(() => document.querySelector('#drill-countdown').hidden === false,
+    null, { timeout: 4000 }).catch(() => {});   // 数えが出る前に終わっていることもある
+  await page.waitForFunction(() => document.querySelector('#drill-countdown').hidden === true,
+    null, { timeout: 15000 });
+};
+
 await page.evaluate(()=>localStorage.clear());
 await page.reload(); await page.waitForTimeout(500);
 
@@ -70,13 +81,16 @@ await page.evaluate(()=>window.__cw.player.stop());
 // ⑥ 連続出題（3問に設定できないので5問で・答えを流し込み）
 await page.selectOption('#drill-count','5');
 await page.selectOption('#drill-type','koch'); await page.waitForTimeout(150);
-await page.click('#btn-drill-new'); await page.waitForTimeout(300);
+await page.click('#btn-drill-new'); await waitDrillReady();
 for (let i=0;i<5;i++){
   const ans = await page.evaluate(()=>window.__cw.drillProblem.answer);
   await page.fill('#drill-answer', ans);
   await page.press('#drill-answer','Enter');       // 採点
   await page.waitForTimeout(200);
-  if (i<4){ await page.press('#drill-answer','Enter'); await page.waitForTimeout(250);} // 次へ
+  if (i<4){
+    await page.press('#drill-answer','Enter');       // 次へ
+    await waitDrillReady();                          // 次の出題も 3 秒数える
+  }
 }
 ok('セッションまとめ表示', (await page.textContent('#drill-result')).includes('セッション終了'));
 ok('進行表示 5/5', (await page.textContent('#drill-result')).includes('5 / 5'));

@@ -25,7 +25,7 @@
 /* 画面を縦に「ヘッダー＋タブ」と「本文｜パドル欄」に分ける。
    ヘッダーとタブは常に見えたまま、下の 2 列がそれぞれ内側でスクロールする。
    狭い窓でパドルが潰れないよう、右列には下限だけ設けている。
-   （スマートフォンは対象外なので、単一段組みへの切り替えは持たない） */
+   狭い画面では 1 列にし、パドルは下から出す引き出しに変える（末尾の @media）。 */
 body {
   margin: 0;
   background: var(--bg);
@@ -34,6 +34,7 @@ body {
   font-size: 15px;
   line-height: 1.7;
   height: 100vh;
+  height: 100dvh;   /* アドレスバーが伸縮する端末では dvh のほうが実際の高さに合う */
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -84,7 +85,7 @@ code { font-family: var(--mono); background: var(--bg-sunken); padding: .1em .35
   letter-spacing: -.1em;
 }
 
-.quick-audio { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem; }
+.quick-audio { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem; margin-left: auto; }
 .qa-item { display: flex; align-items: center; gap: .4rem; font-size: .78rem; color: var(--text-dim); }
 .qa-item input[type=range] { width: 100px; }
 
@@ -1086,3 +1087,164 @@ kbd {
 }
 .spark-head .last { font-family: var(--mono); font-size: .95rem; color: var(--text); }
 .spark-card svg { display: block; width: 100%; height: 52px; overflow: visible; }
+
+
+/* ───────── パドルの引き出し（スマホ用の受け皿） ───────── */
+/* 画面の広いときは使わない。下の @media で初めて意味を持つ */
+.pw-close, .paddle-fab { display: none; }
+
+/* ═══════════════ スマートフォン ═══════════════
+   横に 2 列を並べる余裕が無いので、本文を 1 列にし、
+   パドルは下から出し入れする引き出しに変える。
+   指で押す前提なので、押せるものは 44px 以上を確保する。 */
+@media (max-width: 760px) {
+  body { font-size: 16px; }
+
+  /* ノッチや下端のバーに潜り込ませない */
+  .app-header {
+    padding: .5rem .8rem;
+    padding-left: max(.8rem, env(safe-area-inset-left));
+    padding-right: max(.8rem, env(safe-area-inset-right));
+    gap: .5rem;
+  }
+  .brand h1 { font-size: .95rem; }
+  .brand-mark { font-size: 1rem; }
+
+  /* 速度と音量は畳まずに残す。練習中いちばん触るため。
+     ただし 1 行に収まらないので、横スクロールで逃がす */
+  /* 1 行目に題名と操作ボタン、2 行目に速度・音量。
+     一時停止と終了はいつでも押せる必要があるので、横スクロールの外に出す */
+  .quick-audio {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: .7rem;
+    padding-bottom: .2rem;
+    -webkit-overflow-scrolling: touch;
+  }
+  .qa-item { flex: 0 0 auto; font-size: .72rem; }
+  .qa-item input[type=range] { width: 84px; }
+  .qa-item output { min-width: 3.6em; font-size: .72rem; }
+  /* 題名の隣に収めるため、語を落として記号だけのボタンにする */
+  .transport { flex: 0 0 auto; order: 2; }
+  .transport .btn { font-size: .95rem; padding: .4rem .8rem; }
+  .t-label { display: none; }
+
+  .tabs { padding: 0 .5rem; }
+  .tab { padding: .55rem .6rem; font-size: .8rem; }
+
+  /* 1 列にする。引き出しは position:fixed なので列から外れる */
+  .app-body { grid-template-columns: 1fr; }
+  main {
+    padding: 1rem .8rem 5.5rem;   /* 下端は引き出しのボタンぶん空ける */
+    padding-left: max(.8rem, env(safe-area-inset-left));
+    padding-right: max(.8rem, env(safe-area-inset-right));
+  }
+
+  /* 指で押せる大きさを確保する */
+  .btn { min-height: 44px; padding: .55rem .9rem; }
+  /* タブは横に長いので高さを詰めてよい。操作ボタンは指で押すので詰めない */
+  .tab { min-height: 0; }
+  .pad-key { min-height: 44px; min-width: 3.2rem; }
+  .fkey { min-height: 48px; }
+  input[type=range] { height: 32px; }
+
+  /* iOS は 16px 未満の入力欄に合わせて拡大してしまう */
+  input[type=text], input[type=number], input[type=search], select, textarea {
+    font-size: 16px;
+  }
+
+  .field-row { gap: .7rem; }
+  .field-grid { grid-template-columns: 1fr; gap: .8rem; }
+  .entry-row { grid-template-columns: 1fr; }
+  .cond-grid { grid-template-columns: 1fr 1fr; }
+  .fkeys { display: grid; grid-template-columns: 1fr 1fr; }
+  .logsheet { grid-template-columns: 1fr; padding: .9rem; }
+  .stat-grid { grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); }
+  .score-board .stat-grid { grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); }
+  .progress-charts { grid-template-columns: 1fr; }
+  .style-picker { grid-template-columns: 1fr; }
+  .turn-actions { flex-wrap: wrap; }
+  .turn-actions .btn { flex: 1 1 46%; }
+
+  /* 横に長いものは、はみ出さずにその中で送る */
+  .qso-log, .diff, .tx-preview, .keyed-text, .hint-lines { overflow-x: auto; }
+  table { display: block; overflow-x: auto; }
+
+  /* ── パドルの引き出し ── */
+  .paddle-rail {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    height: min(64dvh, 460px);
+    border-left: none;
+    border-top: 1px solid var(--accent-dim);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, .55);
+    padding-bottom: env(safe-area-inset-bottom);
+    transform: translateY(102%);
+    transition: transform .22s ease-out;
+    visibility: hidden;
+  }
+  .paddle-rail.is-open { transform: none; visibility: visible; }
+  /* 引き出しに隠れた本文まで届くように、下へ余白を足す */
+  body.is-sheet-open main { padding-bottom: calc(64dvh + 2rem); }
+
+  .pw-head { padding: .55rem .9rem; }
+  .pw-body { padding: .6rem .9rem .8rem; gap: .45rem; }
+  /* 引き出しの高さは決まっているので、打面を伸ばすと下の操作が隠れる。
+     打面は固定にして、打った符号・打ち直す・送信速度まで必ず収める */
+  .pw-pad { flex: 0 0 auto; height: clamp(110px, 26dvh, 200px); }
+  .pw-elements { min-height: 1.1rem; font-size: .85rem; }
+  .pw-decoded { min-height: 2.2rem; max-height: 3.4rem; padding: .5rem .6rem; }
+  .pw-label { margin-bottom: -.2rem; }
+  .pw-scope { display: none; }        /* 狭い画面では説明より打面を優先する */
+  .pw-close {
+    display: block;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: .3rem .5rem;
+    cursor: pointer;
+  }
+
+  /* 引き出しを開けるボタン。閉じているときだけ出す */
+  .paddle-fab {
+    display: flex;
+    position: fixed;
+    right: max(.9rem, env(safe-area-inset-right));
+    bottom: calc(.9rem + env(safe-area-inset-bottom));
+    z-index: 41;
+    align-items: center;
+    gap: .4rem;
+    min-height: 48px;
+    padding: .6rem 1rem;
+    background: var(--accent);
+    color: #1a1205;
+    border: none;
+    border-radius: 999px;
+    font-family: inherit;
+    font-size: .85rem;
+    font-weight: 700;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .5);
+    cursor: pointer;
+  }
+  .paddle-fab[aria-expanded="true"] { display: none; }
+  .fab-mark { font-family: var(--mono); letter-spacing: -.08em; }
+}
+
+/* 横向きの狭い画面では、引き出しが画面を覆いすぎないようにする */
+@media (max-width: 760px) and (orientation: landscape) {
+  .paddle-rail { height: min(78dvh, 320px); }
+  .pw-pad { min-height: 90px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paddle-rail { transition: none; }
+}

@@ -13,6 +13,17 @@ const DIR = process.env.SHOTS ?? '.';
 const shot = (n) => page.screenshot({ path: `${DIR}/${n}.png`, fullPage: true });
 
 await page.goto(`${BASE}/index.html`);
+/** 出題の数え（3 秒）が終わるのを待つ。終わる前に答えても採点されない。 */
+const waitDrillReady = async () => {
+  const cd = () => page.waitForFunction(
+    (want) => document.querySelector('#drill-countdown').hidden === want,
+    null, { timeout: 15000 });
+  await page.waitForFunction(() => document.querySelector('#drill-countdown').hidden === false,
+    null, { timeout: 4000 }).catch(() => {});   // 数えが出る前に終わっていることもある
+  await page.waitForFunction(() => document.querySelector('#drill-countdown').hidden === true,
+    null, { timeout: 15000 });
+};
+
 await page.waitForTimeout(600);
 
 // ── 1. QSO simulator: walk the whole script ────────────────
@@ -52,7 +63,7 @@ await shot('03-qso-summary');
 // ── 2. Drill ───────────────────────────────────────────────
 await page.click('.tab[data-panel="drill"]');
 await page.click('#btn-drill-new');
-await page.waitForTimeout(300);
+await waitDrillReady();
 const problem = await page.evaluate(() => window.__cw.drillProblem?.answer);
 await page.fill('#drill-answer', problem || 'X');
 await page.press('#drill-answer', 'Enter');

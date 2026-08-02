@@ -92,7 +92,66 @@ function initPaddleWidget() {
   $('#pw-clear').addEventListener('click', redoKeying);
   showDecoded();
 
+  initPaddleSheet();
   syncPaddleWidget();
+}
+
+// ───────── スマホ用の引き出し ─────────
+//
+// 狭い画面では横に 2 列を並べられないので、パドルは下から出し入れする。
+// 画面が広いときは常に見えているため、この開け閉めは効かない（CSS 側で
+// 引き出しの見た目自体を狭い画面にだけ適用している）。
+
+/** 引き出しが使われる画面かどうか。 */
+function isNarrowScreen() {
+  return window.matchMedia('(max-width: 760px)').matches;
+}
+
+function setPaddleSheet(open) {
+  const widget = $('#paddle-widget');
+  const fab = $('#btn-paddle-sheet');
+  if (!widget || !fab) return;
+  widget.classList.toggle('is-open', open);
+  fab.setAttribute('aria-expanded', String(open));
+  // 引き出しが本文の下半分を覆うので、その分だけ余白を足して
+  // 隠れた部分までスクロールできるようにする
+  document.body.classList.toggle('is-sheet-open', open);
+
+  // 打つ対象（手本や打った符号）が引き出しの上に来るように寄せる。
+  // 打面だけ見えても、何を打つのかが隠れていては使えない。
+  // 引き出しは本文の上に重なっているだけなので、scrollIntoView では
+  // その下に隠れたままになる。見えている帯に入るよう自分で寄せる
+  if (!open) return;
+  const target = $('#qso-keyed') || $('#keyer-task-text');
+  const main = $('.app-main');
+  if (!target || !main) return;
+
+  requestAnimationFrame(() => {
+    const top = $('.tabs').getBoundingClientRect().bottom;
+    // 引き出しはまだ滑って来る途中なので、今の位置ではなく
+    // 着いたときの位置（画面の下端から高さのぶん）で考える
+    const bottom = window.innerHeight - widget.offsetHeight;
+    const rect = target.getBoundingClientRect();
+    const margin = 12;
+
+    if (rect.bottom > bottom - margin) main.scrollTop += rect.bottom - (bottom - margin);
+    else if (rect.top < top + margin) main.scrollTop -= (top + margin) - rect.top;
+  });
+}
+
+/** 打鍵が必要な場面になったら開く。狭い画面でだけ意味がある。 */
+function openPaddleSheet() {
+  if (isNarrowScreen()) setPaddleSheet(true);
+}
+
+function initPaddleSheet() {
+  $('#btn-paddle-sheet').addEventListener('click', () => setPaddleSheet(true));
+  $('#pw-close').addEventListener('click', () => setPaddleSheet(false));
+
+  // 画面が広がったら、開閉の状態は意味を持たないので戻しておく
+  window.matchMedia('(max-width: 760px)').addEventListener('change', (e) => {
+    if (!e.matches) setPaddleSheet(false);
+  });
 }
 
 /** パドル欄の表示（割り当て・速度・入力範囲の説明）を現在の設定に合わせる。 */
@@ -180,12 +239,18 @@ function initTabs() {
     tab.setAttribute('aria-controls', `panel-${tab.dataset.panel}`);
     tab.addEventListener('click', () => {
       player.stop();
+      // 数えている途中で離れたら、そのまま止める。
+      // 放っておくと数え終わった時点で、別の画面の上で鳴り出す
+      cancelCountdown();
       tabs.forEach((t) => t.classList.toggle('is-active', t === tab));
       $$('.panel').forEach((p) => {
         p.classList.toggle('is-active', p.id === `panel-${tab.dataset.panel}`);
       });
       // パドル入力は開いているタブでだけ有効にする
       setPaddleActive(tab.dataset.panel === 'keyer');
+      // 打つためのタブに来たら、狭い画面では引き出しを開けておく
+      if (tab.dataset.panel === 'keyer') openPaddleSheet();
+      else setPaddleSheet(false);
       syncPaddleWidget();
       syncA11y();
     });
@@ -283,7 +348,10 @@ async function togglePause() {
 function syncTransport() {
   const btn = $('#btn-pause-all');
   if (!btn) return;
-  btn.textContent = player.paused ? '▶ 再開' : '❙❙ 一時停止';
+  // 記号と語を分けておく。狭い画面では語だけを隠して記号ボタンにする
+  btn.innerHTML = player.paused
+    ? '▶<span class="t-label"> 再開</span>'
+    : '❙❙<span class="t-label"> 一時停止</span>';
   btn.classList.toggle('is-paused', player.paused);
   document.body.classList.toggle('is-paused', player.paused);
 }
@@ -706,6 +774,7 @@ function answerChoice(index, turn, box) {
   syncRedoLabel();
 
   $('#btn-guide-clear').addEventListener('click', redoKeying);
+  openPaddleSheet();
   $('#btn-guide-check').addEventListener('click', () => {
     const sent = keyer.flush();
     $('#qso-guide-keyed-result').innerHTML = sendingDiffHtml(correctText, sent);
@@ -807,6 +876,7 @@ function renderLiveTurn(turn, box) {
     });
   });
   $('#btn-live-clear').addEventListener('click', redoKeying);
+  openPaddleSheet();   // 打つ場面になったので、狭い画面では引き出しを出す
   $('#btn-live-skip').addEventListener('click', () => {
     player.stop();
     advanceTurn(turn, { reveal: true });
@@ -1231,11 +1301,16 @@ function initDrill() {
       : null;
     newProblem();
   });
+  // 数えている途中に押されたら「もう構えている」ということなので、
+  // 残りを待たずに鳴らす（待ったままだと、あとでもう一度鳴ってしまう）
   $('#btn-drill-replay').addEventListener('click', () => {
-    if (drill.problem) player.play(drill.problem.text);
+    if (!drill.problem) return;
+    cancelCountdown();
+    player.play(drill.problem.text);
   });
   $('#btn-drill-slow').addEventListener('click', () => {
     if (!drill.problem) return;
+    cancelCountdown();
     player.play(drill.problem.text, {
       charWpm: Math.max(8, settings.charWpm - 5),
       effWpm: Math.max(6, Math.min(settings.effWpm, settings.charWpm - 5) - 3),
@@ -1424,6 +1499,9 @@ async function newProblem() {
 
 function gradeCurrentProblem() {
   if (!drill.problem) return;
+  // まだ鳴っていないものは採点しない。数えている途中の Enter で
+  // 空欄のまま記録され、答えまで見えてしまう
+  if (drill.countdown) return;
   player.stop();
 
   const input = $('#drill-answer').value;

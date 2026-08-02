@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CW 交信トレーニング</title>
 <meta name="description" content="ブラウザだけで動くモールス符号・CW 交信の練習アプリ">
 <link rel="stylesheet" href="css/style.css">
@@ -44,10 +44,11 @@
       <input type="range" id="qa-volume" min="0" max="100" step="1">
       <output id="qa-volume-out">50</output>
     </label>
-    <div class="transport" role="group" aria-label="再生の操作">
-      <button type="button" id="btn-pause-all" class="btn btn-ghost" title="再生を一時停止／再開（Space）">❙❙ 一時停止</button>
-      <button type="button" id="btn-stop-all" class="btn btn-ghost" title="今の練習を終了する（Esc）">■ 終了</button>
-    </div>
+  </div>
+
+  <div class="transport" role="group" aria-label="再生の操作">
+    <button type="button" id="btn-pause-all" class="btn btn-ghost" title="再生を一時停止／再開（Space）">❙❙<span class="t-label"> 一時停止</span></button>
+    <button type="button" id="btn-stop-all" class="btn btn-ghost" title="今の練習を終了する（Esc）">■<span class="t-label"> 終了</span></button>
   </div>
 </header>
 
@@ -681,6 +682,8 @@
   <div class="pw-head">
     <span class="pw-title">パドル</span>
     <span class="pw-mini" id="pw-mini"></span>
+    <!-- スマホでは下から出す引き出しになるので、閉じる手段を添える -->
+    <button type="button" class="pw-close" id="pw-close" aria-label="パドルを閉じる">✕</button>
   </div>
 
   <div class="pw-body" id="pw-body">
@@ -708,6 +711,12 @@
     <p class="pw-scope" id="pw-scope"></p>
   </div>
 </aside>
+
+<!-- スマホ用。パドルの引き出しを開け閉めする -->
+<button type="button" class="paddle-fab" id="btn-paddle-sheet" aria-controls="paddle-widget"
+        aria-expanded="false">
+  <span class="fab-mark">・－</span><span class="fab-label">パドル</span>
+</button>
 
 </div><!-- /.app-body -->
 
