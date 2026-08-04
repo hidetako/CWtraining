@@ -1096,8 +1096,13 @@ kbd {
 /* ═══════════════ スマートフォン ═══════════════
    横に 2 列を並べる余裕が無いので、本文を 1 列にし、
    パドルは下から出し入れする引き出しに変える。
-   指で押す前提なので、押せるものは 44px 以上を確保する。 */
-@media (max-width: 760px) {
+   指で押す前提なので、押せるものは 44px 以上を確保する。
+
+   幅だけでは足りない。スマートフォンを横向きにすると幅は 800〜900px に
+   なるが、高さが 400px ほどしかなく、2 列に並べても縦に潰れてしまう。
+   そこで「狭い」に加えて「低くて指で操作している」も同じ扱いにする
+   （pointer: coarse。低いだけのパソコンの窓は対象外） */
+@media (max-width: 760px), (max-height: 520px) and (pointer: coarse) {
   body { font-size: 16px; }
 
   /* ノッチや下端のバーに潜り込ませない */
@@ -1197,8 +1202,9 @@ kbd {
   .pw-head { padding: .55rem .9rem; }
   .pw-body { padding: .6rem .9rem .8rem; gap: .45rem; }
   /* 引き出しの高さは決まっているので、打面を伸ばすと下の操作が隠れる。
-     打面は固定にして、打った符号・打ち直す・送信速度まで必ず収める */
-  .pw-pad { flex: 0 0 auto; height: clamp(110px, 26dvh, 200px); }
+     打面には余りだけを与え（基準 0 で伸ばす）、打った符号・打ち直す・
+     送信速度が先に場所を取るようにする。高さが変わっても崩れない */
+  .pw-pad { flex: 1 1 0; min-height: 70px; max-height: 200px; }
   .pw-elements { min-height: 1.1rem; font-size: .85rem; }
   .pw-decoded { min-height: 2.2rem; max-height: 3.4rem; padding: .5rem .6rem; }
   .pw-label { margin-bottom: -.2rem; }
@@ -1239,10 +1245,16 @@ kbd {
   .fab-mark { font-family: var(--mono); letter-spacing: -.08em; }
 }
 
-/* 横向きの狭い画面では、引き出しが画面を覆いすぎないようにする */
-@media (max-width: 760px) and (orientation: landscape) {
-  .paddle-rail { height: min(78dvh, 320px); }
-  .pw-pad { min-height: 90px; }
+/* 横向きは高さが足りない。引き出しを高く取り、中身も詰めて、
+   送信速度まで画面内に収める（スクロールしないと届かない、を防ぐ） */
+@media (max-height: 520px) and (pointer: coarse) {
+  .paddle-rail { height: 92dvh; }
+  .pw-pad { min-height: 60px; max-height: 150px; }
+  .pw-body { gap: .35rem; padding: .5rem .9rem .6rem; }
+  .pw-label { display: none; }        /* 欄の中の案内で分かるので省く */
+  .pw-decoded { min-height: 1.9rem; max-height: 2.6rem; }
+  .pw-elements { min-height: 1rem; }
+  body.is-sheet-open main { padding-bottom: calc(92dvh + 2rem); }
 }
 
 @media (prefers-reduced-motion: reduce) {

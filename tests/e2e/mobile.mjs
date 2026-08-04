@@ -188,6 +188,42 @@ const tiny = await page.evaluate(() => {
 console.log('小さい文字の入力欄:', JSON.stringify(tiny));
 ok('入力欄の文字が 16px 以上', tiny.length === 0, JSON.stringify(tiny));
 
+// ═══════════════ 横向きでも操作が画面内に収まる ═══════════════
+// スマートフォンを横にすると幅は 800〜900px になるが高さは 400px 前後しかない。
+// 幅だけで判断すると 2 列のまま縦に潰れ、送信速度などがはみ出す
+for (const vp of [
+  { name: 'iPhone 横', width: 844, height: 390 },
+  { name: '小さめ横', width: 740, height: 360 },
+  { name: 'Android 横', width: 915, height: 412 },
+]) {
+  const land = await browser.newPage({
+    viewport: { width: vp.width, height: vp.height }, hasTouch: true, isMobile: true,
+  });
+  await land.goto(`${BASE}/index.html`);
+  await land.waitForTimeout(600);
+  await land.click('#btn-paddle-sheet');
+  await land.waitForTimeout(450);
+
+  const r = await land.evaluate(() => {
+    const w = document.querySelector('#paddle-widget');
+    const wr = w.getBoundingClientRect();
+    const b = (sel) => Math.round(document.querySelector(sel).getBoundingClientRect().bottom);
+    return {
+      isSheet: getComputedStyle(w).position === 'fixed',
+      sheetBottom: Math.round(wr.bottom),
+      speed: b('.pw-speed'), clear: b('#pw-clear'),
+      winH: window.innerHeight,
+      scrolls: w.scrollHeight > w.clientHeight + 1,
+    };
+  });
+  console.log(`${vp.name} ${vp.width}x${vp.height}:`, JSON.stringify(r));
+  ok(`${vp.name}: 引き出しになる`, r.isSheet, JSON.stringify(r));
+  ok(`${vp.name}: 送信速度が画面内`, r.speed <= r.winH, `${r.speed} / ${r.winH}`);
+  ok(`${vp.name}: 打ち直すが画面内`, r.clear <= r.winH, `${r.clear} / ${r.winH}`);
+  ok(`${vp.name}: 中でスクロールしない`, r.scrolls === false, String(r.scrolls));
+  await land.close();
+}
+
 // ═══════════════ 広い画面では従来どおり ═══════════════
 const deskPage = await browser.newPage({ viewport: { width: 1400, height: 900 } });
 await deskPage.goto(`${BASE}/index.html`);
@@ -210,6 +246,18 @@ ok('広い画面では語を省かない', desk.labelShown);
 ok('広い画面ではパドルが右に常置', desk.railRight === desk.winW && desk.railLeft > desk.winW / 2,
   JSON.stringify(desk));
 await deskPage.close();
+
+// 低いだけのパソコンの窓（指で操作していない）は、これまでどおり 2 列
+const shortDesk = await browser.newPage({ viewport: { width: 1400, height: 500 } });
+await shortDesk.goto(`${BASE}/index.html`);
+await shortDesk.waitForTimeout(600);
+const shortInfo = await shortDesk.evaluate(() => ({
+  isSheet: getComputedStyle(document.querySelector('#paddle-widget')).position === 'fixed',
+  coarse: matchMedia('(pointer: coarse)').matches,
+}));
+console.log('低いパソコンの窓:', JSON.stringify(shortInfo));
+ok('低いだけのパソコンは 2 列のまま', shortInfo.isSheet === false, JSON.stringify(shortInfo));
+await shortDesk.close();
 
 console.log('\n失敗:', fails.length ? fails.join(' / ') : 'なし');
 console.log('ERRORS:', errors.length ? errors.join('\n') : '(none)');
