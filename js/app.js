@@ -1306,11 +1306,13 @@ function initDrill() {
   $('#btn-drill-replay').addEventListener('click', () => {
     if (!drill.problem) return;
     cancelCountdown();
+    focusAnswer();
     player.play(drill.problem.text);
   });
   $('#btn-drill-slow').addEventListener('click', () => {
     if (!drill.problem) return;
     cancelCountdown();
+    focusAnswer();
     player.play(drill.problem.text, {
       charWpm: Math.max(8, settings.charWpm - 5),
       effWpm: Math.max(6, Math.min(settings.effWpm, settings.charWpm - 5) - 3),
@@ -1335,6 +1337,21 @@ function describeWeakDrill() {
   return weak.length >= 2
     ? `対象: ${weak.map((w) => w.char).join(' ')}（正答率の低い順）`
     : 'まだ十分な記録がありません。ドリルを数回解くと苦手文字が集まります（それまではコッホ法の文字で代替）。';
+}
+
+/**
+ * 書き取り欄に焦点を移し、カーソルを末尾に置く。
+ *
+ * 再生を押したあとは、そのまま打ち込めるのが自然な流れ。ボタンに焦点が
+ * 残っていると、いちいち欄をクリックしてからでないと入力できない。
+ * 途中まで書いてあるときに消えては困るので、選択せず末尾に付ける。
+ */
+function focusAnswer() {
+  const el = $('#drill-answer');
+  if (!el) return;
+  el.focus();
+  const at = el.value.length;
+  el.setSelectionRange(at, at);
 }
 
 /** ドリルの種類ごとに、出題に使う文字の並びを返す。 */
@@ -1486,7 +1503,7 @@ async function newProblem() {
 
   $('#drill-result').hidden = true;
   $('#drill-answer').value = '';
-  $('#drill-answer').focus();
+  focusAnswer();
   $('#btn-drill-replay').disabled = false;
   $('#btn-drill-slow').disabled = false;
 
