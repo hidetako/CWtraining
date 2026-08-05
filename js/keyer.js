@@ -206,6 +206,13 @@ export class ElectronicKeyer extends EventTarget {
     const spaceUnit = this.dit * (2 - w);   // 短点 1 個分の全長は常に 2 dit
     const tone = next === '.' ? markUnit : markUnit + 2 * this.dit;
 
+    // 描画や GC でメインスレッドが詰まると、この setTimeout が遅れて
+    // 走り、鳴らしたい時刻がもう過ぎていることがある。過ぎたまま予約すると
+    // 音量の予約がすべて過去になり、その要素は鳴らずに消える（解読も ＊ に
+    // なる）。取り戻せない遅れは捨てて、今から鳴らし直す
+    const now = this.player.currentTime;
+    if (this.clock < now) this.clock = now + 0.004;
+
     this.player.scheduleKey(this.clock, tone);
 
     if (next === '.') { this.ditMemory = false; } else { this.dahMemory = false; }
