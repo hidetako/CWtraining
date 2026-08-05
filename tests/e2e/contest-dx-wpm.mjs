@@ -51,15 +51,27 @@ ok('自局速度は別のまま', await page.evaluate(() => window.__cw.contest.
 await page.evaluate(() => window.__cw.contest.stopSession());
 await page.waitForTimeout(300);
 
-// ばらつきを付けると散る
+// ばらつきを付けると散る。
+// 1 回の運用で湧く局は 2 局ほどしかなく、±8 の 17 通りから 2 局が
+// たまたま同じ値を引くことは 6% ほどある。それでは「散らない」と
+// 誤って報告してしまうので、何度か湧かせて標本を貯めてから見る
 await setRange('#contest-dx-wpm', 30);
 await setRange('#contest-dx-spread', 8);
-await page.click('#btn-contest-start');
-await page.waitForTimeout(3500);
-const spread = await page.evaluate(() => window.__cw.contest.stations.map((s) => s.wpm));
+// 局が湧く間隔もばらつくので、何局取れるかは前もって決められない。
+// 散りが確かめられた時点で打ち切る（運用は開いたまま次の検査へ渡す）
+const spread = [];
+for (let round = 0; round < 8; round++) {
+  if (spread.length >= 4 && new Set(spread).size > 1) break;
+  await page.evaluate(() => window.__cw.contest.stopSession());
+  await page.waitForTimeout(300);
+  await page.click('#btn-contest-start');
+  await page.waitForTimeout(3500);
+  spread.push(...await page.evaluate(() => window.__cw.contest.stations.map((s) => s.wpm)));
+}
 console.log('ばらつき ±8 の局:', JSON.stringify(spread));
+ok('標本が集まっている', spread.length >= 4, `${spread.length} 局`);
 ok('範囲内に収まる', spread.every((w) => w >= 22 && w <= 38), spread.join(','));
-ok('少なくとも 1 局は 30 以外', spread.length < 2 || new Set(spread).size > 1, spread.join(','));
+ok('全局が同じ速度にならない', new Set(spread).size > 1, spread.join(','));
 
 // 運用中に変えると、そのあと現れる局に効く
 const before = await page.evaluate(() => window.__cw.contest.stations.map((s) => s.wpm));

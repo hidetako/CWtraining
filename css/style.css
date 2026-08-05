@@ -395,14 +395,22 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 }
 .marks .ok { color: var(--ok); }
 /* 打ち漏らし（出題にあって解答に無い）と、余分（解答にだけある）を区別する。
-   取り消し線だけだと J のような字は線と一体に見えて別の字に読めてしまうので、
-   1 文字ずつ薄い下地を敷いて、どこからどこまでが 1 文字かを分かるようにする */
+   1 文字ずつ薄い下地を敷いて、どこからどこまでが 1 文字かを分かるようにする。
+   字の上に線を引いてはいけない。取り消し線は字画と一体に見えるので、
+   7 が ｱ、3 が ヨ、J が チ のように別の字として読めてしまい、
+   採点結果に覚えのない文字が混ざったように見える。
+   囲みは outline で描く。border と違って字送りに影響しない */
 .marks .missing, .marks .extra, .marks .ng {
   border-radius: 3px;
   padding: 0 .14em;
   margin: 0 .04em;
 }
-.marks .missing { color: var(--ng); background: rgba(255, 123, 114, .16); text-decoration: line-through; }
+.marks .missing {
+  color: var(--ng);
+  background: rgba(255, 123, 114, .16);
+  outline: 1px dashed rgba(255, 123, 114, .6);
+  outline-offset: -1px;
+}
 .marks .extra { color: var(--accent); background: rgba(255, 183, 77, .16); text-decoration: underline wavy var(--accent); }
 .marks .ng { color: var(--ng); background: rgba(255, 123, 114, .16); text-decoration: underline wavy var(--ng); }
 
@@ -855,19 +863,25 @@ kbd {
 
 .diff { font-family: var(--mono); font-size: 1.15rem; letter-spacing: .12em; word-break: break-all; }
 .diff .ok { color: var(--ok); }
-/* 1 文字ずつ下地を敷く理由は .marks と同じ */
+/* 下地を敷く理由と、字の上に線を引かない理由は .marks と同じ */
 .diff .missing, .diff .extra { border-radius: 3px; padding: 0 .14em; margin: 0 .04em; }
-.diff .missing { color: var(--ng); background: rgba(255, 123, 114, .16); text-decoration: line-through; }
+.diff .missing {
+  color: var(--ng);
+  background: rgba(255, 123, 114, .16);
+  outline: 1px dashed rgba(255, 123, 114, .6);
+  outline-offset: -1px;
+}
 .diff .extra { color: var(--accent); background: rgba(255, 183, 77, .16); text-decoration: underline wavy var(--accent); }
 /* 語の切れ目。採点対象ではないので色を付けず、幅だけ取る */
 .diff .gap { display: inline-block; width: .7em; }
 
 .diff-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .75rem; color: var(--text-dim); margin-top: .6rem; align-items: center; }
-/* 凡例の色見本は色だけ示したいので、取り消し線や波線は付けない */
+/* 凡例の色見本は色だけ示したいので、囲みや波線は付けない */
 .diff-legend .diff, .diff-legend .marks {
   display: inline; background: none; padding: 0; font-size: 1em; letter-spacing: 0;
 }
-.diff-legend span span { text-decoration: none; }
+/* クラス 2 つ分の重みが要る。.diff .missing より弱いと囲みが消せない */
+.diff-legend .diff span, .diff-legend .marks span { text-decoration: none; outline: none; }
 
 /* ───────── 略語集 ───────── */
 .glossary {
