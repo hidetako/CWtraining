@@ -195,6 +195,40 @@ export function codeUnits(text) {
   return units;
 }
 
+/**
+ * 突き合わせの結果から、「打ち間違い（置き換え）」の数を数える。
+ *
+ * 最長共通部分列は置き換えを表せないので、1 文字の書き間違いが
+ * 「取り漏らし 1 + 余分 1」に分かれて出てくる。余分は分母に足す決まりに
+ * してあるため、そのままでは 1 回の誤りが二重に効いてしまう
+ * （5 文字中 1 文字を落とすと 80%、書き間違えると 67%、と逆転する）。
+ *
+ * 隣り合う「取り漏らし」と「余分」は同じ 1 文字の書き間違いとみなし、
+ * その分は余分から差し引く。離れた位置の余分（水増し）はそのまま残る。
+ *
+ * @param {{type: string}[]} marks
+ * @returns {number} 置き換えとして数えた組の数
+ */
+export function countSubstitutions(marks) {
+  let pairs = 0;
+  let missing = 0;
+  let extra = 0;
+
+  const settle = () => {
+    pairs += Math.min(missing, extra);
+    missing = 0;
+    extra = 0;
+  };
+
+  for (const m of marks) {
+    if (m.type === 'missing') missing += 1;
+    else if (m.type === 'extra') extra += 1;
+    else if (m.type !== 'space') settle();   // 語間は区切りとみなさない
+  }
+  settle();
+  return pairs;
+}
+
 /** 文字列を ".-  -..." 形式の可読なモールス表記に変換する。 */
 export function toMorseString(text) {
   return tokenize(text)

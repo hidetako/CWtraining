@@ -900,8 +900,7 @@ function sendingDiffHtml(target, sent) {
   return `
     <div class="score-line">
       <span class="big">${Math.round(result.accuracy * 100)}%</span>
-      <span class="hint">${result.correct} / ${result.total} 文字一致${
-        result.extra ? `・余分 ${result.extra} 文字` : ''}</span>
+      <span class="hint">${result.correct} / ${result.total} 文字一致${scoreNote(result)}</span>
     </div>
     <div class="diff">${diff}</div>
     <div class="diff-legend">
@@ -1164,6 +1163,19 @@ async function playText(text, selector, override = {}) {
   // 鳴り終わったら光を消す。止められた場合も同じ
   clearWordHighlight(highlight);
   return done;
+}
+
+/**
+ * 点数の内訳。書き間違いと余分は意味が違うので分けて示す。
+ *
+ * 書き間違いは「その文字を落とした」1 回の誤りとして数える（分母は増えない）。
+ * 余分は水増しを防ぐために分母へ足すので、割合が文字数より低く出る。
+ */
+function scoreNote(result) {
+  const parts = [];
+  if (result.wrong) parts.push(`書き間違い ${result.wrong} 文字`);
+  if (result.extra) parts.push(`余分 ${result.extra} 文字（減点）`);
+  return parts.length ? `・${parts.join('・')}` : '';
 }
 
 /**
@@ -1571,8 +1583,7 @@ function gradeCurrentProblem() {
   box.innerHTML = `
     <div class="score-line">
       <span class="big">${pct}%</span>
-      <span class="hint">${result.correct} / ${result.total} 文字${
-        result.extra ? `・余分 ${result.extra} 文字` : ''}</span>
+      <span class="hint">${result.correct} / ${result.total} 文字${scoreNote(result)}</span>
       ${progress}
       ${levelUp ? '<span class="levelup">90% 到達 — レベルを上げましょう</span>' : ''}
     </div>
@@ -2589,8 +2600,7 @@ function gradeKeying() {
   box.innerHTML = `
     <div class="score-line">
       <span class="big">${pct}%</span>
-      <span class="hint">${result.correct} / ${result.total} 文字一致${
-        result.extra ? `・余分 ${result.extra} 文字` : ''}</span>
+      <span class="hint">${result.correct} / ${result.total} 文字一致${scoreNote(result)}</span>
     </div>
     <div class="diff">${diff}</div>
     <div class="diff-legend">

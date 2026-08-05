@@ -1,6 +1,6 @@
 // 聞き取りドリルの問題生成と採点
 
-import { codeUnits } from './morse.js';
+import { codeUnits, countSubstitutions } from './morse.js';
 import {
   ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER, RST_POOL, SYMBOL_ORDER,
   makeCallsign, pick, pickInt,
@@ -130,13 +130,18 @@ export function gradeProblem(problem, input) {
 
   // 出題の長さは符号の個数で数える。プロサインは <AR> で 1 個
   const total = marks.filter((m) => m.type !== 'extra').length;
-  // 余分に打った分も分母に入れる。そうしないと、当てずっぽうに多く打つほど
-  // 得をしてしまう（出題文字さえ含まれていれば 100% になる）
-  const denominator = total + extra;
+  // 書き間違い 1 文字は「取り漏らし＋余分」に分かれて出てくる。
+  // これは 1 回の誤りなので、余分としては数えない
+  const wrong = countSubstitutions(marks);
+  // 残った余分（水増し）は分母に入れる。そうしないと、当てずっぽうに
+  // 多く書くほど得をしてしまう（出題文字さえ含まれていれば 100% になる）
+  const inserted = Math.max(0, extra - wrong);
+  const denominator = total + inserted;
   return {
     total,
     correct,
-    extra,
+    extra: inserted,
+    wrong,
     accuracy: denominator ? correct / denominator : 0,
     marks,
     perChar,

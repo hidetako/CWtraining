@@ -30,7 +30,8 @@ await page.waitForTimeout(600);
 const grade = (answer, input) => page.evaluate(
   ([a, i]) => {
     const r = window.__cw.gradeProblem({ answer: a }, i);
-    return { pct: Math.round(r.accuracy * 100), correct: r.correct, total: r.total, extra: r.extra };
+    return { pct: Math.round(r.accuracy * 100), correct: r.correct, total: r.total,
+      extra: r.extra, wrong: r.wrong };
   }, [answer, input]);
 
 const perfect = await grade('ABCDE', 'ABCDE');
@@ -52,17 +53,33 @@ ok('報告例が 4% ではなくなった', real.pct > 60, `${real.pct}%`);
 const mid = await grade('ABCDEFGHIJ', 'ABCDEGHIJ');
 ok('途中の脱落でも 9/10', mid.correct === 9, JSON.stringify(mid));
 
-// 取り違えは 1 文字ぶんの誤り（打ち漏らし + 余分）
+// 取り違えは「1 回の誤り」。落としたときと同じ重さになること。
+// 最長共通部分列は取り違えを「打ち漏らし + 余分」に分けて出すので、
+// そのまま数えると 1 回の誤りが二重に効き、落とすより重くなってしまう
 const sub = await grade('ABCDE', 'ABXDE');
-console.log('1 文字取り違え:', JSON.stringify(sub));
+const drop = await grade('ABCDE', 'ABDE');
+console.log('1 文字取り違え:', JSON.stringify(sub), '/ 1 文字落とし:', JSON.stringify(drop));
 ok('取り違えは 4 文字一致', sub.correct === 4, JSON.stringify(sub));
-ok('取り違えで余分 1', sub.extra === 1, JSON.stringify(sub));
+ok('取り違えを余分として数えない', sub.extra === 0, JSON.stringify(sub));
+ok('取り違えは書き間違い 1 として数える', sub.wrong === 1, JSON.stringify(sub));
+ok('取り違えは 80%', sub.pct === 80, `${sub.pct}%`);
+ok('落としたときと同じ重さ', sub.pct === drop.pct, `取り違え ${sub.pct}% / 落とし ${drop.pct}%`);
+
+// 報告された実例（JR5OE を 1R5OE と書いた）
+const oneWrong = await grade('JR5OE', '1R5OE');
+console.log('報告例:', JSON.stringify(oneWrong));
+ok('報告例は 4/5 で 80%',
+  oneWrong.correct === 4 && oneWrong.total === 5 && oneWrong.pct === 80,
+  JSON.stringify(oneWrong));
+ok('報告例の内訳が表示と合う', oneWrong.extra === 0 && oneWrong.wrong === 1,
+  JSON.stringify(oneWrong));
 
 // 余分に打っても得をしないこと（当てずっぽう対策）
 const padded = await grade('ABCDE', 'AXBXCXDXE');
 console.log('余分だらけ:', JSON.stringify(padded));
 ok('余分だらけは 100% にならない', padded.pct < 70, `${padded.pct}%`);
 ok('余分が数えられている', padded.extra === 4, JSON.stringify(padded));
+ok('水増しは書き間違いではない', padded.wrong === 0, JSON.stringify(padded));
 
 const junk = await grade('ABCDE', 'ZZZZZ');
 ok('全部違えば 0%', junk.pct === 0, JSON.stringify(junk));
