@@ -41,7 +41,8 @@ const graded = await page.evaluate(() => {
   const { compareSending } = window.__cw;
   const pct = (t, s) => {
     const r = compareSending(t, s);
-    return { pct: Math.round(r.accuracy * 100), correct: r.correct, total: r.total, extra: r.extra };
+    return { pct: Math.round(r.accuracy * 100), correct: r.correct, total: r.total,
+      extra: r.extra, wrong: r.wrong };
   };
   return {
     btForEq: pct('= NAME TARO', '<BT> NAME TARO'),
@@ -59,7 +60,11 @@ ok('<BT> を = と打っても満点', graded.eqForBt.pct === 100, JSON.stringif
 ok('文中の = も通る', graded.inLine.pct === 100, JSON.stringify(graded.inLine));
 ok('<BT> を余分と数えない', graded.btForEq.extra === 0, String(graded.btForEq.extra));
 ok('そのままの一致はこれまでどおり', graded.same.pct === 100, JSON.stringify(graded.same));
-ok('符号が違えば間違いのまま', graded.nn.pct < 100 && graded.nn.extra === 2, JSON.stringify(graded.nn));
+// 599 を 5NN と打つのは 2 文字の打ち間違い。1 回の誤りを二重に数えず、
+// 「打ち漏らし＋余分」ではなく打ち間違い 2 として数える
+ok('符号が違えば間違いのまま',
+  graded.nn.pct < 100 && graded.nn.wrong === 2 && graded.nn.extra === 0,
+  JSON.stringify(graded.nn));
 ok('打ち漏らしも従来どおり', graded.drop.correct === 4 && graded.drop.total === 6,
   JSON.stringify(graded.drop));
 

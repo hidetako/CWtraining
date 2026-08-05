@@ -394,10 +394,17 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
   padding: .8rem;
 }
 .marks .ok { color: var(--ok); }
-/* 打ち漏らし（出題にあって解答に無い）と、余分（解答にだけある）を区別する */
-.marks .missing { color: var(--ng); text-decoration: line-through; }
-.marks .extra { color: var(--accent); text-decoration: underline wavy var(--accent); }
-.marks .ng { color: var(--ng); text-decoration: underline wavy var(--ng); }
+/* 打ち漏らし（出題にあって解答に無い）と、余分（解答にだけある）を区別する。
+   取り消し線だけだと J のような字は線と一体に見えて別の字に読めてしまうので、
+   1 文字ずつ薄い下地を敷いて、どこからどこまでが 1 文字かを分かるようにする */
+.marks .missing, .marks .extra, .marks .ng {
+  border-radius: 3px;
+  padding: 0 .14em;
+  margin: 0 .04em;
+}
+.marks .missing { color: var(--ng); background: rgba(255, 123, 114, .16); text-decoration: line-through; }
+.marks .extra { color: var(--accent); background: rgba(255, 183, 77, .16); text-decoration: underline wavy var(--accent); }
+.marks .ng { color: var(--ng); background: rgba(255, 123, 114, .16); text-decoration: underline wavy var(--ng); }
 
 .score-line { display: flex; align-items: baseline; gap: .8rem; margin: .8rem 0; flex-wrap: wrap; }
 .score-line .big { font-family: var(--mono); font-size: 1.9rem; color: var(--accent); }
@@ -848,8 +855,10 @@ kbd {
 
 .diff { font-family: var(--mono); font-size: 1.15rem; letter-spacing: .12em; word-break: break-all; }
 .diff .ok { color: var(--ok); }
-.diff .missing { color: var(--ng); text-decoration: line-through; }
-.diff .extra { color: var(--accent); text-decoration: underline wavy var(--accent); }
+/* 1 文字ずつ下地を敷く理由は .marks と同じ */
+.diff .missing, .diff .extra { border-radius: 3px; padding: 0 .14em; margin: 0 .04em; }
+.diff .missing { color: var(--ng); background: rgba(255, 123, 114, .16); text-decoration: line-through; }
+.diff .extra { color: var(--accent); background: rgba(255, 183, 77, .16); text-decoration: underline wavy var(--accent); }
 /* 語の切れ目。採点対象ではないので色を付けず、幅だけ取る */
 .diff .gap { display: inline-block; width: .7em; }
 

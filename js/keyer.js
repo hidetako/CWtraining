@@ -7,7 +7,7 @@
 // setTimeout で駆動する。判定は要素の終わり LOOKAHEAD 秒前に行うので、
 // setTimeout のばらつきが符号のリズムに乗らない。
 
-import { codeUnits, decodePattern } from './morse.js';
+import { codeUnits, countSubstitutions, decodePattern } from './morse.js';
 
 const LOOKAHEAD = 0.008; // 秒。次要素を決める前倒し量
 
@@ -460,15 +460,19 @@ export function compareSending(target, sent) {
   }
   fillSpaces(a.length);
 
-  // 余分に打った分も分母に入れる。そうしないと、手本の文字さえ含まれていれば
+  // 打ち間違い 1 文字は「打ち漏らし＋余分」に分かれて出てくる。
+  // これは 1 回の誤りなので、余分としては数えない
+  const wrong = countSubstitutions(marks);
+  // 残った余分は分母に入れる。そうしないと、手本の文字さえ含まれていれば
   // どれだけ余計に打っても 100% になってしまう
-  const extra = ops.filter((m) => m.type === 'extra').length;
+  const inserted = Math.max(0, ops.filter((m) => m.type === 'extra').length - wrong);
   const total = at.length;
-  const denominator = total + extra;
+  const denominator = total + inserted;
   return {
     marks,
     correct,
-    extra,
+    extra: inserted,
+    wrong,
     total,
     accuracy: denominator ? correct / denominator : 0,
   };
