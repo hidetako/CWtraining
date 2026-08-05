@@ -1173,6 +1173,11 @@ async function playText(text, selector, override = {}) {
  */
 function scoreNote(result) {
   const parts = [];
+  // 手本にあって出てこなかった分。書き間違いは「取り漏らし＋余分」に
+  // 分かれて現れるので、その分を差し引いた純粋な抜けだけを数える。
+  // これを出さないと 12 / 14 の残り 2 文字が何なのか画面から読み取れない
+  const missing = Math.max(0, result.total - result.correct - (result.wrong || 0));
+  if (missing) parts.push(`抜け ${missing} 文字`);
   if (result.wrong) parts.push(`書き間違い ${result.wrong} 文字`);
   if (result.extra) parts.push(`余分 ${result.extra} 文字（減点）`);
   return parts.length ? `・${parts.join('・')}` : '';
@@ -3013,6 +3018,7 @@ init();
 window.__cw = {
   player, keyer, contest, responder,
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
+  sendingDiffHtml,                           // 採点結果の見せ方を検証できるように
   hintMask, HINT_LEVELS, HINT_MASK,          // 受信ヘルプの伏せ方を検証できるように
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES, ABBREVIATIONS,  // 定型文・語彙を検証できるように
   SYMBOL_ORDER,                              // 記号・プロサインの並びを検証できるように
