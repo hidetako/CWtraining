@@ -38,7 +38,9 @@ export class CWPlayer {
     if (!this.ctx) {
       const Ctor = window.AudioContext || window.webkitAudioContext;
       if (!Ctor) throw new Error('このブラウザは Web Audio API に対応していません');
-      this.ctx = new Ctor();
+      // 打鍵の側音は「押した瞬間に鳴る」ことが要るので、
+      // 遅延の小さい設定を明示して作る
+      this.ctx = new Ctor({ latencyHint: 'interactive' });
       this._buildGraph();
     }
     if (this.ctx.state === 'suspended') await this.ctx.resume();
@@ -536,9 +538,13 @@ export class CWPlayer {
     const gain = ctx.createGain();
     gain.gain.value = 0;
     osc.connect(gain);
-    gain.connect(this.qsbGain);
+    // 自局の側音は送信バスへ。フェージング（QSB）は相手の電波の話なので、
+    // 自分の打鍵音が波打っては打ちにくくなる
+    gain.connect(this.txBus);
     osc.start();
-    this._keyLine = { osc, gain };
+    // bus はどちらへ流したかの控え。自局音が受信側の演出を受けていないかを
+    // 外から確かめられるようにしておく
+    this._keyLine = { osc, gain, bus: 'tx' };
     return this._keyLine;
   }
 
@@ -582,7 +588,7 @@ export class CWPlayer {
     const gain = ctx.createGain();
     gain.gain.value = 0;
     osc.connect(gain);
-    gain.connect(this.qsbGain);
+    gain.connect(this.txBus);   // 縦振りの側音も同じ理由で送信バスへ
     osc.start();
     gain.gain.linearRampToValueAtTime(1, ctx.currentTime + 0.005);
     this._manual = { osc, gain };
