@@ -1171,6 +1171,73 @@ async function playText(text, selector, override = {}) {
  * 書き間違いは「その文字を落とした」1 回の誤りとして数える（分母は増えない）。
  * 余分は水増しを防ぐために分母へ足すので、割合が文字数より低く出る。
  */
+/**
+ * 採点結果を「1 文字 = 1 列」に組み直す。
+ *
+ * 最長共通部分列は書き間違いを「取り漏らし」と「余分」の 2 件に分けて返すので、
+ * そのまま並べると同じ 1 文字が 2 列に散ってしまい、上下で見比べられない。
+ * 一致に挟まれたひと続きの誤りの中で、取り漏らしと余分を順に組にして
+ * 1 列にまとめる（数え方は countSubstitutions と同じ）。
+ *
+ * @returns {Array<{ state: 'ok'|'wrong'|'missing'|'extra', mine: string, want: string }>}
+ */
+function comparisonColumns(marks) {
+  const cols = [];
+  let run = [];
+
+  const settle = () => {
+    const missing = run.filter((m) => m.type === 'missing');
+    const extra = run.filter((m) => m.type === 'extra');
+    const paired = Math.min(missing.length, extra.length);
+    for (let k = 0; k < paired; k++) {
+      cols.push({ state: 'wrong', mine: extra[k].actual, want: missing[k].expected });
+    }
+    // 組にならなかった残り。打ち漏らし（正解だけ）と余分（自分だけ）
+    for (let k = paired; k < missing.length; k++) {
+      cols.push({ state: 'missing', mine: '', want: missing[k].expected });
+    }
+    for (let k = paired; k < extra.length; k++) {
+      cols.push({ state: 'extra', mine: extra[k].actual, want: '' });
+    }
+    run = [];
+  };
+
+  for (const m of marks) {
+    if (m.type === 'ok') {
+      settle();
+      cols.push({ state: 'ok', mine: m.expected, want: m.expected });
+    } else {
+      run.push(m);
+    }
+  }
+  settle();
+  return cols;
+}
+
+/**
+ * 自分の答えと正解を 2 段に並べた HTML。
+ * 桁を揃えるのに文字送りは使えない（<SK> のようなプロサインは幅が違う）ので、
+ * 1 文字ずつ列に入れて上下で対応させる。
+ */
+function compareRowsHtml(marks) {
+  const cols = comparisonColumns(marks);
+  // 何も無い側は空欄と分かるように置き字を出す。空のままだと列が潰れて、
+  // どこが抜けたのか上下の対応が読めなくなる
+  const cell = (row, text, cls) => `<span class="${row} ${cls}">${
+    text ? escapeHtml(text) : '<span class="blank">—</span>'}</span>`;
+
+  const cells = cols.map((c) => {
+    if (c.state === 'ok') return cell('mine', c.mine, 'ok') + cell('want', c.want, 'ok');
+    // 自分の答えは「余分・誤り」の色、正解は「取り漏らし」の色。凡例と同じ
+    return cell('mine', c.mine, c.mine ? 'bad' : 'none')
+      + cell('want', c.want, c.want ? 'want-bad' : 'none');
+  }).join('');
+
+  return `<div class="compare">
+      <span class="cmp-label">あなた</span><span class="cmp-label">正解</span>${cells}
+    </div>`;
+}
+
 function scoreNote(result) {
   const parts = [];
   // 手本にあって出てこなかった分。書き間違いは「取り漏らし＋余分」に
@@ -1556,11 +1623,15 @@ function gradeCurrentProblem() {
   saveStats(stats);
   renderStats();
 
-  // 一致・打ち漏らし・余分を区別して並べる。打ち漏らしは出題側の文字を出す
-  const marks = result.marks
-    .map((m) => `<span class="${m.type || (m.ok ? 'ok' : 'ng')}">${
-      escapeHtml(m.type === 'extra' ? m.actual : m.expected)}</span>`)
-    .join('');
+  // 全問正解なら 1 段でよい。間違えたときだけ、自分の答えと正解を
+  // 上下に並べて見比べられるようにする
+  const perfect = result.correct === result.total && !result.extra && !result.wrong;
+  const detail = perfect
+    ? `<div class="marks">${result.marks
+        .map((m) => `<span class="${m.type || (m.ok ? 'ok' : 'ng')}">${
+          escapeHtml(m.type === 'extra' ? m.actual : m.expected)}</span>`)
+        .join('')}</div>`
+    : compareRowsHtml(result.marks);
 
   // 連続出題の進行を記録する
   const session = drill.session;
@@ -1592,7 +1663,7 @@ function gradeCurrentProblem() {
       ${progress}
       ${levelUp ? '<span class="levelup">90% 到達 — レベルを上げましょう</span>' : ''}
     </div>
-    <div class="marks">${marks}</div>
+    ${detail}
     <div class="diff-legend">
       <span><span class="marks"><span class="ok">■</span></span> 一致</span>
       <span><span class="marks"><span class="missing">■</span></span> 取り漏らし</span>
@@ -3018,7 +3089,7 @@ init();
 window.__cw = {
   player, keyer, contest, responder,
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
-  sendingDiffHtml,                           // 採点結果の見せ方を検証できるように
+  sendingDiffHtml, comparisonColumns,        // 採点結果の見せ方を検証できるように
   hintMask, HINT_LEVELS, HINT_MASK,          // 受信ヘルプの伏せ方を検証できるように
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES, ABBREVIATIONS,  // 定型文・語彙を検証できるように
   SYMBOL_ORDER,                              // 記号・プロサインの並びを検証できるように
