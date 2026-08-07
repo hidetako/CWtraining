@@ -414,6 +414,43 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 .marks .extra { color: var(--accent); background: rgba(255, 183, 77, .16); text-decoration: underline wavy var(--accent); }
 .marks .ng { color: var(--ng); background: rgba(255, 123, 114, .16); text-decoration: underline wavy var(--ng); }
 
+/* 間違えたときの見比べ欄。自分の答えを上、正解を下に置く。
+   1 列 = 1 文字。プロサイン <SK> のように幅の違う符号があるので、
+   桁を揃えるには文字送りではなく列で持たなければならない */
+.compare {
+  display: grid;
+  grid-template-rows: auto auto;
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: center;
+  gap: .3rem .1rem;
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  background: var(--bg-sunken);
+  border-radius: 8px;
+  padding: .8rem;
+  overflow-x: auto;
+}
+.compare span { text-align: center; }
+.compare .cmp-label {
+  font-size: .72rem;
+  color: var(--text-dim);
+  padding-right: .6rem;
+  white-space: nowrap;
+  text-align: right;
+}
+.compare .mine, .compare .want { padding: 0 .18em; border-radius: 3px; }
+.compare .ok { color: var(--ok); }
+/* 色の役割は凡例のまま。自分の誤りは橙、出せなかった正解は赤 */
+.compare .bad { color: var(--accent); background: rgba(255, 183, 77, .16); }
+.compare .want-bad {
+  color: var(--ng);
+  background: rgba(255, 123, 114, .16);
+  outline: 1px dashed rgba(255, 123, 114, .6);
+  outline-offset: -1px;
+}
+.compare .blank { color: var(--text-dim); }
+
 .score-line { display: flex; align-items: baseline; gap: .8rem; margin: .8rem 0; flex-wrap: wrap; }
 .score-line .big { font-family: var(--mono); font-size: 1.9rem; color: var(--accent); }
 .levelup { color: var(--ok); font-weight: 700; font-size: .85rem; }

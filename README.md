@@ -402,6 +402,7 @@ BASE=https://hidetako.github.io/CWtraining tests/run-e2e.sh --remote
 | `mobile` | スマホ画面（横はみ出し・引き出しの開閉・タップ打鍵・押せる大きさ） |
 | `drill-focus` | 再生を押したら書き取り欄でそのまま打てること（焦点・入力の保持） |
 | `diff-legibility` | 採点結果が読めること（字の上に線を引かない・内訳を言葉でも出す） |
+| `drill-compare` | 間違えたときの見比べ欄（自分の答えと正解の 2 段・桁ぞろえ） |
 | `logsheet` | 聞き取り練習の書き取り欄（案内・目立ち方・開始ボタンとの距離） |
 | `word-highlight` | 聞き直し中に今の語が光ること（順序・消灯・初心者モードと独立） |
 | `redo-keying` | 打ち直しの導線（ボタンの位置と表示・Esc の使い分け・採点結果の片付け） |
