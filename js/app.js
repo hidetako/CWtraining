@@ -1,7 +1,7 @@
 // 画面の組み立てとイベント配線
 
 import { CWPlayer } from './audio.js';
-import { toMorseString, estimateDuration, tokenize } from './morse.js';
+import { MORSE_TABLE, toMorseString, estimateDuration, tokenize } from './morse.js';
 import {
   ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER, SYMBOL_ORDER,
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES,
@@ -1301,12 +1301,15 @@ function clearWordHighlight(box) {
   $$('.word.is-playing', box).forEach((el) => el.classList.remove('is-playing'));
 }
 
-/** 本文に出てきた用語を一覧にした HTML を返す。 */
-function termListHtml(text) {
-  const terms = explainText(text);
+/**
+ * 本文に出てきた用語を一覧にした HTML を返す。
+ * skip には出したくない種類（'number' など、意味を書いても情報が増えないもの）を渡す。
+ */
+function termListHtml(text, { heading = 'この送信に出てきた用語', skip = [] } = {}) {
+  const terms = explainText(text).filter((t) => !skip.includes(t.kind));
   if (!terms.length) return '';
   return `
-    <h4>この送信に出てきた用語</h4>
+    <h4>${escapeHtml(heading)}</h4>
     <div class="explain-live">
       ${terms.map((t) => `
         <div class="explain-card">
@@ -1319,10 +1322,18 @@ function termListHtml(text) {
 
 // ═══════════════════════════════════════════ 聞き取りドリル
 
-const drill = { problem: null, session: null, awaitingNext: false, countdown: null };
+const drill = {
+  problem: null, session: null, awaitingNext: false, countdown: null, gradedAt: 0,
+};
 
 /** 出題までの間（秒）。構える時間を作るためのもの。 */
 const DRILL_COUNTDOWN = 3;
+
+/**
+ * 採点してから Enter で次へ進めるようになるまでの間（ミリ秒）。
+ * 採点結果を読む前に画面が切り替わってしまうのを防ぐための最小限の待ち。
+ */
+const NEXT_GUARD_MS = 700;
 
 /** 苦手文字を重み付きの出題アルファベットに変換する。正答率が低いほど多く混ぜる。 */
 function weakAlphabet() {
@@ -1404,9 +1415,20 @@ function initDrill() {
   });
   $('#drill-answer').addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
+    // 押しっぱなしの自動リピートは取らない。答えを打ち終えて Enter を
+    // 少し長く押すと、採点した直後にもう一度 Enter が届いて次の問題へ
+    // 進んでしまい、採点結果を見ないまま画面が切り替わっていた
+    if (e.repeat) return;
+
     // 採点後にもう一度 Enter で次の問題へ（連続出題が途切れない）
-    if (drill.awaitingNext) newProblem();
-    else gradeCurrentProblem();
+    if (drill.awaitingNext) {
+      // 採点の直後は受け付けない。打ち終えた勢いの 2 度押しでも、
+      // 結果が一瞬で流れてしまうため
+      if (Date.now() - drill.gradedAt < NEXT_GUARD_MS) return;
+      newProblem();
+    } else {
+      gradeCurrentProblem();
+    }
   });
 
   updateDrillControls();
@@ -1648,6 +1670,17 @@ function gradeCurrentProblem() {
   }
 
   drill.awaitingNext = true;
+  drill.gradedAt = Date.now();
+
+  // Q 符号・略語などの意味を、符号と一緒に添える。
+  // 「数字 0537」のような当たり前の言い換えは出さない
+  const terms = termListHtml(drill.problem.answer, {
+    heading: 'この問題に出てきた符号の意味',
+    skip: ['number'],
+  });
+  // 答えが 1 語で、それ自体が解説の見出しになっているとき。
+  // 解説カードに符号が入っているので、別に「モールス:」を出すと同じものが 2 行並ぶ
+  const wholeIsOneTerm = !!terms && !/\s/.test(drill.problem.answer.trim());
 
   const sessionDone = session && session.done >= session.size;
   const progress = session
@@ -1669,9 +1702,13 @@ function gradeCurrentProblem() {
       <span><span class="marks"><span class="missing">■</span></span> 取り漏らし</span>
       <span><span class="marks"><span class="extra">■</span></span> 余分・誤り</span>
     </div>
-    <p class="hint">正解: <code>${escapeHtml(drill.problem.answer)}</code>
-      ${drill.problem.hint ? ` — ${escapeHtml(drill.problem.hint)}` : ''}</p>
-    <p class="hint">モールス: <code>${escapeHtml(toMorseString(drill.problem.answer))}</code></p>
+    <p class="hint">正解: <code>${escapeHtml(drill.problem.answer)}</code>${
+      // 解説を出すときは意味を書かない。解説の側に符号付きで出るので、
+      // 同じ説明が 1 画面に 2 度並んでしまう
+      !terms && drill.problem.hint ? ` — ${escapeHtml(drill.problem.hint)}` : ''}</p>
+    ${wholeIsOneTerm ? ''
+      : `<p class="hint">モールス: <code>${escapeHtml(toMorseString(drill.problem.answer))}</code></p>`}
+    ${terms}
     ${sessionDone ? sessionSummaryHtml(session) : ''}
     <div class="drill-actions" style="margin-top:.9rem">
       ${levelUp ? '<button type="button" class="btn" id="btn-levelup">レベルを 1 上げる</button>' : ''}
@@ -1699,7 +1736,13 @@ function gradeCurrentProblem() {
       settings.kochLevel = Math.min(effectiveDrillLevel() + 1, order.length);
       persist();
       updateDrillControls();
-      newProblem();
+      // ここで次の問題を始めてはいけない。採点結果が消えてしまい、
+      // 「レベルを上げたら採点を見ないまま次へ進んだ」ことになる。
+      // 次へ進むかどうかは、隣の「次の問題」で本人が決める
+      levelBtn.disabled = true;
+      levelBtn.textContent = `レベル ${effectiveDrillLevel()} になりました`;
+      const banner = $('#drill-result .levelup');
+      if (banner) banner.textContent = '次の問題から新しい文字が入ります';
     });
   }
 }
@@ -3090,6 +3133,8 @@ window.__cw = {
   player, keyer, contest, responder,
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   sendingDiffHtml, comparisonColumns,        // 採点結果の見せ方を検証できるように
+  DRILL_TYPES, makeProblem, termListHtml,    // ドリルの種類と解説を検証できるように
+  MORSE_TABLE,                               // 鳴らせない文字が混ざっていないかを検証できるように
   hintMask, HINT_LEVELS, HINT_MASK,          // 受信ヘルプの伏せ方を検証できるように
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES, ABBREVIATIONS,  // 定型文・語彙を検証できるように
   SYMBOL_ORDER,                              // 記号・プロサインの並びを検証できるように

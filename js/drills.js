@@ -2,9 +2,20 @@
 
 import { codeUnits, countSubstitutions } from './morse.js';
 import {
-  ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER, RST_POOL, SYMBOL_ORDER,
+  ABBREVIATIONS, ALL_KEY_PHRASES, ANTENNAS, FREQUENCY_ORDER, KOCH_ORDER,
+  NAMES, POWERS, QTH, RIGS, RST_POOL, SYMBOL_ORDER,
   makeCallsign, pick, pickInt,
 } from './data.js';
+
+/** Q 符号だけを抜き出したもの（QRM・QSB など、3 文字で Q から始まるもの）。 */
+const Q_CODES = ABBREVIATIONS.filter((a) => /^Q[A-Z]{2}$/.test(a.code));
+
+/** 名前と地名は、国内・DX の区別なくひとつの池から選ぶ。 */
+const ALL_NAMES = [...NAMES.JA, ...NAMES.DX];
+const ALL_QTH = [...QTH.JA, ...QTH.DX];
+
+/** 設備の話でよく出てくる語。型番はハイフンと数字が混じるので聞き取りが難しい。 */
+const GEAR = [...RIGS, ...ANTENNAS, ...POWERS];
 
 /** 平文の交信でよく出てくる短い単語。 */
 const COMMON_WORDS = [
@@ -19,8 +30,15 @@ export const DRILL_TYPES = {
   frequency: { label: '頻度順（文字）', help: '英文での出現頻度が高い文字から順に増やす' },
   callsign: { label: 'コールサイン', help: '実在しそうなコールサインを聞き取る' },
   abbrev: { label: '略語・Q 符号', help: '交信で頻出する略語。答え合わせで意味も表示' },
+  qcode: { label: 'Q 符号だけ', help: 'QRM・QSB・QTH など Q 符号にしぼって出題。答え合わせで意味も表示' },
   number: { label: '数字・RST', help: 'RST や番号などの数字列' },
+  rst: { label: 'RST レポート', help: '599 や 5NN など信号レポートだけ。答え合わせで各桁の意味も表示' },
   word: { label: '頻出単語', help: '交信でよく使う短い単語' },
+  name: { label: '名前', help: 'TAKA・BOB など、交信で名乗る名前' },
+  qth: { label: '地名（QTH）', help: 'TOKYO・BERLIN など、交信で伝える地名' },
+  gear: { label: '設備（RIG・ANT・出力）', help: 'IC-7300・3ELE YAGI・50W など。型番の数字とハイフンに慣れる' },
+  phrase: { label: '交信の定型文', help: '実際の交信で送られる一節をまるごと聞き取る' },
+  exchange: { label: '実戦の一節', help: 'コールサイン・RST・名前・地名を組み合わせた、交信そのままの並び' },
   symbol: {
     label: '記号・プロサイン',
     help: '= / ? . , や <AR> <SK> など、ローマ字以外の符号だけを出題します',
@@ -74,9 +92,78 @@ export function makeProblem(type, opts = {}) {
       const meaning = ABBREVIATIONS.find((a) => a.code === word);
       return { text: word, answer: word, hint: meaning?.ja, chars: word.split('') };
     }
+    case 'qcode': {
+      const entry = pick(Q_CODES);
+      return {
+        text: entry.code, answer: entry.code, hint: entry.ja, chars: entry.code.split(''),
+      };
+    }
+    case 'rst': {
+      // 5NN は 599 を短く打つ送り方。そのまま出して、書くほうも 5NN で通す
+      const value = pick(RST_POOL);
+      return { text: value, answer: value, chars: value.split('') };
+    }
+    case 'name': {
+      const name = pick(ALL_NAMES);
+      return { text: name, answer: name, chars: name.split('') };
+    }
+    case 'qth': {
+      const place = pick(ALL_QTH);
+      return { text: place, answer: place, chars: place.split('') };
+    }
+    case 'gear': {
+      const gear = pick(GEAR);
+      return { text: gear, answer: gear, chars: gear.replace(/\s/g, '').split('') };
+    }
+    case 'phrase': {
+      const phrase = fillPlaceholders(pick(ALL_KEY_PHRASES));
+      return { text: phrase, answer: phrase, chars: phrase.replace(/\s/g, '').split('') };
+    }
+    case 'exchange':
+      return makeExchange();
     default:
       return charGroups(KOCH_ORDER, opts);
   }
+}
+
+/**
+ * 定型文の差し込み記号を埋める。
+ *
+ * 聞き取りは「相手が送ってきた符号」を取る練習なので、自局の設定ではなく
+ * その場で作った値を入れる。埋め残すと {QTH} のような波括弧がそのまま
+ * 出題文になり、符号表に無い文字なので鳴らないまま答えにだけ現れてしまう。
+ */
+function fillPlaceholders(text) {
+  return text
+    .replaceAll('{ME}', makeCallsign('JA'))
+    .replaceAll('{DX}', makeCallsign())
+    .replaceAll('{NAME}', pick(ALL_NAMES))
+    .replaceAll('{QTH}', pick(ALL_QTH))
+    .replaceAll('{RIG}', pick(RIGS))
+    .replaceAll('{PWR}', pick(POWERS))
+    .replaceAll('{ANT}', pick(ANTENNAS));
+}
+
+/**
+ * 交信そのままの一節を組み立てる。
+ * ばらばらの単語を聞き取れても、続けて送られると取れないことが多いので、
+ * コールサイン・RST・名前・地名を実際の並びのままつなげて出す。
+ */
+function makeExchange() {
+  const call = makeCallsign();
+  const rst = pick(RST_POOL);
+  const name = pick(ALL_NAMES);
+  const place = pick(ALL_QTH);
+
+  const text = pick([
+    `${call} UR ${rst} ${rst}`,
+    `UR ${rst} ${rst} NAME ${name} ${name}`,
+    `NAME ${name} QTH ${place}`,
+    `${call} DE ${makeCallsign('JA')} ${rst}`,
+    `QTH ${place} ES NAME ${name}`,
+    `TNX ${rst} NAME HR ${name}`,
+  ]);
+  return { text, answer: text, chars: text.replace(/\s/g, '').split('') };
 }
 
 function charGroups(order, opts) {

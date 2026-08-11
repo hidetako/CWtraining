@@ -86,7 +86,8 @@ for (let i=0;i<5;i++){
   const ans = await page.evaluate(()=>window.__cw.drillProblem.answer);
   await page.fill('#drill-answer', ans);
   await page.press('#drill-answer','Enter');       // 採点
-  await page.waitForTimeout(200);
+  // 採点の直後の Enter は取らない作り。人が読む分だけ間を置く
+  await page.waitForTimeout(900);
   if (i<4){
     await page.press('#drill-answer','Enter');       // 次へ
     await waitDrillReady();                          // 次の出題も 3 秒数える

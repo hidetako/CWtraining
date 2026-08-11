@@ -79,7 +79,8 @@ await page.evaluate(() => window.__cw.player.stop());
 const ans = await page.evaluate(() => window.__cw.drillProblem?.answer ?? '');
 await page.fill('#drill-answer', ans);
 await page.press('#drill-answer', 'Enter');      // 採点
-await page.waitForTimeout(400);
+// 採点の直後の Enter は取らない作りなので、人が読む分だけ間を置く
+await page.waitForTimeout(900);
 await page.press('#drill-answer', 'Enter');      // 次の問題
 await page.waitForTimeout(300);
 ok('次の問題でも書き取り欄に焦点', await focused() === 'drill-answer', await focused());
