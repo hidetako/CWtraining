@@ -196,6 +196,16 @@ export const ABBREVIATIONS = [
   { code: 'VIA', ja: '〜経由で' },
   { code: 'B4', ja: '以前に (before)' },
   { code: 'DWN', ja: '下がる (down)' },
+  { code: 'NAME', ja: '名前（NAME HR TAKA のように名乗る）' },
+  { code: 'TX', ja: '送信機・送信する' },
+  { code: 'RX', ja: '受信機・受信する' },
+  { code: 'DR', ja: '親愛なる (dear) — DR OM で呼びかけに使う' },
+  { code: 'FREQ', ja: '周波数' },
+  { code: 'BTU', ja: 'あなたにお返しします (back to you)' },
+  { code: 'BCNU', ja: 'またお会いしましょう (be seeing you)' },
+  { code: 'DX', ja: '遠距離の局・海外局' },
+  { code: 'SN', ja: 'まもなく (soon)' },
+  { code: 'WL', ja: '〜でしょう (will)' },
 ];
 
 /**

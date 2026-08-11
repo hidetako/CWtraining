@@ -176,7 +176,8 @@ await page.evaluate(() => window.__cw.player.stop());
 const answer = await page.evaluate(() => window.__cw.drillProblem?.answer ?? '');
 await page.fill('#drill-answer', answer);
 await page.press('#drill-answer', 'Enter');          // 採点
-await page.waitForTimeout(500);
+// 採点の直後の Enter は取らない作りなので、人が読む分だけ間を置く
+await page.waitForTimeout(900);
 const next = await watch(() => page.press('#drill-answer', 'Enter'));  // 次の問題
 console.log('次の問題:', JSON.stringify(next.seen), '/', next.startedAt, 'ms');
 ok('次の問題でも数える', next.seen[0] === '3', JSON.stringify(next.seen));
