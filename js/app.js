@@ -7,6 +7,11 @@ import {
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES,
 } from './data.js';
 import { annotateHtml, createTracker, explainText, lookupTerm, termCode, termTitle } from './explain.js';
+import {
+  loadLogbook, saveLogbook, newEntry, bandFromFreq, BAND_LABELS,
+  jccSearch, searchLog, history as logHistory, logStats,
+  toAdif, fromAdif, toCsv, fromCsv,
+} from './logbook.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
 import { LocalResponder, gradeField, REACTION_LABELS, FIELD_HINTS } from './qso.js';
 import { PHASES, PATTERN_SHEET, makeReplyOptions, readDxTurn } from './qsoguide.js';
@@ -46,6 +51,7 @@ function init() {
   initDrill();
   initContest();
   initKeyer();
+  initLogbook();
   initTools();
   initGlossary();
   initSettings();
@@ -3146,6 +3152,295 @@ function renderStats() {
     : '<p class="empty">まだ記録がありません。</p>';
 }
 
+// ═══════════════════════════════════════════ ログ帳
+
+const logbook = { entries: loadLogbook(), editId: null, tz: 'jst', openTranscript: null };
+
+/** JST は UTC + 9 時間。夏時間が無いので足し引きだけでよい。 */
+const JST_MS = 9 * 3600 * 1000;
+
+/** 保存している UTC の ISO を、表示設定に合わせて読める形にする。 */
+function fmtLogTs(ts) {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return ts;
+  const shown = logbook.tz === 'jst' ? new Date(d.getTime() + JST_MS) : d;
+  return shown.toISOString().slice(0, 16).replace('T', ' ');
+}
+
+/** datetime-local（JST として扱う）→ UTC ISO。 */
+const jstInputToIso = (value) => new Date(`${value}+09:00`).toISOString();
+
+function setLogFormNow() {
+  $('#log-date').value = new Date(Date.now() + JST_MS).toISOString().slice(0, 19);
+}
+
+function clearLogForm() {
+  // 周波数・モード・RST は残す。連続してログを付けるとき、バンドや
+  // モードは変わらないことが多い（HAMLOG などと同じ振る舞い）
+  ['#log-call', '#log-name', '#log-qth', '#log-jcc', '#log-notes'].forEach((s) => { $(s).value = ''; });
+  $('#log-qsls').checked = false;
+  $('#log-qslr').checked = false;
+  $('#log-history').hidden = true;
+  logbook.editId = null;
+  $('#log-form-title').textContent = '交信を登録する';
+  $('#btn-log-add').textContent = '登録する';
+  $('#btn-log-cancel').hidden = true;
+  setLogFormNow();
+}
+
+/** コールを打ったら、その局との交信歴を出し、空欄を前回の値で埋める。 */
+function showCallHistory() {
+  const call = $('#log-call').value.toUpperCase().trim();
+  const box = $('#log-history');
+  const past = logHistory(logbook.entries, call).filter((e) => e.id !== logbook.editId);
+  if (!call || !past.length) { box.hidden = true; return; }
+
+  const last = past[0];
+  const filled = [];
+  for (const [sel, key] of [['#log-name', 'name'], ['#log-qth', 'qth'], ['#log-jcc', 'jcc']]) {
+    if (!$(sel).value && last[key]) { $(sel).value = last[key]; filled.push($(sel).previousElementSibling?.textContent || key); }
+  }
+  box.hidden = false;
+  box.textContent = `この局とは ${past.length} 回交信しています（前回 ${fmtLogTs(last.ts)} ${last.band || ''} ${last.mode || ''}）`
+    + (filled.length ? ` — ${filled.join('・')}を前回の値で埋めました` : '');
+}
+
+function readLogForm() {
+  const dateValue = $('#log-date').value;
+  return {
+    ts: dateValue ? jstInputToIso(dateValue) : new Date().toISOString(),
+    call: $('#log-call').value,
+    freq: $('#log-freq').value.trim(),
+    band: bandFromFreq($('#log-freq').value),
+    mode: $('#log-mode').value,
+    rstS: $('#log-rsts').value.trim(),
+    rstR: $('#log-rstr').value.trim(),
+    name: $('#log-name').value.trim(),
+    qth: $('#log-qth').value.trim(),
+    jcc: $('#log-jcc').value.trim(),
+    qslS: $('#log-qsls').checked,
+    qslR: $('#log-qslr').checked,
+    notes: $('#log-notes').value.trim(),
+  };
+}
+
+function submitLogForm() {
+  const fields = readLogForm();
+  if (!fields.call.trim()) {
+    const box = $('#log-history');
+    box.hidden = false;
+    box.textContent = 'コールサインを入れてください。';
+    return;
+  }
+  if (logbook.editId) {
+    const entry = logbook.entries.find((e) => e.id === logbook.editId);
+    if (entry) Object.assign(entry, fields, { call: fields.call.toUpperCase().trim() });
+  } else {
+    logbook.entries.push(newEntry(fields));
+  }
+  saveLogbook(logbook.entries);
+  clearLogForm();
+  renderLogList();
+  renderLogStats();
+  $('#log-call').focus();
+}
+
+function startLogEdit(id) {
+  const e = logbook.entries.find((x) => x.id === id);
+  if (!e) return;
+  logbook.editId = id;
+  $('#log-date').value = new Date(new Date(e.ts).getTime() + JST_MS).toISOString().slice(0, 19);
+  $('#log-call').value = e.call;
+  $('#log-freq').value = e.freq;
+  $('#log-band-out').textContent = e.band || '';
+  $('#log-mode').value = e.mode || 'CW';
+  $('#log-rsts').value = e.rstS;
+  $('#log-rstr').value = e.rstR;
+  $('#log-name').value = e.name;
+  $('#log-qth').value = e.qth;
+  $('#log-jcc').value = e.jcc;
+  $('#log-notes').value = e.notes;
+  $('#log-qsls').checked = !!e.qslS;
+  $('#log-qslr').checked = !!e.qslR;
+  $('#log-form-title').textContent = `${e.call} の記録を編集する`;
+  $('#btn-log-add').textContent = '更新する';
+  $('#btn-log-cancel').hidden = false;
+  renderLogList();
+  $('#panel-logbook').scrollIntoView?.();
+  $('#log-call').focus();
+}
+
+function renderJccResults() {
+  const q = $('#jcc-query').value;
+  const box = $('#jcc-results');
+  const hits = jccSearch(q, 40);
+  if (!q.trim()) { box.innerHTML = ''; return; }
+  if (!hits.length) { box.innerHTML = '<p class="hint">見つかりません。漢字かローマ字、または番号で。</p>'; return; }
+  box.innerHTML = hits.map((h) => `
+    <button type="button" class="jcc-hit" data-code="${h.code}" data-name="${escapeHtml(h.name)}">
+      <span class="code">${h.code}</span>
+      <span>${escapeHtml(h.name)}</span>
+      ${h.gone ? '<span class="gone">消滅</span>' : ''}
+      <span class="kind">${h.kind}${h.roman ? ` / ${escapeHtml(h.roman)}` : ''}</span>
+    </button>`).join('');
+  $$('.jcc-hit', box).forEach((btn) => btn.addEventListener('click', () => {
+    $('#log-jcc').value = btn.dataset.code;
+    if (!$('#log-qth').value) $('#log-qth').value = btn.dataset.name;
+  }));
+}
+
+function renderLogList() {
+  const filtered = searchLog(logbook.entries, {
+    text: $('#log-search').value,
+    band: $('#log-filter-band').value,
+    mode: $('#log-filter-mode').value,
+  }).sort((a, b) => b.ts.localeCompare(a.ts));
+
+  const LIMIT = 200;
+  const shown = filtered.slice(0, LIMIT);
+  $('#log-count').textContent = filtered.length > LIMIT
+    ? `${filtered.length} 件（新しい ${LIMIT} 件を表示。検索で絞り込めます）`
+    : `${filtered.length} 件`;
+
+  $('#log-rows').innerHTML = shown.map((e) => `
+    <tr data-id="${e.id}" class="${e.id === logbook.editId ? 'is-editing' : ''}">
+      <td class="mono">${fmtLogTs(e.ts)}</td>
+      <td class="mono">${escapeHtml(e.call)}</td>
+      <td>${escapeHtml(e.band || e.freq || '')}</td>
+      <td>${escapeHtml(e.mode || '')}</td>
+      <td class="mono">${escapeHtml([e.rstS, e.rstR].filter(Boolean).join('/'))}</td>
+      <td>${escapeHtml(e.name || '')}</td>
+      <td>${escapeHtml(e.qth || '')}</td>
+      <td class="mono">${escapeHtml(e.jcc || '')}</td>
+      <td>${e.qslS ? '送' : ''}${e.qslR ? '受' : ''}</td>
+      <td class="row-actions">
+        ${e.transcript?.length ? '<button type="button" class="btn" data-act="transcript">記録</button>' : ''}
+        <button type="button" class="btn" data-act="edit">編集</button>
+        <button type="button" class="btn" data-act="delete">削除</button>
+      </td>
+    </tr>`).join('');
+}
+
+function renderLogTranscript(entry) {
+  const box = $('#log-transcript');
+  if (!entry || logbook.openTranscript === entry.id) {
+    logbook.openTranscript = null;
+    box.hidden = true;
+    box.innerHTML = '';
+    return;
+  }
+  logbook.openTranscript = entry.id;
+  box.hidden = false;
+  box.innerHTML = `<strong>${escapeHtml(entry.call)} との交信記録</strong>\n`
+    + entry.transcript.map((l) => `<span class="${l.dir === 'tx' ? 'tx' : 'rx'}">`
+      + `${escapeHtml(l.at || '')} ${l.dir === 'tx' ? '送' : '受'}: ${escapeHtml(l.text)}</span>`).join('\n');
+}
+
+function renderLogStats() {
+  const s = logStats(logbook.entries);
+  const list = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${k} ${v}`).join(' / ') || '—';
+  $('#log-stats').innerHTML = `
+    <div class="stat"><span class="n">${s.total}</span><span class="l">交信</span></div>
+    <div class="stat"><span class="n">${s.calls}</span><span class="l">ユニーク局</span></div>
+    <div class="stat"><span class="n">${s.jcc}</span><span class="l">JCC ワークド</span></div>
+    <div class="stat"><span class="n">${s.jcg}</span><span class="l">JCG ワークド</span></div>
+    <div class="stat"><span class="n">${s.qslR}</span><span class="l">QSL 受領</span></div>
+    <div class="stat"><span class="l">バンド別</span><span>${list(s.byBand)}</span></div>
+    <div class="stat"><span class="l">モード別</span><span>${list(s.byMode)}</span></div>`;
+}
+
+function downloadText(filename, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/** 交信サポートなど、他の画面からログへ 1 件登録する入口。 */
+function addLogEntry(fields) {
+  const entry = newEntry(fields);
+  logbook.entries.push(entry);
+  saveLogbook(logbook.entries);
+  renderLogList();
+  renderLogStats();
+  return entry;
+}
+
+function initLogbook() {
+  setLogFormNow();
+  $('#btn-log-now').addEventListener('click', setLogFormNow);
+  $('#log-freq').addEventListener('input', () => {
+    $('#log-band-out').textContent = bandFromFreq($('#log-freq').value) || '';
+  });
+  $('#log-call').addEventListener('change', showCallHistory);
+  $('#btn-log-add').addEventListener('click', submitLogForm);
+  $('#btn-log-cancel').addEventListener('click', () => { clearLogForm(); renderLogList(); });
+  $('#jcc-query').addEventListener('input', renderJccResults);
+
+  // 絞り込みの選択肢。バンドは決まった並び、モードは登録フォームと同じ
+  $('#log-filter-band').innerHTML = '<option value="">すべて</option>'
+    + BAND_LABELS.map((b) => `<option>${b}</option>`).join('');
+  $('#log-filter-mode').innerHTML = '<option value="">すべて</option>'
+    + [...$('#log-mode').options].map((o) => `<option>${o.value}</option>`).join('');
+  $('#log-search').addEventListener('input', renderLogList);
+  $('#log-filter-band').addEventListener('change', renderLogList);
+  $('#log-filter-mode').addEventListener('change', renderLogList);
+
+  $('#btn-log-tz').addEventListener('click', () => {
+    logbook.tz = logbook.tz === 'jst' ? 'utc' : 'jst';
+    $('#btn-log-tz').textContent = logbook.tz === 'jst' ? 'JST 表示' : 'UTC 表示';
+    renderLogList();
+  });
+
+  // 一覧の編集・削除・交信記録。行ごとにハンドラを張らず、表で受ける
+  $('#log-rows').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = btn.closest('tr')?.dataset.id;
+    const entry = logbook.entries.find((x) => x.id === id);
+    if (!entry) return;
+    if (btn.dataset.act === 'edit') startLogEdit(id);
+    else if (btn.dataset.act === 'transcript') renderLogTranscript(entry);
+    else if (btn.dataset.act === 'delete') {
+      if (!confirm(`${entry.call} ${fmtLogTs(entry.ts)} の記録を削除しますか？`)) return;
+      logbook.entries = logbook.entries.filter((x) => x.id !== id);
+      if (logbook.editId === id) clearLogForm();
+      saveLogbook(logbook.entries);
+      renderLogList();
+      renderLogStats();
+    }
+  });
+
+  const today = () => new Date().toISOString().slice(0, 10);
+  $('#btn-log-adif').addEventListener('click', () =>
+    downloadText(`cwtraining-log-${today()}.adi`, toAdif(logbook.entries), 'text/plain'));
+  $('#btn-log-csv').addEventListener('click', () =>
+    downloadText(`cwtraining-log-${today()}.csv`, toCsv(logbook.entries), 'text/csv'));
+
+  const importFile = (input, parse, label) => async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const parsed = parse(await file.text());
+      logbook.entries.push(...parsed);
+      saveLogbook(logbook.entries);
+      renderLogList();
+      renderLogStats();
+      $('#log-count').textContent = `${label}から ${parsed.length} 件を取り込みました（全 ${logbook.entries.length} 件）`;
+    } catch (err) {
+      $('#log-count').textContent = `取り込めませんでした: ${err.message}`;
+    }
+  };
+  $('#log-import-adif').addEventListener('change', importFile($('#log-import-adif'), fromAdif, 'ADIF'));
+  $('#log-import-csv').addEventListener('change', importFile($('#log-import-csv'), fromCsv, 'CSV'));
+
+  renderLogList();
+  renderLogStats();
+}
+
 init();
 
 // 動作確認や自動テストから内部状態を触るためのハンドル。
@@ -3155,6 +3450,9 @@ window.__cw = {
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   sendingDiffHtml, comparisonColumns,        // 採点結果の見せ方を検証できるように
   DRILL_TYPES, makeProblem, termListHtml,    // ドリルの種類と解説を検証できるように
+  jccSearch, toAdif, fromAdif, toCsv, fromCsv, bandFromFreq, logStats,  // ログ帳の検証用
+  addLogEntry,
+  get logEntries() { return logbook.entries; },
   MORSE_TABLE,                               // 鳴らせない文字が混ざっていないかを検証できるように
   hintMask, HINT_LEVELS, HINT_MASK,          // 受信ヘルプの伏せ方を検証できるように
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES, ABBREVIATIONS,  // 定型文・語彙を検証できるように
