@@ -11,6 +11,19 @@ import { codeUnits, countSubstitutions, decodePattern } from './morse.js';
 
 const LOOKAHEAD = 0.008; // 秒。次要素を決める前倒し量
 
+/**
+ * レバーが押されたままになったと判断するまでの時間（ミリ秒）。
+ *
+ * 「離す」の合図が届かないと、キーヤーはレバーが握られたままだと思って
+ * 短点（または長点）を延々と出し続ける。触っていないのに鳴り止まない状態で、
+ * 実際に報告された。届かない経路は塞いだが、塞ぎ忘れが 1 つでもあると
+ * 同じことが起きるので、最後の砦としてここで止める。
+ *
+ * 10 秒は、いちばん遅い 5 WPM でも短点 40 個分にあたる。
+ * それだけ押し続けるのは操作ではないので、誤って止めることはない。
+ */
+const STUCK_LIMIT_MS = 10000;
+
 /** 送信速度の下限・上限（WPM）。画面のつまみと保存値の両方をこれで抑える。 */
 export const KEYER_WPM_MIN = 5;
 export const KEYER_WPM_MAX = 28;
@@ -54,6 +67,27 @@ export class ElectronicKeyer extends EventTarget {
     this.text = '';     // 解読済みの文字列
 
     this._straightStart = 0;
+    this._lastInput = 0;   // 最後にレバーが動いた時刻。押されたままの検出に使う
+  }
+
+  /**
+   * 押されている扱いのレバーをすべて離す。
+   *
+   * 「離す」の合図が届かなかったときの後始末。ウィンドウが焦点を失うと
+   * mouseup も keyup も届かないので、そのままでは鳴り続けてしまう。
+   * @returns {boolean} 実際に離すものがあれば true
+   */
+  releaseAll() {
+    if (!this.ditDown && !this.dahDown && !this.ditMemory && !this.dahMemory) return false;
+    this.ditDown = false;
+    this.dahDown = false;
+    this.ditMemory = false;
+    this.dahMemory = false;
+    this.squeezed = false;
+    this.bPending = false;
+    this._straightStart = 0;
+    this._lastInput = Date.now();
+    return true;
   }
 
   get dit() {
@@ -101,6 +135,7 @@ export class ElectronicKeyer extends EventTarget {
 
   /** which は 'dit' か 'dah'。swap 設定はここで解決済みであること。 */
   paddleDown(which) {
+    this._lastInput = Date.now();
     if (this.mode === 'straight') return this._straightDown();
 
     if (which === 'dit') {
@@ -119,6 +154,7 @@ export class ElectronicKeyer extends EventTarget {
   }
 
   paddleUp(which) {
+    this._lastInput = Date.now();
     if (this.mode === 'straight') return this._straightUp();
 
     if (which === 'dit') this.ditDown = false;
@@ -192,6 +228,14 @@ export class ElectronicKeyer extends EventTarget {
   }
 
   _step() {
+    // 誰も触っていないのに鳴り続けていないか。届かなかった「離す」の
+    // 後始末で、ここを抜けないと止まる手立てが Esc しかなくなる
+    if ((this.ditDown || this.dahDown)
+        && Date.now() - this._lastInput > STUCK_LIMIT_MS) {
+      this.releaseAll();
+      this._emit('stuck');
+    }
+
     const next = this._decideNext();
 
     if (!next) {
@@ -310,20 +354,26 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
     return null;
   };
 
+  // 押したボタンと、そのとき決めた側を覚えておく。
+  // 離すときに割り当てを決め直すと、押したのと違う側を離すことがある
+  const buttons = new Map();
+
   const onDown = (e) => {
     const side = sideOf(e.button);
     if (!side) return;
     // 全画面モードでも、操作ボタンやフォームの上では通常のクリックを優先する
     if (opts.global && e.target.closest('button, input, select, textarea, a, label')) return;
     e.preventDefault();
+    buttons.set(e.button, side);
     if (e.button === 0) state.left = true; else if (e.button === 2) state.right = true;
     notify();
     keyer.paddleDown(side);
   };
 
   const onUp = (e) => {
-    const side = sideOf(e.button);
-    if (!side) return;
+    const side = buttons.get(e.button);
+    if (side === undefined) return;   // 押し下げを取っていないものは離さない
+    buttons.delete(e.button);
     if (e.button === 0) state.left = false; else if (e.button === 2) state.right = false;
     notify();
     keyer.paddleUp(side);
@@ -342,7 +392,7 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
   // 押した側だけを覚えておく。押し下げを見送ったのに離すほうだけ通すと、
   // 押していない側を離したことになって、レバーの表示や
   // アイアンビック B の追加要素の判断が狂う
-  const held = new Set();
+  const held = new Map();
 
   const onKeyDown = (e) => {
     if (e.repeat) return;
@@ -350,28 +400,34 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
     const side = keyOf(e.code);
     if (!side) return;
     e.preventDefault();
-    held.add(e.code);
+    held.set(e.code, side);
     if (side === 'dit') state.left = true; else state.right = true;
     notify();
     keyer.paddleDown(side);
   };
 
   const onKeyUp = (e) => {
-    const side = keyOf(e.code);
-    if (!side) return;
-    if (!held.delete(e.code)) return;   // 押し下げを見送ったものは離さない
+    const side = held.get(e.code);
+    if (side === undefined) return;   // 押し下げを見送ったものは離さない
+    held.delete(e.code);
     if (side === 'dit') state.left = false; else state.right = false;
     notify();
     keyer.paddleUp(side);
   };
 
-  // タッチ操作用に、パッドを左右半分に割って短点／長点に対応させる
+  // タッチ操作用に、パッドを左右半分に割って短点／長点に対応させる。
+  // 指ごとに「どちら側を押したか」を覚えておく。離した場所で決め直すと、
+  // 指を滑らせて反対側で離したときに押していない側を離すことになり、
+  // 押したままの側が残って鳴り続けてしまう
+  const touches = new Map();
+
   const onTouchStart = (e) => {
     e.preventDefault();
     const rect = pad.getBoundingClientRect();
     for (const touch of e.changedTouches) {
       const side = (touch.clientX - rect.left) < rect.width / 2 ? 'dit' : 'dah';
       const mapped = keyer.swap ? (side === 'dit' ? 'dah' : 'dit') : side;
+      touches.set(touch.identifier, { side, mapped });
       if (side === 'dit') state.left = true; else state.right = true;
       notify();
       keyer.paddleDown(mapped);
@@ -380,15 +436,38 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
 
   const onTouchEnd = (e) => {
     e.preventDefault();
-    const rect = pad.getBoundingClientRect();
     for (const touch of e.changedTouches) {
-      const side = (touch.clientX - rect.left) < rect.width / 2 ? 'dit' : 'dah';
-      const mapped = keyer.swap ? (side === 'dit' ? 'dah' : 'dit') : side;
-      if (side === 'dit') state.left = false; else state.right = false;
+      const rec = touches.get(touch.identifier);
+      if (!rec) continue;             // 押し下げを取っていない指は離さない
+      touches.delete(touch.identifier);
+      if (rec.side === 'dit') state.left = false; else state.right = false;
       notify();
-      keyer.paddleUp(mapped);
+      keyer.paddleUp(rec.mapped);
     }
   };
+
+  /**
+   * 押されている扱いのものをすべて離す。
+   *
+   * ウィンドウが焦点を失うと（別のアプリへ切り替えた、ブラウザの外で
+   * ボタンを離した、通知に焦点を取られた）、mouseup も keyup も届かない。
+   * キーヤーはレバーが握られたままだと思って鳴らし続けるので、
+   * 焦点を失った時点で全部離す
+   */
+  const releaseEverything = () => {
+    buttons.clear();
+    held.clear();
+    touches.clear();
+    if (state.left || state.right) {
+      state.left = false;
+      state.right = false;
+      notify();
+    }
+    keyer.releaseAll();
+  };
+
+  const onWindowBlur = () => releaseEverything();
+  const onVisibility = () => { if (document.hidden) releaseEverything(); };
 
   // 打面を持たず、キーボードだけ受け付けたいときは opts.mouse === false を渡す
   if (opts.mouse !== false) {
@@ -399,6 +478,9 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
     pad.addEventListener('touchend', onTouchEnd, { passive: false });
     pad.addEventListener('touchcancel', onTouchEnd, { passive: false });
   }
+  // 焦点を失ったときの後始末は、マウスでもキーボードでも要る
+  window.addEventListener('blur', onWindowBlur);
+  document.addEventListener('visibilitychange', onVisibility);
   // 常時表示ウィジェットなど、複数箇所から接続するときに
   // キーボードの二重発火を避けられるよう、opts.keyboard === false で無効化できる
   if (opts.keyboard !== false) {
@@ -415,6 +497,9 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
       pad.removeEventListener('touchend', onTouchEnd);
       pad.removeEventListener('touchcancel', onTouchEnd);
     }
+    window.removeEventListener('blur', onWindowBlur);
+    document.removeEventListener('visibilitychange', onVisibility);
+    releaseEverything();
     if (opts.keyboard !== false) {
       document.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('keyup', onKeyUp);

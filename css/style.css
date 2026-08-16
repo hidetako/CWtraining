@@ -1085,6 +1085,18 @@ kbd {
 
 .pw-scope { margin: auto 0 0; font-size: .68rem; color: var(--text-dim); line-height: 1.5; }
 
+/* レバーが戻らず鳴り続けたのを止めたときの断り書き。
+   黙って止めると、なぜ余分な符号が並んだのか分からないままになる */
+.pw-note {
+  margin: .5rem 0 0;
+  padding: .5rem .6rem;
+  font-size: .72rem;
+  line-height: 1.5;
+  color: var(--accent);
+  background: rgba(255, 183, 77, .12);
+  border-radius: 6px;
+}
+
 /* ───────── 実技モード ───────── */
 .live-keyed {
   font-family: var(--mono);

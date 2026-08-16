@@ -89,6 +89,18 @@ function initPaddleWidget() {
   keyer.addEventListener('update', showDecoded);
   keyer.addEventListener('element', showDecoded);
   keyer.addEventListener('char', showDecoded);
+
+  // レバーが押されたままになって鳴り続けたのを、キーヤー側が止めたとき。
+  // 黙って止めると、なぜ余計な符号が並んだのか分からないままになる
+  const note = $('#pw-note');
+  keyer.addEventListener('stuck', () => {
+    note.textContent = 'レバーが戻らないまま鳴り続けたので止めました。'
+      + '余分に入った符号は「打ち直す」（Esc）で消せます。';
+    note.hidden = false;
+    clearTimeout(note._timer);
+    note._timer = setTimeout(() => { note.hidden = true; }, 12000);
+  });
+  keyer.addEventListener('update', () => { note.hidden = true; });
   $('#pw-clear').addEventListener('click', redoKeying);
   showDecoded();
 
