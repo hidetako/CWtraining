@@ -281,6 +281,21 @@ export class ElectronicKeyer extends EventTarget {
  *                       mouse: false でマウス／タッチを取らずキーボードだけにする,
  *                       keyboard: false でキーボードを取らない, onState }
  */
+/**
+ * その要素が「文字を打ち込む場所」かどうか。
+ *
+ * tagName が INPUT かどうかで判断してはいけない。パドル欄の速度つまみ自体が
+ * <input type="range"> なので、速度を変えただけでキー操作が効かなくなる。
+ * つまみやチェックボックスは文字入力ではないので、打鍵や Esc を譲る必要はない。
+ */
+export function isTextEntry(el) {
+  if (!el) return false;
+  const tag = el.tagName;
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;   // SELECT は頭文字で選べる
+  if (tag !== 'INPUT') return !!el.isContentEditable;
+  return /^(text|search|email|url|tel|password|number)$/.test(el.type || 'text');
+}
+
 export function attachPaddleInput(keyer, pad, opts = {}) {
   const target = opts.global ? document : pad;
   const state = { left: false, right: false };
@@ -324,12 +339,18 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
     return null;
   };
 
+  // 押した側だけを覚えておく。押し下げを見送ったのに離すほうだけ通すと、
+  // 押していない側を離したことになって、レバーの表示や
+  // アイアンビック B の追加要素の判断が狂う
+  const held = new Set();
+
   const onKeyDown = (e) => {
     if (e.repeat) return;
-    if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    if (isTextEntry(e.target)) return;
     const side = keyOf(e.code);
     if (!side) return;
     e.preventDefault();
+    held.add(e.code);
     if (side === 'dit') state.left = true; else state.right = true;
     notify();
     keyer.paddleDown(side);
@@ -338,6 +359,7 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
   const onKeyUp = (e) => {
     const side = keyOf(e.code);
     if (!side) return;
+    if (!held.delete(e.code)) return;   // 押し下げを見送ったものは離さない
     if (side === 'dit') state.left = false; else state.right = false;
     notify();
     keyer.paddleUp(side);
