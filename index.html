@@ -57,6 +57,7 @@
   <button type="button" class="tab" role="tab" data-panel="drill">聞き取りドリル</button>
   <button type="button" class="tab" role="tab" data-panel="contest">コンテスト運用</button>
   <button type="button" class="tab" role="tab" data-panel="keyer">パドル送信</button>
+  <button type="button" class="tab" role="tab" data-panel="support">交信サポート</button>
   <button type="button" class="tab" role="tab" data-panel="logbook">ログ帳</button>
   <button type="button" class="tab" role="tab" data-panel="tools">変換・電鍵</button>
   <button type="button" class="tab" role="tab" data-panel="glossary">略語集</button>
@@ -510,6 +511,91 @@
     </label>
   </div>
 
+</section>
+
+<!-- ═══════════════ 交信サポート ═══════════════ -->
+<section class="panel" id="panel-support" role="tabpanel">
+  <div class="panel-head">
+    <h2>CW 交信サポート</h2>
+    <p class="lede">無線機の受信音からモールスを解読し、相手の情報を拾って返答の候補を出します。
+      取った内容はそのままログ帳へ登録できます。</p>
+  </div>
+
+  <div class="card">
+    <h3>受信（デコーダー）</h3>
+    <p class="hint" style="margin-top:0">無線機の受信音をこの端末のマイクに聞かせるか、
+      オーディオケーブル／インターフェースでライン入力へつなぎます。</p>
+    <div class="field-row">
+      <button type="button" class="btn btn-primary" id="btn-sup-mic">マイクを開く</button>
+      <label class="field" style="min-width:220px"><span>トーン周波数 <output id="sup-pitch-out">700 Hz</output></span>
+        <input type="range" id="sup-pitch" min="300" max="1200" step="10" value="700">
+      </label>
+      <button type="button" class="btn" id="btn-sup-autopitch" disabled>いちばん強い音に合わせる</button>
+      <span class="field"><span>信号</span><span class="sup-meter"><span id="sup-level-bar"></span></span></span>
+      <output id="sup-wpm"></output>
+    </div>
+    <div class="sup-decoded" id="sup-decoded"><span class="empty">マイクを開くと、解読した文字がここに流れます。</span></div>
+    <div class="drill-actions" style="margin-top:.6rem">
+      <button type="button" class="btn" id="btn-sup-clear">受信欄をクリア</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>相手の情報</h3>
+    <p class="hint" style="margin-top:0">解読した内容から自動で埋まります。取り違えたら手で直せます。</p>
+    <div class="field-grid">
+      <label class="field"><span>相手のコール</span><input type="text" id="sup-dxcall"></label>
+      <label class="field"><span>もらった RST</span><input type="text" id="sup-rstr"></label>
+      <label class="field"><span>名前</span><input type="text" id="sup-name"></label>
+      <label class="field"><span>QTH</span><input type="text" id="sup-qth"></label>
+      <label class="field"><span>周波数（MHz）</span><input type="text" id="sup-freq" placeholder="7.010" inputmode="decimal"></label>
+    </div>
+    <div class="drill-actions" style="margin-top:.9rem">
+      <button type="button" class="btn btn-primary" id="btn-sup-log">この交信をログ帳へ登録</button>
+      <button type="button" class="btn" id="btn-sup-reset">次の交信へ（情報と記録をクリア）</button>
+      <span class="hint" id="sup-log-note" style="margin:0"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>返答</h3>
+    <p class="hint" style="margin-top:0">段階に合わせた候補です。選ぶと下の欄に入り、直してから送れます。</p>
+    <div id="sup-suggestions" class="sup-suggestions"></div>
+    <label class="answer-field"><span>送る内容</span>
+      <input type="text" id="sup-tx-text" placeholder="JR3XYZ DE JA1ABC K">
+    </label>
+    <div class="drill-actions" style="margin-top:.7rem">
+      <button type="button" class="btn btn-primary" id="btn-sup-send">送信する（音を出す）</button>
+      <button type="button" class="btn" id="btn-sup-send-stop" hidden>送信をやめる</button>
+      <label class="check" style="margin:0" title="相手が自分を呼んできたとき、最初の候補を自動で送ります">
+        <input type="checkbox" id="sup-auto"> 自動応答（実験的）</label>
+    </div>
+    <p class="hint" id="sup-auto-note" hidden></p>
+    <p class="hint">「送信する」はこの端末から<strong>キーイングされたトーン音</strong>を出します。
+      無線機のマイク端子・データ端子に音声でつなぐか（SSB モード＋VOX など）、下のシリアル接続で
+      電鍵端子を直接叩きます。<strong>電波を出すときは、免許の範囲で必ず監視しながら使ってください。</strong></p>
+  </div>
+
+  <div class="card">
+    <h3>無線機と接続（シリアルキーイング・実験的）</h3>
+    <p class="hint" style="margin-top:0">USB シリアルのキーイング回路（DTR/RTS → フォトカプラ →
+      電鍵端子）ごしに、送信文をそのまま電鍵として叩きます。Chrome 系ブラウザのみ。
+      実機での検証はまだ行えていません。</p>
+    <div class="field-row">
+      <button type="button" class="btn" id="btn-sup-serial">ポートを選んで接続</button>
+      <label class="field"><span>キーの線</span>
+        <select id="sup-serial-line"><option value="dtr">DTR</option><option value="rts">RTS</option></select>
+      </label>
+      <output id="sup-serial-state">未接続</output>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>交信記録</h3>
+    <p class="hint" style="margin-top:0">受けた内容と送った内容が時刻付きで残ります。
+      ログ帳へ登録すると、この記録も一緒に保存されます。</p>
+    <div class="log-transcript" id="sup-transcript" style="margin-top:0">まだ記録がありません。</div>
+  </div>
 </section>
 
 <!-- ═══════════════ ログ帳 ═══════════════ -->
