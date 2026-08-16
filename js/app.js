@@ -1,7 +1,7 @@
 // 画面の組み立てとイベント配線
 
 import { CWPlayer } from './audio.js';
-import { MORSE_TABLE, toMorseString, estimateDuration, tokenize } from './morse.js';
+import { MORSE_TABLE, computeTiming, toMorseString, estimateDuration, tokenize } from './morse.js';
 import {
   ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER, SYMBOL_ORDER,
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES,
@@ -12,6 +12,8 @@ import {
   jccSearch, searchLog, history as logHistory, logStats,
   toAdif, fromAdif, toCsv, fromCsv,
 } from './logbook.js';
+import { CWDecoder } from './decoder.js';
+import { SupportSession, SerialKeyer, keyTimeline } from './support.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
 import { LocalResponder, gradeField, REACTION_LABELS, FIELD_HINTS } from './qso.js';
 import { PHASES, PATTERN_SHEET, makeReplyOptions, readDxTurn } from './qsoguide.js';
@@ -52,6 +54,7 @@ function init() {
   initContest();
   initKeyer();
   initLogbook();
+  initSupport();
   initTools();
   initGlossary();
   initSettings();
@@ -3152,6 +3155,225 @@ function renderStats() {
     : '<p class="empty">まだ記録がありません。</p>';
 }
 
+// ═══════════════════════════════════════════ CW 交信サポート
+
+const support = {
+  decoder: null,        // CWDecoder。マイクを初めて開いたときに作る
+  session: null,        // SupportSession
+  serial: new SerialKeyer(),
+  micOpen: false,
+  word: '',             // 組み立て中の語
+  autoTimer: null,
+  sending: false,
+};
+
+function supportSession() {
+  if (!support.session) {
+    support.session = new SupportSession({
+      myCall: settings.callsign, myName: settings.name, myQth: settings.qth,
+    });
+    support.session.addEventListener('update', renderSupport);
+  }
+  return support.session;
+}
+
+/** 解読した文字を受信欄に流し、語が切れたら解析へ渡す。 */
+function supportChar(char) {
+  const box = $('#sup-decoded');
+  if ($('.empty', box)) box.innerHTML = '';
+  box.textContent += char;
+  box.scrollTop = box.scrollHeight;
+  support.word += char;
+}
+
+function supportWordBreak() {
+  const word = support.word.trim();
+  support.word = '';
+  if (!word) return;
+  const box = $('#sup-decoded');
+  if (!$('.empty', box)) { box.textContent += ' '; box.scrollTop = box.scrollHeight; }
+  supportSession().feedRx(word);
+}
+
+async function openSupportMic() {
+  const btn = $('#btn-sup-mic');
+  if (support.micOpen) {
+    support.decoder.detachMic();
+    support.micOpen = false;
+    btn.textContent = 'マイクを開く';
+    $('#btn-sup-autopitch').disabled = true;
+    return;
+  }
+  await player.resume().catch(() => {});
+  if (!support.decoder) {
+    support.decoder = new CWDecoder(player.ctx);
+    await support.decoder.init();
+    support.decoder.setPitch(Number($('#sup-pitch').value));
+    support.decoder.addEventListener('char', (e) => {
+      supportChar(e.detail.char);
+      $('#sup-wpm').textContent = `${e.detail.wpm} WPM`;
+    });
+    support.decoder.addEventListener('word', supportWordBreak);
+    support.decoder.addEventListener('level', (e) => {
+      const { env, peak, on } = e.detail;
+      const bar = $('#sup-level-bar');
+      bar.style.width = `${Math.min(100, Math.round((env / (peak || 1e-6)) * 100))}%`;
+      bar.classList.toggle('is-on', !!on);
+    });
+  }
+  try {
+    await support.decoder.attachMic();
+    support.micOpen = true;
+    btn.textContent = 'マイクを閉じる';
+    $('#btn-sup-autopitch').disabled = false;
+  } catch (err) {
+    $('#sup-decoded').innerHTML = `<span class="empty">マイクを開けませんでした: ${escapeHtml(err.message)}。ブラウザの許可を確認してください。</span>`;
+  }
+}
+
+/** 返答を送る。音を鳴らし、つながっていればシリアルの電鍵も叩く。 */
+async function sendSupportReply(text) {
+  const t = String(text || '').trim();
+  if (!t || support.sending) return;
+  support.sending = true;
+  $('#btn-sup-send').disabled = true;
+  $('#btn-sup-send-stop').hidden = false;
+  supportSession().noteTx(t);
+
+  const wpm = keyer.wpm;
+  if (support.serial.connected) {
+    support.serial.playTimeline(keyTimeline(tokenize(t), computeTiming(wpm, wpm)));
+  }
+  try {
+    await player.play(t, { charWpm: wpm, effWpm: wpm });
+  } finally {
+    support.sending = false;
+    $('#btn-sup-send').disabled = false;
+    $('#btn-sup-send-stop').hidden = true;
+  }
+}
+
+function renderSupport() {
+  const s = supportSession();
+
+  // 情報欄は自動で埋めるが、書き込み中の欄は上書きしない
+  for (const [sel, key] of [['#sup-dxcall', 'dxCall'], ['#sup-rstr', 'rstR'],
+    ['#sup-name', 'name'], ['#sup-qth', 'qth']]) {
+    const el = $(sel);
+    if (document.activeElement !== el && s.fields[key]) el.value = s.fields[key];
+  }
+
+  $('#sup-suggestions').innerHTML = s.suggestions().map((sug, i) => `
+    <button type="button" class="sug" data-i="${i}">
+      <span class="lbl">${escapeHtml(sug.label)}</span>
+      <span class="txt">${escapeHtml(sug.text)}</span>
+    </button>`).join('');
+  $$('#sup-suggestions .sug').forEach((btn) => btn.addEventListener('click', () => {
+    $('#sup-tx-text').value = s.suggestions()[Number(btn.dataset.i)].text;
+  }));
+
+  const box = $('#sup-transcript');
+  box.innerHTML = s.transcript.length
+    ? s.transcript.map((l) => `<span class="${l.dir === 'tx' ? 'tx' : 'rx'}">`
+        + `${escapeHtml(l.at)} ${l.dir === 'tx' ? '送' : '受'}: ${escapeHtml(l.text)}</span>`).join('\n')
+    : 'まだ記録がありません。';
+  box.scrollTop = box.scrollHeight;
+
+  // 自動応答。相手が自分を呼んできたときだけ、少し待ってから最初の候補を送る。
+  // 電波が出得る操作なので、必ず取り消せる形で予告する
+  const note = $('#sup-auto-note');
+  // 「自分宛ての送信を受けた直後」だけ。called-me はレポート付きで
+  // 呼ばれると同じ受信内で exchange まで進むので、両方を対象にする。
+  // 自分が返すと記録の末尾が tx になるため、二重には発火しない
+  const calledUs = s.phase === 'called-me' || s.phase === 'exchange';
+  if ($('#sup-auto').checked && calledUs && !support.autoTimer && !support.sending
+      && s.transcript.at(-1)?.dir === 'rx') {
+    const reply = s.suggestions()[0]?.text;
+    if (reply) {
+      note.hidden = false;
+      note.textContent = `自動応答: 2 秒後に「${reply}」を送ります — 送りたくなければ自動応答を外してください`;
+      support.autoTimer = setTimeout(() => {
+        support.autoTimer = null;
+        note.hidden = true;
+        if ($('#sup-auto').checked) sendSupportReply(reply);
+      }, 2000);
+    }
+  }
+}
+
+function initSupport() {
+  $('#btn-sup-mic').addEventListener('click', openSupportMic);
+  $('#sup-pitch').addEventListener('input', () => {
+    $('#sup-pitch-out').textContent = `${$('#sup-pitch').value} Hz`;
+    support.decoder?.setPitch(Number($('#sup-pitch').value));
+  });
+  $('#btn-sup-autopitch').addEventListener('click', () => {
+    const hz = support.decoder?.strongestPitch();
+    if (hz) {
+      $('#sup-pitch').value = String(hz);
+      $('#sup-pitch-out').textContent = `${hz} Hz`;
+      support.decoder.setPitch(hz);
+    }
+  });
+  $('#btn-sup-clear').addEventListener('click', () => {
+    support.decoder?.reset();
+    support.word = '';
+    $('#sup-decoded').innerHTML = '<span class="empty">マイクを開くと、解読した文字がここに流れます。</span>';
+  });
+
+  // 情報欄の手直しはセッションに書き戻す（登録時にそのまま使われる）
+  for (const [sel, key] of [['#sup-dxcall', 'dxCall'], ['#sup-rstr', 'rstR'],
+    ['#sup-name', 'name'], ['#sup-qth', 'qth']]) {
+    $(sel).addEventListener('change', () => {
+      supportSession().fields[key] = $(sel).value.toUpperCase().trim();
+    });
+  }
+
+  $('#btn-sup-log').addEventListener('click', () => {
+    const s = supportSession();
+    const note = $('#sup-log-note');
+    if (!s.fields.dxCall) { note.textContent = '相手のコールサインが取れていません。手で入れてください。'; return; }
+    const entry = addLogEntry(s.toLogFields($('#sup-freq').value.trim()));
+    note.textContent = `${entry.call} を登録しました（交信記録 ${entry.transcript?.length ?? 0} 行つき）。ログ帳タブで確認できます。`;
+  });
+  $('#btn-sup-reset').addEventListener('click', () => {
+    supportSession().reset();
+    ['#sup-dxcall', '#sup-rstr', '#sup-name', '#sup-qth'].forEach((sel) => { $(sel).value = ''; });
+    $('#sup-log-note').textContent = '';
+    clearTimeout(support.autoTimer);
+    support.autoTimer = null;
+  });
+
+  $('#btn-sup-send').addEventListener('click', () => sendSupportReply($('#sup-tx-text').value));
+  $('#btn-sup-send-stop').addEventListener('click', () => {
+    player.stop();
+    support.serial.stop();
+  });
+
+  $('#btn-sup-serial').addEventListener('click', async () => {
+    const state = $('#sup-serial-state');
+    if (!SerialKeyer.supported) { state.textContent = 'このブラウザは Web Serial に対応していません'; return; }
+    try {
+      if (support.serial.connected) {
+        await support.serial.close();
+        state.textContent = '未接続';
+        $('#btn-sup-serial').textContent = 'ポートを選んで接続';
+      } else {
+        await support.serial.connect();
+        state.textContent = `接続中（${support.serial.line.toUpperCase()} でキーイング）`;
+        $('#btn-sup-serial').textContent = '切断する';
+      }
+    } catch (err) {
+      state.textContent = `接続できませんでした: ${err.message}`;
+    }
+  });
+  $('#sup-serial-line').addEventListener('change', () => {
+    support.serial.line = $('#sup-serial-line').value;
+  });
+
+  renderSupport();
+}
+
 // ═══════════════════════════════════════════ ログ帳
 
 const logbook = { entries: loadLogbook(), editId: null, tz: 'jst', openTranscript: null };
@@ -3453,6 +3675,10 @@ window.__cw = {
   jccSearch, toAdif, fromAdif, toCsv, fromCsv, bandFromFreq, logStats,  // ログ帳の検証用
   addLogEntry,
   get logEntries() { return logbook.entries; },
+  CWDecoder, SupportSession, SerialKeyer, keyTimeline,  // 交信サポートの検証用
+  supportChar, supportWordBreak,             // デコーダー → 画面の配線を検証できるように
+  get supportSession() { return supportSession(); },
+  get supportState() { return support; },
   MORSE_TABLE,                               // 鳴らせない文字が混ざっていないかを検証できるように
   hintMask, HINT_LEVELS, HINT_MASK,          // 受信ヘルプの伏せ方を検証できるように
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES, ABBREVIATIONS,  // 定型文・語彙を検証できるように

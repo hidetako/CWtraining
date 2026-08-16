@@ -920,6 +920,37 @@ kbd {
 /* クラス 2 つ分の重みが要る。.diff .missing より弱いと囲みが消せない */
 .diff-legend .diff span, .diff-legend .marks span { text-decoration: none; outline: none; }
 
+/* ───────── 交信サポート ───────── */
+.sup-meter {
+  display: inline-block; width: 90px; height: 10px; border-radius: 5px;
+  background: var(--bg-sunken); border: 1px solid var(--line); overflow: hidden;
+  vertical-align: middle;
+}
+.sup-meter span {
+  display: block; height: 100%; width: 0%;
+  background: var(--ok); transition: width .08s linear;
+}
+.sup-meter span.is-on { background: var(--accent); }
+
+.sup-decoded {
+  margin-top: .8rem; min-height: 5.5rem; max-height: 12rem; overflow-y: auto;
+  background: var(--bg-sunken); border-radius: 8px; padding: .8rem;
+  font-family: var(--mono); font-size: 1.05rem; letter-spacing: .1em;
+  word-break: break-all; white-space: pre-wrap;
+}
+.sup-decoded .empty { color: var(--text-dim); letter-spacing: 0; font-size: .85rem; }
+
+.sup-suggestions { display: flex; flex-direction: column; gap: .35rem; }
+.sup-suggestions .sug {
+  display: flex; gap: .8rem; align-items: baseline; text-align: left;
+  background: var(--bg-sunken); border: 1px solid var(--line-soft); border-radius: 7px;
+  padding: .45rem .7rem; cursor: pointer; color: var(--text); font-family: inherit;
+  font-size: .85rem;
+}
+.sup-suggestions .sug:hover { border-color: var(--accent-dim); }
+.sup-suggestions .sug .lbl { color: var(--text-dim); font-size: .75rem; white-space: nowrap; }
+.sup-suggestions .sug .txt { font-family: var(--mono); }
+
 /* ───────── ログ帳 ───────── */
 .log-date-row { display: flex; gap: .4rem; align-items: center; }
 .log-date-row input { flex: 1; }
