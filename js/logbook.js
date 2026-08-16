@@ -6,6 +6,7 @@
 // JCC/JCG 検索、ADIF / CSV の入出力、集計。
 
 import { JCC_TSV } from './jccdata.js';
+import { JCC_GEO_TSV } from './jccgeo.js';
 
 const STORE_KEY = 'cwtraining.logbook.v1';
 
@@ -39,6 +40,54 @@ export function jccSearch(query, limit = 30) {
   return table
     .filter((e) => e.name.includes(q) || (e.roman && e.roman.toLowerCase().includes(lower)))
     .slice(0, limit);
+}
+
+// ───────── 現在地から JCC を推定する ─────────
+
+let geoTable = null;
+
+function geoPoints() {
+  if (geoTable) return geoTable;
+  const byCode = new Map(jccEntries().map((e) => [e.code, e]));
+  geoTable = JCC_GEO_TSV.split('\n').map((line) => {
+    const [code, lat, lon] = line.split('\t');
+    return { code, lat: Number(lat), lon: Number(lon), entry: byCode.get(code) };
+  }).filter((p) => p.entry);
+  return geoTable;
+}
+
+/** 2 点間の距離（km）。ハバースイン公式。 */
+function distanceKm(lat1, lon1, lat2, lon2) {
+  const rad = Math.PI / 180;
+  const a = Math.sin(((lat2 - lat1) * rad) / 2) ** 2
+    + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(((lon2 - lon1) * rad) / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * 緯度経度に近い市・郡（と東京特別区）を距離順に返す。
+ *
+ * 収録している座標は各市郡の代表点なので、境界近くでは隣が先に出ることが
+ * ある。「これで決める」のではなく「近い候補から選ぶ」ための並びと考えること。
+ * 政令指定都市の市が近いときは、その市の区番号から選べるように区も添える。
+ * @returns {{ code, name, kind, km, wards?: {code,name}[] }[]}
+ */
+export function nearestJcc(lat, lon, limit = 6) {
+  const sorted = geoPoints()
+    .map((p) => ({ ...p, km: distanceKm(lat, lon, p.lat, p.lon) }))
+    .sort((a, b) => a.km - b.km)
+    .slice(0, limit);
+  const all = jccEntries();
+  return sorted.map((p) => {
+    const wards = p.code.length === 4
+      ? all.filter((e) => e.code.length === 6 && e.code.startsWith(p.code) && !e.gone)
+      : [];
+    return {
+      code: p.code, name: p.entry.name, kind: p.entry.kind,
+      km: Math.round(p.km * 10) / 10,
+      wards: wards.length ? wards.map((w) => ({ code: w.code, name: w.name })) : undefined,
+    };
+  });
 }
 
 // ───────── 保存・読み出し ─────────

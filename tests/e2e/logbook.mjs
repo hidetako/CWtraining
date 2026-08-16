@@ -208,6 +208,47 @@ ok('削除できる', await page.locator('#log-rows tr').count() === 3);
 ok('削除も保存される', await page.evaluate(() =>
   JSON.parse(localStorage.getItem('cwtraining.logbook.v1')).entries.length === 3));
 
+// ── 現在地から JCC を探す ─────────────────────────
+// 位置情報を大阪駅に固定して、近い順の候補と区の選択を確かめる
+const geoCtx = await browser.newContext({
+  viewport: { width: 1500, height: 1100 },
+  geolocation: { latitude: 34.702, longitude: 135.496 },
+  permissions: ['geolocation'],
+});
+const gp = await geoCtx.newPage();
+gp.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+await gp.goto(`${BASE}/index.html`);
+await gp.waitForTimeout(600);
+await gp.click('.tab[data-panel="logbook"]');
+
+const near = await gp.evaluate(() => window.__cw.nearestJcc(34.702, 135.496, 4));
+console.log('大阪駅の近傍:', JSON.stringify(near.map((h) => `${h.code} ${h.name} ${h.km}km`)));
+ok('現在地の最寄りが大阪市（2501）', near[0]?.code === '2501', JSON.stringify(near[0]));
+ok('距離が付く', typeof near[0]?.km === 'number' && near[0].km < 5, `${near[0]?.km}km`);
+ok('政令市には区の候補が付く', (near[0]?.wards?.length ?? 0) >= 20, `${near[0]?.wards?.length} 区`);
+
+const nearSap = await gp.evaluate(() => window.__cw.nearestJcc(43.062, 141.354, 1));
+ok('札幌なら 0101', nearSap[0]?.code === '0101', JSON.stringify(nearSap[0]));
+const shinjuku = await gp.evaluate(() => window.__cw.nearestJcc(35.690, 139.700, 1));
+ok('新宿なら東京特別区の区番号', shinjuku[0]?.code === '100104', JSON.stringify(shinjuku[0]));
+const ashoro = await gp.evaluate(() => window.__cw.nearestJcc(43.25, 143.55, 1));
+ok('郡部なら JCG（足寄郡 01002）', ashoro[0]?.code === '01002', JSON.stringify(ashoro[0]));
+
+await gp.click('#btn-jcc-here');
+await gp.waitForFunction(() => document.querySelectorAll('#jcc-results .jcc-hit').length > 0,
+  null, { timeout: 8000 });
+const noteText = await gp.textContent('#jcc-here-note');
+ok('候補の但し書きが出る', noteText.includes('近い順'), noteText.slice(0, 40));
+const firstHit = await gp.locator('#jcc-results .jcc-hit').first().textContent();
+ok('画面の先頭候補も大阪市', firstHit.includes('2501') && firstHit.includes('大阪'), firstHit.trim().slice(0, 40));
+
+// 区の行を選ぶと区番号が入る
+await gp.locator('#jcc-results .jcc-ward', { hasText: '北区' }).first().click();
+ok('区を選ぶと区番号が入る', await gp.inputValue('#log-jcc') === '250101',
+  await gp.inputValue('#log-jcc'));
+await gp.screenshot({ path: `${DIR}/lb3-geolocation.png`, fullPage: true });
+await geoCtx.close();
+
 console.log('\n失敗:', fails.length ? fails.join(' / ') : 'なし');
 console.log('ERRORS:', errors.length ? errors.join('\n') : '(none)');
 await browser.close();

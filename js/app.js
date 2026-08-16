@@ -9,7 +9,7 @@ import {
 import { annotateHtml, createTracker, explainText, lookupTerm, termCode, termTitle } from './explain.js';
 import {
   loadLogbook, saveLogbook, newEntry, bandFromFreq, BAND_LABELS,
-  jccSearch, searchLog, history as logHistory, logStats,
+  jccSearch, nearestJcc, searchLog, history as logHistory, logStats,
   toAdif, fromAdif, toCsv, fromCsv,
 } from './logbook.js';
 import { CWDecoder } from './decoder.js';
@@ -3492,23 +3492,58 @@ function startLogEdit(id) {
   $('#log-call').focus();
 }
 
+/** JCC 検索結果の共通描画。選ぶとフォームの JCC 欄（と空なら QTH）に入る。 */
+function renderJccHits(hits, box) {
+  box.innerHTML = hits.map((h) => `
+    <button type="button" class="jcc-hit" data-code="${h.code}" data-name="${escapeHtml(h.name)}">
+      <span class="code">${h.code}</span>
+      <span>${escapeHtml(h.name)}</span>
+      ${h.gone ? '<span class="gone">消滅</span>' : ''}
+      <span class="kind">${h.km != null ? `約 ${h.km} km / ` : ''}${h.kind}${h.roman ? ` / ${escapeHtml(h.roman)}` : ''}</span>
+    </button>
+    ${(h.wards || []).map((w) => `
+      <button type="button" class="jcc-hit jcc-ward" data-code="${w.code}" data-name="${escapeHtml(w.name)}">
+        <span class="code">${w.code}</span>
+        <span>${escapeHtml(w.name)}</span>
+        <span class="kind">区</span>
+      </button>`).join('')}`).join('');
+  $$('.jcc-hit', box).forEach((btn) => btn.addEventListener('click', () => {
+    $('#log-jcc').value = btn.dataset.code;
+    if (!$('#log-qth').value) $('#log-qth').value = btn.dataset.name;
+  }));
+}
+
+/** 現在地（ブラウザの位置情報）に近い市郡を出す。 */
+function findJccHere() {
+  const note = $('#jcc-here-note');
+  note.hidden = false;
+  if (!navigator.geolocation) {
+    note.textContent = 'このブラウザでは位置情報が使えません。';
+    return;
+  }
+  note.textContent = '位置を調べています…（ブラウザの許可が要ります）';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      const hits = nearestJcc(latitude, longitude);
+      note.textContent = '現在地に近い順です。収録している座標は各市郡の代表点なので、'
+        + '境界の近くでは隣が先に出ることがあります。正しいものを選んでください。';
+      renderJccHits(hits, $('#jcc-results'));
+    },
+    (err) => {
+      note.textContent = `位置を取れませんでした: ${err.message}。番号か名前で検索してください。`;
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
+  );
+}
+
 function renderJccResults() {
   const q = $('#jcc-query').value;
   const box = $('#jcc-results');
   const hits = jccSearch(q, 40);
   if (!q.trim()) { box.innerHTML = ''; return; }
   if (!hits.length) { box.innerHTML = '<p class="hint">見つかりません。漢字かローマ字、または番号で。</p>'; return; }
-  box.innerHTML = hits.map((h) => `
-    <button type="button" class="jcc-hit" data-code="${h.code}" data-name="${escapeHtml(h.name)}">
-      <span class="code">${h.code}</span>
-      <span>${escapeHtml(h.name)}</span>
-      ${h.gone ? '<span class="gone">消滅</span>' : ''}
-      <span class="kind">${h.kind}${h.roman ? ` / ${escapeHtml(h.roman)}` : ''}</span>
-    </button>`).join('');
-  $$('.jcc-hit', box).forEach((btn) => btn.addEventListener('click', () => {
-    $('#log-jcc').value = btn.dataset.code;
-    if (!$('#log-qth').value) $('#log-qth').value = btn.dataset.name;
-  }));
+  renderJccHits(hits, box);
 }
 
 function renderLogList() {
@@ -3600,6 +3635,7 @@ function initLogbook() {
   $('#btn-log-add').addEventListener('click', submitLogForm);
   $('#btn-log-cancel').addEventListener('click', () => { clearLogForm(); renderLogList(); });
   $('#jcc-query').addEventListener('input', renderJccResults);
+  $('#btn-jcc-here').addEventListener('click', findJccHere);
 
   // 絞り込みの選択肢。バンドは決まった並び、モードは登録フォームと同じ
   $('#log-filter-band').innerHTML = '<option value="">すべて</option>'
@@ -3672,7 +3708,7 @@ window.__cw = {
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   sendingDiffHtml, comparisonColumns,        // 採点結果の見せ方を検証できるように
   DRILL_TYPES, makeProblem, termListHtml,    // ドリルの種類と解説を検証できるように
-  jccSearch, toAdif, fromAdif, toCsv, fromCsv, bandFromFreq, logStats,  // ログ帳の検証用
+  jccSearch, nearestJcc, toAdif, fromAdif, toCsv, fromCsv, bandFromFreq, logStats,  // ログ帳の検証用
   addLogEntry,
   get logEntries() { return logbook.entries; },
   CWDecoder, SupportSession, SerialKeyer, keyTimeline,  // 交信サポートの検証用

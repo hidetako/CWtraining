@@ -647,7 +647,11 @@
     <h3>JCC・JCG 検索</h3>
     <p class="hint" style="margin-top:0">番号（前方一致）か、市郡区名（漢字・ローマ字）で引けます。
       JARL の市郡区番号リストを収録しています。選ぶと登録フォームに入ります。</p>
-    <input type="search" id="jcc-query" placeholder="0101 / 札幌 / Sapporo">
+    <div class="field-row">
+      <input type="search" id="jcc-query" placeholder="0101 / 札幌 / Sapporo" style="flex:1;min-width:180px">
+      <button type="button" class="btn" id="btn-jcc-here">現在地から探す</button>
+    </div>
+    <p class="hint" id="jcc-here-note" hidden></p>
     <div id="jcc-results" class="jcc-results"></div>
   </div>
 
