@@ -951,6 +951,17 @@ kbd {
 .sup-suggestions .sug .lbl { color: var(--text-dim); font-size: .75rem; white-space: nowrap; }
 .sup-suggestions .sug .txt { font-family: var(--mono); }
 
+/* 返答カードの中の「パドルで打つ」枠 */
+.card-inset {
+  margin-top: .9rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: .9rem 1rem;
+}
+.sup-manual-target { margin: .4rem 0 0; font-size: .95rem; }
+.sup-manual-target code { font-size: 1rem; }
+
 /* ───────── ログ帳 ───────── */
 .log-date-row { display: flex; gap: .4rem; align-items: center; }
 .log-date-row input { flex: 1; }

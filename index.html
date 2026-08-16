@@ -565,10 +565,25 @@
       <input type="text" id="sup-tx-text" placeholder="JR3XYZ DE JA1ABC K">
     </label>
     <div class="drill-actions" style="margin-top:.7rem">
-      <button type="button" class="btn btn-primary" id="btn-sup-send">送信する（音を出す）</button>
+      <button type="button" class="btn btn-primary" id="btn-sup-manual">自分のパドルで打つ</button>
+      <button type="button" class="btn" id="btn-sup-send">自動送信（音を出す）</button>
       <button type="button" class="btn" id="btn-sup-send-stop" hidden>送信をやめる</button>
       <label class="check" style="margin:0" title="相手が自分を呼んできたとき、最初の候補を自動で送ります">
         <input type="checkbox" id="sup-auto"> 自動応答（実験的）</label>
+    </div>
+
+    <div class="sup-manual card-inset" id="sup-manual" hidden>
+      <h4 style="margin-top:0">パドルで打つ</h4>
+      <p class="hint" style="margin-top:0">手本を見ながら、右のパドル欄（またはキーボードの
+        <code>Z</code> / <code>X</code>）で打ってください。打ち終わったら照合します。
+        打ち直しは <code>Esc</code> です。</p>
+      <p class="sup-manual-target">手本: <code id="sup-manual-target"></code></p>
+      <p class="hint">モールス: <code id="sup-manual-morse"></code></p>
+      <div id="sup-manual-result"></div>
+      <div class="drill-actions" style="margin-top:.7rem">
+        <button type="button" class="btn btn-primary" id="btn-sup-manual-done">照合して記録する</button>
+        <button type="button" class="btn" id="btn-sup-manual-close">閉じる</button>
+      </div>
     </div>
     <p class="hint" id="sup-auto-note" hidden></p>
     <p class="hint">「送信する」はこの端末から<strong>キーイングされたトーン音</strong>を出します。
