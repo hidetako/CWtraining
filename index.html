@@ -57,6 +57,7 @@
   <button type="button" class="tab" role="tab" data-panel="drill">聞き取りドリル</button>
   <button type="button" class="tab" role="tab" data-panel="contest">コンテスト運用</button>
   <button type="button" class="tab" role="tab" data-panel="keyer">パドル送信</button>
+  <button type="button" class="tab" role="tab" data-panel="logbook">ログ帳</button>
   <button type="button" class="tab" role="tab" data-panel="tools">変換・電鍵</button>
   <button type="button" class="tab" role="tab" data-panel="glossary">略語集</button>
   <button type="button" class="tab" role="tab" data-panel="settings">設定・記録</button>
@@ -509,6 +510,101 @@
     </label>
   </div>
 
+</section>
+
+<!-- ═══════════════ ログ帳 ═══════════════ -->
+<section class="panel" id="panel-logbook" role="tabpanel">
+  <div class="panel-head">
+    <h2>ログ帳</h2>
+    <p class="lede">実際の交信を記録する台帳です。練習の成績とは別に、この端末に保存されます。</p>
+  </div>
+
+  <div class="card">
+    <h3 id="log-form-title">交信を登録する</h3>
+    <div class="field-grid">
+      <label class="field"><span>日時（JST）</span>
+        <span class="log-date-row">
+          <input type="datetime-local" id="log-date" step="1">
+          <button type="button" class="btn" id="btn-log-now">今</button>
+        </span>
+      </label>
+      <label class="field"><span>コールサイン</span>
+        <input type="text" id="log-call" placeholder="JA1ABC" autocapitalize="characters">
+      </label>
+      <label class="field"><span>周波数（MHz）</span>
+        <input type="text" id="log-freq" placeholder="7.010" inputmode="decimal">
+        <output id="log-band-out"></output>
+      </label>
+      <label class="field"><span>モード</span>
+        <select id="log-mode">
+          <option>CW</option><option>SSB</option><option>FM</option><option>AM</option>
+          <option>RTTY</option><option>FT8</option><option>FT4</option><option>その他</option>
+        </select>
+      </label>
+      <label class="field"><span>RST 送</span><input type="text" id="log-rsts" placeholder="599"></label>
+      <label class="field"><span>RST 受</span><input type="text" id="log-rstr" placeholder="599"></label>
+      <label class="field"><span>名前</span><input type="text" id="log-name"></label>
+      <label class="field"><span>QTH</span><input type="text" id="log-qth"></label>
+      <label class="field"><span>JCC / JCG</span><input type="text" id="log-jcc" inputmode="numeric"></label>
+      <label class="field"><span>備考</span><input type="text" id="log-notes"></label>
+    </div>
+    <p class="hint" id="log-history" hidden></p>
+    <div class="drill-actions" style="margin-top:.9rem">
+      <button type="button" class="btn btn-primary" id="btn-log-add">登録する</button>
+      <button type="button" class="btn" id="btn-log-cancel" hidden>編集をやめる</button>
+      <label class="check" style="margin:0"><input type="checkbox" id="log-qsls"> QSL 送付済み</label>
+      <label class="check" style="margin:0"><input type="checkbox" id="log-qslr"> QSL 受領済み</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>JCC・JCG 検索</h3>
+    <p class="hint" style="margin-top:0">番号（前方一致）か、市郡区名（漢字・ローマ字）で引けます。
+      JARL の市郡区番号リストを収録しています。選ぶと登録フォームに入ります。</p>
+    <input type="search" id="jcc-query" placeholder="0101 / 札幌 / Sapporo">
+    <div id="jcc-results" class="jcc-results"></div>
+  </div>
+
+  <div class="card">
+    <h3>交信一覧</h3>
+    <div class="field-row">
+      <label class="field" style="flex:1;min-width:160px"><span>検索</span>
+        <input type="search" id="log-search" placeholder="コール・名前・QTH・JCC・備考">
+      </label>
+      <label class="field"><span>バンド</span><select id="log-filter-band"><option value="">すべて</option></select></label>
+      <label class="field"><span>モード</span><select id="log-filter-mode"><option value="">すべて</option></select></label>
+      <button type="button" class="btn" id="btn-log-tz" title="表示の時刻を切り替える">JST 表示</button>
+    </div>
+    <p class="hint" id="log-count"></p>
+    <div class="table-wrap">
+      <table class="log-table" id="log-table">
+        <thead><tr>
+          <th>日時</th><th>コール</th><th>バンド</th><th>モード</th><th>RST</th>
+          <th>名前</th><th>QTH</th><th>JCC</th><th>QSL</th><th></th>
+        </tr></thead>
+        <tbody id="log-rows"></tbody>
+      </table>
+    </div>
+    <div id="log-transcript" class="log-transcript" hidden></div>
+  </div>
+
+  <div class="card">
+    <h3>集計</h3>
+    <div id="log-stats" class="log-stats"></div>
+  </div>
+
+  <div class="card">
+    <h3>書き出し・取り込み</h3>
+    <div class="drill-actions">
+      <button type="button" class="btn" id="btn-log-adif">ADIF で書き出す</button>
+      <button type="button" class="btn" id="btn-log-csv">CSV で書き出す</button>
+      <label class="btn file-btn">ADIF を取り込む<input type="file" id="log-import-adif" accept=".adi,.adif,.txt" hidden></label>
+      <label class="btn file-btn">CSV を取り込む<input type="file" id="log-import-csv" accept=".csv,.txt" hidden></label>
+    </div>
+    <p class="hint">ADIF は他のログソフト（HAMLOG・Logger32 など）や QSL 転送サービスとやり取りできる標準形式です。
+      CSV は表計算ソフト向けで、交信サポートの交信記録も含めて往復できます。
+      ログはこの端末のブラウザにだけ保存されるので、ときどき書き出して控えを取ってください。</p>
+  </div>
 </section>
 
 <!-- ═══════════════ 変換・電鍵 ═══════════════ -->
