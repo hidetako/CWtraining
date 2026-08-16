@@ -10,7 +10,7 @@ import { annotateHtml, createTracker, explainText, lookupTerm, termCode, termTit
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
 import { LocalResponder, gradeField, REACTION_LABELS, FIELD_HINTS } from './qso.js';
 import { PHASES, PATTERN_SHEET, makeReplyOptions, readDxTurn } from './qsoguide.js';
-import { ElectronicKeyer, KEYER_MODES, attachPaddleInput, compareSending } from './keyer.js';
+import { ElectronicKeyer, KEYER_MODES, attachPaddleInput, compareSending, isTextEntry } from './keyer.js';
 import {
   ContestRunner, EXCHANGE_TYPES, RUN_MODES,
   HINT_LEVELS, HINT_MASK, clampHint, hintMask,
@@ -89,6 +89,18 @@ function initPaddleWidget() {
   keyer.addEventListener('update', showDecoded);
   keyer.addEventListener('element', showDecoded);
   keyer.addEventListener('char', showDecoded);
+
+  // レバーが押されたままになって鳴り続けたのを、キーヤー側が止めたとき。
+  // 黙って止めると、なぜ余計な符号が並んだのか分からないままになる
+  const note = $('#pw-note');
+  keyer.addEventListener('stuck', () => {
+    note.textContent = 'レバーが戻らないまま鳴り続けたので止めました。'
+      + '余分に入った符号は「打ち直す」（Esc）で消せます。';
+    note.hidden = false;
+    clearTimeout(note._timer);
+    note._timer = setTimeout(() => { note.hidden = true; }, 12000);
+  });
+  keyer.addEventListener('update', () => { note.hidden = true; });
   $('#pw-clear').addEventListener('click', redoKeying);
   showDecoded();
 
@@ -309,28 +321,37 @@ function initHeaderControls() {
   $('#btn-pause-all').addEventListener('click', togglePause);
   $('#btn-stop-all').addEventListener('click', endCurrentMode);
 
-  // Space で一時停止／再開、Esc で終了。
-  // 文字入力の邪魔をしないよう入力欄の上では効かせない。
+  // Space で一時停止／再開、Esc で打ち直し・終了。
   // コンテスト運用はこの 2 つを独自に使うので除外する
   document.addEventListener('keydown', (e) => {
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     if ($('#panel-contest').classList.contains('is-active')) return;
-    // Space はボタンを押す操作と衝突するので、ボタンの上では譲る。
-    // Esc はボタンの既定動作と衝突しないため、譲らない（「打ち直す」を
-    // クリックすると焦点がボタンに残り、そのあと Esc が効かなくなる）
+
+    // 空白は文字そのものなので、打ち込む場所とボタンの上では譲る
     if (e.code === 'Space') {
-      if (e.target.tagName === 'BUTTON') return;
+      if (isTextEntry(e.target) || e.target.tagName === 'BUTTON') return;
       e.preventDefault(); togglePause();
+      return;
     }
-    else if (e.key === 'Escape') {
+    if (e.key !== 'Escape') return;
+
+    // 打った符号が残っていれば打ち直し。焦点がどこにあっても効かせる。
+    //
+    // ここを「入力欄の上では効かせない」としていたため、消えるときと
+    // 消えないときがあった。パドル欄の速度つまみ自体が <input> なので、
+    // 自分の速度を変えただけで Esc が死ぬ。打面のすぐ下のボタンが
+    // 「打ち直す（Esc）」と出している以上、焦点の置き場所で変わってはいけない
+    if (keyer.text || keyer.buffer) {
       e.preventDefault();
-      // 打った符号が残っていれば、まず打ち直し。残っていなければ練習を終了する。
-      // パドルから手を離さずに打ち直せるようにするため。パドル欄はどのタブでも
-      // 使えるので、課題が出ていない場面でも消せるようにしておく
-      if (keyer.text || keyer.buffer) redoKeying();
-      else endCurrentMode();
+      redoKeying();
+      return;
     }
+
+    // 打った符号が無いときの Esc は練習の終了。取り消しの利かない操作なので、
+    // 文字を打ち込んでいる最中だけは効かせない
+    if (isTextEntry(e.target)) return;
+    e.preventDefault();
+    endCurrentMode();
   });
 
   sync();
