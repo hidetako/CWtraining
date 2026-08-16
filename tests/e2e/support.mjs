@@ -146,6 +146,49 @@ ok('文字が受信欄に流れる', (await page.textContent('#sup-decoded')).in
 ok('語の切れ目で解析に渡る', await page.inputValue('#sup-dxcall') === 'JI1WIRE',
   await page.inputValue('#sup-dxcall'));
 
+// ── 自分のパドルで打つ ────────────────────────────
+// 候補を手本として出し、パドルで打った内容を照合して記録に残す
+await page.click('#btn-sup-reset');
+await page.fill('#sup-tx-text', 'E E');
+await page.click('#btn-sup-manual');
+await page.waitForTimeout(150);
+ok('打つ枠が開く', !(await page.evaluate(() => document.querySelector('#sup-manual').hidden)));
+ok('手本が出る', (await page.textContent('#sup-manual-target')) === 'E E');
+ok('手本のモールスも出る', (await page.textContent('#sup-manual-morse')).includes('.'));
+
+// 右の打面で E を 2 回打つ（語間を置いて）
+const pad = await page.locator('#pw-pad').boundingBox();
+const keyOnce = async () => {
+  await page.mouse.move(pad.x + pad.width * 0.25, pad.y + pad.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(70);
+  await page.mouse.up();
+};
+await keyOnce();
+await page.waitForTimeout(700);        // 語間
+await keyOnce();
+await page.waitForTimeout(900);        // 解読の確定を待つ
+
+await page.click('#btn-sup-manual-done');
+await page.waitForTimeout(200);
+const manualResult = await page.textContent('#sup-manual-result');
+console.log('照合:', manualResult.replace(/\s+/g, ' ').trim().slice(0, 60));
+ok('照合結果が出る', /100%/.test(manualResult), manualResult.slice(0, 40));
+const manualLog = await page.textContent('#sup-transcript');
+ok('打った内容が記録に残る', /送: E ?E/.test(manualLog),
+  manualLog.split('\n').slice(-1)[0]);
+
+// キーボード（Z）でもサポートタブで打てること
+await page.keyboard.down('KeyZ');
+await page.waitForTimeout(80);
+await page.keyboard.up('KeyZ');
+await page.waitForTimeout(900);
+ok('サポートタブでも Z で打てる',
+  (await page.evaluate(() => window.__cw.keyer.text + window.__cw.keyer.buffer)).trim().length > 0);
+await page.evaluate(() => window.__cw.keyer.reset());
+await page.click('#btn-sup-manual-close');
+ok('閉じられる', await page.evaluate(() => document.querySelector('#sup-manual').hidden));
+
 // ── シリアルキーイングの時系列 ────────────────────
 // 実機は無いので、擬似ポートに setSignals の記録を取らせて
 // 「E T」= 短点 1・長点 1 の on/off が正しい長さで並ぶことを見る

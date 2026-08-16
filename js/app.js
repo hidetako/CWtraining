@@ -268,7 +268,9 @@ function initTabs() {
         p.classList.toggle('is-active', p.id === `panel-${tab.dataset.panel}`);
       });
       // パドル入力は開いているタブでだけ有効にする
-      setPaddleActive(tab.dataset.panel === 'keyer');
+      // 交信サポートでも Z / X で打てるようにする（候補を見ながら
+      // 自分の電鍵で送るため）。打面のマウス・タッチは常時有効
+      setPaddleActive(tab.dataset.panel === 'keyer' || tab.dataset.panel === 'support');
       // 打つためのタブに来たら、狭い画面では引き出しを開けておく
       if (tab.dataset.panel === 'keyer') openPaddleSheet();
       else setPaddleSheet(false);
@@ -3165,6 +3167,7 @@ const support = {
   word: '',             // 組み立て中の語
   autoTimer: null,
   sending: false,
+  manualTarget: '',     // 「自分のパドルで打つ」の手本
 };
 
 function supportSession() {
@@ -3251,6 +3254,40 @@ async function sendSupportReply(text) {
     $('#btn-sup-send').disabled = false;
     $('#btn-sup-send-stop').hidden = true;
   }
+}
+
+/**
+ * 「自分のパドルで打つ」。手本を見せて、右のパドル欄で打ってもらい、
+ * 打ち終わったら手本と照合して、実際に打った内容を交信記録に残す。
+ * 無線機へは側音の経路（音声インターフェース + VOX など）でそのまま出る。
+ */
+function openSupportManual() {
+  const target = $('#sup-tx-text').value.trim();
+  if (!target) {
+    $('#sup-manual-result').innerHTML = '<p class="hint">先に候補を選ぶか、送る内容を入れてください。</p>';
+    $('#sup-manual').hidden = false;
+    return;
+  }
+  support.manualTarget = target;
+  $('#sup-manual').hidden = false;
+  $('#sup-manual-target').textContent = target;
+  $('#sup-manual-morse').textContent = toMorseString(target);
+  $('#sup-manual-result').innerHTML = '';
+  keyer.start();
+  keyer.reset();
+}
+
+function finishSupportManual() {
+  const sent = (keyer.text + ' ' + keyer.buffer).trim();
+  if (!sent) {
+    $('#sup-manual-result').innerHTML = '<p class="hint">まだ何も打っていません。右のパドル欄か Z / X で打ってください。</p>';
+    return;
+  }
+  // 照合は見せるだけ。記録に残すのは手本ではなく、実際に打った内容。
+  // 相手に届いたのはそちらだから
+  $('#sup-manual-result').innerHTML = sendingDiffHtml(support.manualTarget, sent);
+  supportSession().noteTx(sent);
+  keyer.reset();
 }
 
 function renderSupport() {
@@ -3343,6 +3380,10 @@ function initSupport() {
     clearTimeout(support.autoTimer);
     support.autoTimer = null;
   });
+
+  $('#btn-sup-manual').addEventListener('click', openSupportManual);
+  $('#btn-sup-manual-done').addEventListener('click', finishSupportManual);
+  $('#btn-sup-manual-close').addEventListener('click', () => { $('#sup-manual').hidden = true; });
 
   $('#btn-sup-send').addEventListener('click', () => sendSupportReply($('#sup-tx-text').value));
   $('#btn-sup-send-stop').addEventListener('click', () => {
