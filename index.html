@@ -521,6 +521,7 @@
       取った内容はそのままログ帳へ登録できます。</p>
   </div>
 
+  <div class="card-row">
   <div class="card">
     <h3>受信（デコーダー）</h3>
     <p class="hint" style="margin-top:0">無線機の受信音をこの端末のマイクに聞かせるか、
@@ -557,6 +558,9 @@
     </div>
   </div>
 
+  </div>
+
+  <div class="card-row">
   <div class="card">
     <h3>返答</h3>
     <p class="hint" style="margin-top:0">段階に合わせた候補です。選ぶと下の欄に入り、直してから送れます。</p>
@@ -586,16 +590,27 @@
       </div>
     </div>
     <p class="hint" id="sup-auto-note" hidden></p>
-    <p class="hint">「送信する」はこの端末から<strong>キーイングされたトーン音</strong>を出します。
-      無線機のマイク端子・データ端子に音声でつなぐか（SSB モード＋VOX など）、下のシリアル接続で
-      電鍵端子を直接叩きます。<strong>電波を出すときは、免許の範囲で必ず監視しながら使ってください。</strong></p>
+    <p class="hint"><strong>電波を出すときは、免許の範囲で必ず監視しながら。</strong></p>
+    <details class="more"><summary>無線機へのつなぎ方</summary>
+      <p>パドルの側音と「自動送信」はこの端末から<strong>キーイングされたトーン音</strong>として出ます。
+      無線機のマイク端子・データ端子に音声でつなぐか（SSB モード＋VOX など）、
+      下のシリアル接続で電鍵端子を直接叩きます。</p>
+    </details>
+  </div>
+
+  <div class="card">
+    <h3>交信記録</h3>
+    <p class="hint" style="margin-top:0">受信・送信のやり取り。ログ帳へ登録すると一緒に保存されます。</p>
+    <div class="log-transcript" id="sup-transcript" style="margin-top:0">まだ記録がありません。</div>
+  </div>
   </div>
 
   <div class="card">
     <h3>無線機と接続（シリアルキーイング・実験的）</h3>
-    <p class="hint" style="margin-top:0">USB シリアルのキーイング回路（DTR/RTS → フォトカプラ →
-      電鍵端子）ごしに、送信文をそのまま電鍵として叩きます。Chrome 系ブラウザのみ。
-      実機での検証はまだ行えていません。</p>
+    <details class="more" style="margin-top:0"><summary>この機能について（Chrome 系のみ・実機検証は未実施）</summary>
+      <p>USB シリアルのキーイング回路（DTR/RTS → フォトカプラ → 電鍵端子）ごしに、
+      送信文をそのまま電鍵として叩きます。</p>
+    </details>
     <div class="field-row">
       <button type="button" class="btn" id="btn-sup-serial">ポートを選んで接続</button>
       <label class="field"><span>キーの線</span>
@@ -605,12 +620,6 @@
     </div>
   </div>
 
-  <div class="card">
-    <h3>交信記録</h3>
-    <p class="hint" style="margin-top:0">受けた内容と送った内容が時刻付きで残ります。
-      ログ帳へ登録すると、この記録も一緒に保存されます。</p>
-    <div class="log-transcript" id="sup-transcript" style="margin-top:0">まだ記録がありません。</div>
-  </div>
 </section>
 
 <!-- ═══════════════ ログ帳 ═══════════════ -->
@@ -620,6 +629,7 @@
     <p class="lede">実際の交信を記録する台帳です。練習の成績とは別に、この端末に保存されます。</p>
   </div>
 
+  <div class="card-row">
   <div class="card">
     <h3 id="log-form-title">交信を登録する</h3>
     <div class="field-grid">
@@ -670,6 +680,8 @@
     <div id="jcc-results" class="jcc-results"></div>
   </div>
 
+  </div>
+
   <div class="card">
     <h3>交信一覧</h3>
     <div class="field-row">
@@ -693,6 +705,7 @@
     <div id="log-transcript" class="log-transcript" hidden></div>
   </div>
 
+  <div class="card-row">
   <div class="card">
     <h3>集計</h3>
     <div id="log-stats" class="log-stats"></div>
@@ -706,9 +719,12 @@
       <label class="btn file-btn">ADIF を取り込む<input type="file" id="log-import-adif" accept=".adi,.adif,.txt" hidden></label>
       <label class="btn file-btn">CSV を取り込む<input type="file" id="log-import-csv" accept=".csv,.txt" hidden></label>
     </div>
-    <p class="hint">ADIF は他のログソフト（HAMLOG・Logger32 など）や QSL 転送サービスとやり取りできる標準形式です。
-      CSV は表計算ソフト向けで、交信サポートの交信記録も含めて往復できます。
-      ログはこの端末のブラウザにだけ保存されるので、ときどき書き出して控えを取ってください。</p>
+    <p class="hint">ログはこの端末のブラウザにだけ保存されます。ときどき書き出して控えを取ってください。</p>
+    <details class="more"><summary>形式について</summary>
+      <p>ADIF は他のログソフト（HAMLOG・Logger32 など）や QSL 転送サービスとやり取りできる標準形式です。
+      CSV は表計算ソフト向けで、交信サポートの交信記録も含めて往復できます。</p>
+    </details>
+  </div>
   </div>
 </section>
 
