@@ -130,7 +130,9 @@ body.is-paused main { opacity: .72; }
 .tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* ───────── レイアウト ───────── */
-main { max-width: 1160px; margin: 0 auto; padding: 1.1rem 1.25rem 2rem; }
+/* width を明示しないと、縦 flex の子で auto margin を使っているために
+   stretch が効かず、中身の狭いタブ（略語集など）で本文ごと縮んでしまう */
+main { width: 100%; max-width: 1160px; margin: 0 auto; padding: 1.1rem 1.25rem 2rem; }
 .panel { display: none; }
 .panel.is-active { display: block; }
 .panel-head { margin-bottom: .8rem; }
@@ -1033,38 +1035,41 @@ input[type=datetime-local] {
 /* ───────── 略語集 ───────── */
 .glossary {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: .4rem;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: .5rem;
   margin-top: 1rem;
-  max-height: 60vh;
-  overflow-y: auto;
 }
+/* 1 項目 = 2 行。上段に符号名と意味、下段に打ち方（・－ 表記）。
+   1 行に全部並べると、意味が 1 文字ずつ折れて縦書きのようになり、
+   符号は右へはみ出して表全体が横に流れてしまう */
 .gloss-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: .8rem;
+  row-gap: .1rem;
   align-items: baseline;
-  gap: .7rem;
   background: var(--bg-sunken);
   border: 1px solid transparent;
   border-radius: 7px;
-  padding: .45rem .7rem;
+  padding: .5rem .75rem;
   cursor: pointer;
   text-align: left;
   color: inherit;
   font-family: inherit;
   font-size: .82rem;
+  min-width: 0;
 }
 .gloss-item:hover { border-color: var(--accent-dim); }
 .gloss-item .code { font-family: var(--mono); font-weight: 700; color: var(--accent); min-width: 3.5em; }
-.gloss-item .ja { color: var(--text-dim); }
-/* 符号は右端にそろえる。意味と並べて「どう打つか」まで見えるように */
+.gloss-item .ja { color: var(--text-dim); min-width: 0; line-height: 1.5; }
 .gloss-item .morse {
-  margin-left: auto;
+  grid-column: 2;
   font-family: var(--mono);
-  font-size: .82rem;
-  letter-spacing: .06em;
+  font-size: .8rem;
+  letter-spacing: .04em;
   color: var(--accent);
   opacity: .7;
-  white-space: nowrap;
+  white-space: normal;   /* 長い符号は折り返す。横にはみ出させない */
 }
 .gloss-item.is-symbol .code { color: var(--rx); }
 
