@@ -28,7 +28,7 @@ import {
 import { Tutorial, TUTORIAL_STEPS } from './tutorial.js';
 import {
   loadSettings, saveSettings, loadStats, saveStats, resetStats,
-  recordDrill, recordQso, recordKeying, recordContest, weakChars,
+  recordDrill, recordQso, recordKeying, recordKeyPerChar, recordContest, weakChars,
   paddleAssignment,
 } from './stats.js';
 
@@ -967,7 +967,11 @@ function gradeLiveTurn(turn) {
     keyer.reset();
     $('#qso-live-result').innerHTML = '';
   });
-  $('#btn-live-next').addEventListener('click', () => advanceTurn(turn, { reveal: true }));
+  $('#btn-live-next').addEventListener('click', () => {
+    stats = recordKeyPerChar(stats, result.marks);
+    saveStats(stats);
+    advanceTurn(turn, { reveal: true });
+  });
 }
 
 function renderLiveSummary() {
@@ -2738,6 +2742,7 @@ function gradeKeying() {
     target: paddle.task,
     wpm: settings.keyerWpm,
   });
+  stats = recordKeyPerChar(stats, result.marks);
   saveStats(stats);
   renderStats();
 
@@ -3130,13 +3135,17 @@ function renderStats() {
       : null;
     newProblem();
   });
-  $('#weak-chars').innerHTML = weak.length
-    ? weak.map((w) => `
+  const weakListHtml = (list, emptyText) => (list.length
+    ? list.map((w) => `
         <span class="weak-char">
           <span class="ch">${escapeHtml(w.char)}</span>${Math.round(w.accuracy * 100)}%
           <span class="hint" style="display:inline">(${w.sent})</span>
         </span>`).join('')
-    : '<p class="empty">まだ十分なデータがありません。ドリルを 5 回ほど試してください。</p>';
+    : `<p class="empty">${emptyText}</p>`);
+  $('#weak-chars').innerHTML = weakListHtml(weak,
+    'まだ十分なデータがありません。聞き取りドリルを 5 回ほど試してください。');
+  $('#weak-chars-keying').innerHTML = weakListHtml(weakChars(stats, { source: 'keying' }),
+    'まだ十分なデータがありません。パドル送信で採点すると集まります。');
 
   $('#history-list').innerHTML = stats.history.length
     ? stats.history.slice(0, 20).map((h) => {
@@ -3750,6 +3759,7 @@ window.__cw = {
   sendingDiffHtml, comparisonColumns,        // 採点結果の見せ方を検証できるように
   DRILL_TYPES, makeProblem, termListHtml,    // ドリルの種類と解説を検証できるように
   jccSearch, nearestJcc, toAdif, fromAdif, toCsv, fromCsv, bandFromFreq, logStats,  // ログ帳の検証用
+  recordKeyPerChar,                          // 苦手文字の数え方を検証できるように
   addLogEntry,
   get logEntries() { return logbook.entries; },
   CWDecoder, SupportSession, SerialKeyer, keyTimeline,  // 交信サポートの検証用
