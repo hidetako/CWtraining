@@ -27,7 +27,7 @@ const geom = await page.evaluate(() => {
   };
 });
 console.log('パドル欄:', JSON.stringify(geom));
-ok('幅が画面の 28%', Math.abs(geom.w / geom.vw - 0.28) < 0.01, `${(geom.w / geom.vw * 100).toFixed(1)}%`);
+ok('幅が画面の 31%', Math.abs(geom.w / geom.vw - 0.31) < 0.01, `${(geom.w / geom.vw * 100).toFixed(1)}%`);
 ok('画面の右端に接している', Math.abs(geom.x + geom.w - geom.vw) < 2);
 ok('タブの直下から始まる', Math.abs(geom.top - geom.tabsBottom) < 2, `${geom.top.toFixed(0)} vs ${geom.tabsBottom.toFixed(0)}`);
 ok('画面の下端まで届く', Math.abs(geom.bottom - geom.vh) < 2);
