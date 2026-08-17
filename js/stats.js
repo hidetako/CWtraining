@@ -249,9 +249,33 @@ function pushHistory(stats, entry) {
   if (stats.history.length > 50) stats.history.length = 50;
 }
 
-/** 苦手な文字を正答率の低い順に返す。 */
-export function weakChars(stats, { minSent = 5, limit = 10 } = {}) {
-  return Object.entries(stats.perChar)
+/**
+ * 打鍵の照合結果（compareSending の marks）から文字別の成績を数え、
+ * 打鍵側の記録（keyPerChar）へ足す。
+ *
+ * 聞き取り（perChar）とは分けて持つ。耳で取れない文字と手で打てない
+ * 文字は別物で、混ぜると「聞き取れるのに苦手扱い」（逆も）になる。
+ * 手本側の文字（ok / missing）だけを数え、余分に打った文字は
+ * どの出題文字の成績でもないので数えない（ドリルの採点と同じ扱い）。
+ */
+export function recordKeyPerChar(stats, marks) {
+  if (!stats.keyPerChar) stats.keyPerChar = {};
+  for (const m of marks) {
+    if (m.type !== 'ok' && m.type !== 'missing') continue;
+    if (!stats.keyPerChar[m.char]) stats.keyPerChar[m.char] = { sent: 0, correct: 0 };
+    stats.keyPerChar[m.char].sent += 1;
+    if (m.type === 'ok') stats.keyPerChar[m.char].correct += 1;
+  }
+  return stats;
+}
+
+/**
+ * 苦手な文字を正答率の低い順に返す。
+ * source: 'drill' = 聞き取り（既定）、'keying' = パドル入力。
+ */
+export function weakChars(stats, { minSent = 5, limit = 10, source = 'drill' } = {}) {
+  const table = source === 'keying' ? (stats.keyPerChar || {}) : stats.perChar;
+  return Object.entries(table)
     .filter(([, c]) => c.sent >= minSent)
     .map(([ch, c]) => ({ char: ch, accuracy: c.correct / c.sent, sent: c.sent }))
     .sort((a, b) => a.accuracy - b.accuracy)
