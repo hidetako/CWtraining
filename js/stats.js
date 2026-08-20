@@ -4,6 +4,9 @@ import { clampKeyerWpm } from './keyer.js';
 import { clampHint } from './contest.js';
 
 const SETTINGS_KEY = 'cwtraining.settings.v1';
+
+/** 受信速度（文字速度・実効速度）の上限（WPM）。画面のつまみと保存値の両方をこれで抑える。 */
+export const RX_WPM_MAX = 30;
 const STATS_KEY = 'cwtraining.stats.v1';
 
 export const DEFAULT_SETTINGS = {
@@ -116,6 +119,9 @@ export function loadSettings() {
 
   // 送信速度の上限を下げた際、以前の設定値が範囲外のまま残らないようにする
   settings.keyerWpm = clampKeyerWpm(settings.keyerWpm);
+  // 受信速度（文字速度・実効速度）も同じ。上限 30 WPM
+  settings.charWpm = Math.max(5, Math.min(RX_WPM_MAX, Number(settings.charWpm) || 20));
+  settings.effWpm = Math.max(5, Math.min(settings.charWpm, Number(settings.effWpm) || 15));
   // 知らない段階名が保存されていても、いちばん厳しい none に寄せる
   settings.contestHint = clampHint(settings.contestHint);
 
