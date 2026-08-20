@@ -91,6 +91,28 @@ const bottom = await page.evaluate(() => window.__cw.contest.opts.myWpm);
 ok('PgDn の下限は 10 のまま', bottom === 10, String(bottom));
 await page.evaluate(() => window.__cw.contest.stopSession());
 
+// ── 受信速度（文字速度・実効速度）の上限は 30 ──────
+ok('文字速度のつまみの上限が 30', await page.evaluate(() =>
+  document.querySelector('#qa-charwpm').max === '30'));
+ok('実効速度のつまみの上限が 30', await page.evaluate(() =>
+  document.querySelector('#qa-effwpm').max === '30'));
+
+// 以前の設定に 30 超が残っていても、読み込みで丸められること
+await page.evaluate(() => {
+  const s = JSON.parse(localStorage.getItem('cwtraining.settings.v1') || '{}');
+  s.charWpm = 40; s.effWpm = 38;
+  localStorage.setItem('cwtraining.settings.v1', JSON.stringify(s));
+});
+await page.reload();
+await page.waitForTimeout(600);
+const rx = await page.evaluate(() => ({
+  char: window.__cw.settings.charWpm, eff: window.__cw.settings.effWpm,
+  shown: document.querySelector('#qa-charwpm-out').textContent,
+}));
+console.log('丸め後:', JSON.stringify(rx));
+ok('保存されていた 40 WPM が 30 に丸まる', rx.char === 30 && rx.eff === 30, JSON.stringify(rx));
+ok('表示も 30 WPM', rx.shown.includes('30'), rx.shown);
+
 console.log('\n失敗:', fails.length ? fails.join(' / ') : 'なし');
 console.log('ERRORS:', errors.length ? errors.join('\n') : '(none)');
 await browser.close();
