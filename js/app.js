@@ -17,7 +17,10 @@ import { SupportSession, SerialKeyer, keyTimeline } from './support.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
 import { LocalResponder, gradeField, REACTION_LABELS, FIELD_HINTS } from './qso.js';
 import { PHASES, PATTERN_SHEET, makeReplyOptions, readDxTurn } from './qsoguide.js';
-import { ElectronicKeyer, KEYER_MODES, attachPaddleInput, compareSending, isTextEntry } from './keyer.js';
+import {
+  ElectronicKeyer, KEYER_MODES, attachPaddleInput, compareSending, isTextEntry,
+  sameSpacing, spacingUnits,
+} from './keyer.js';
 import {
   ContestRunner, EXCHANGE_TYPES, RUN_MODES,
   HINT_LEVELS, HINT_MASK, clampHint, hintMask,
@@ -1311,6 +1314,11 @@ function redoKeying() {
     qso.graded = false;
   }
 
+  // パドル送信の課題を打ち直すときは、そこから次の 100点＋ までを計り直す。
+  // 他のタブの「打ち直す」で計測が始まってしまわないよう、
+  // パドル送信タブを開いていて課題が出ているときだけ
+  if (paddle.task && $('#panel-keyer')?.classList.contains('is-active')) startKeyerAttempt();
+
   renderKeyedText();
   syncRedoLabel();
 }
@@ -2331,7 +2339,44 @@ async function finishContest(score) {
 
 // ═══════════════════════════════════════════ パドル送信（キーヤー）
 
-const paddle = { detach: null, task: null, elements: '' };
+const paddle = {
+  detach: null, task: null, elements: '',
+  // 100点＋（間隔まで手本どおり）が出るまでの時間を計る。
+  // startedAt は課題が出た時点／打ち直した時点。runs は今の課題での記録
+  startedAt: 0,
+  runs: [],
+};
+
+/** 100点＋の記録を残す回数。これ以上は数えず、次の課題で数え直す。 */
+const KEYER_PLUS_MAX = 5;
+
+/** 計測を始める（課題が出たとき・打ち直したとき）。 */
+function startKeyerAttempt() {
+  paddle.startedAt = performance.now();
+}
+
+/**
+ * 100点＋の記録表。打ち直しても消えないよう、採点結果とは別の器に描く。
+ */
+function renderKeyerPlus() {
+  const box = $('#keyer-plus');
+  if (!box) return;
+  if (!paddle.runs.length) { box.innerHTML = ''; return; }
+
+  const best = Math.min(...paddle.runs.map((r) => r.seconds));
+  box.innerHTML = `
+    <h4>100点＋ の記録</h4>
+    <table class="plus-table">
+      <thead><tr><th>回</th><th>かかった時間</th></tr></thead>
+      <tbody>${paddle.runs.map((r, i) => `
+        <tr class="${r.seconds === best ? 'best' : ''}">
+          <td class="rank">${i + 1}</td><td>${r.seconds.toFixed(1)} 秒</td>
+        </tr>`).join('')}</tbody>
+    </table>
+    <p class="hint">${paddle.runs.length >= KEYER_PLUS_MAX
+      ? `${KEYER_PLUS_MAX} 回そろいました。次の課題に進むと数え直します。`
+      : '「打ち直す」を押した時点から、次の 100点＋ が出るまでを計ります。'}</p>`;
+}
 
 /** 交信の中で実際に打つことの多い定型文。 */
 /** いま選ばれている話題の定型文。「おまかせ」なら全話題から選ぶ。 */
@@ -2697,6 +2742,10 @@ function newKeyerTask() {
     // 語ごとに色分けし、下に意味を並べる
     preview.innerHTML = annotateHtml(paddle.task, escapeHtml);
     terms.innerHTML = taskTermsHtml(paddle.task);
+    // 課題が変われば記録の意味も変わるので、数え直す
+    paddle.runs = [];
+    renderKeyerPlus();
+    startKeyerAttempt();
     $('#btn-keyer-listen').disabled = false;
     $('#btn-keyer-next').disabled = false;
   }
@@ -2753,17 +2802,43 @@ function gradeKeying() {
       : `<span class="${m.type}">${escapeHtml(m.char)}</span>`))
     .join('');
 
+  // 文字の採点は語間を見ない（手が止まっただけで語間が入るため）。
+  // 語の切れ目までそろっているかは別に見て、そろっていれば別格に扱う
+  const plus = sameSpacing(paddle.task, sent);
+  let plusTime = '';
+  if (plus) {
+    if (paddle.startedAt) {
+      const seconds = (performance.now() - paddle.startedAt) / 1000;
+      plusTime = ` — ${seconds.toFixed(1)} 秒`;
+      if (paddle.runs.length < KEYER_PLUS_MAX) paddle.runs.push({ seconds });
+      // 記録したら計測を止める。打ち直すまで次の計測は始めない
+      paddle.startedAt = 0;
+      renderKeyerPlus();
+    }
+  }
+
+  const scoreLine = plus
+    ? `<span class="big is-plus">100点＋</span>
+       <span class="hint">文字も語の切れ目も手本どおり${escapeHtml(plusTime)}</span>`
+    : `<span class="big">${pct}%</span>
+       <span class="hint">${result.correct} / ${result.total} 文字一致${scoreNote(result)}</span>`;
+
+  // 文字は合っているのに別格にならなかったときは、理由が分かるようにする。
+  // 「CQ」が「C Q」に割れている、のような差はこれを見ないと気づけない
+  const spacingNote = (!plus && result.accuracy >= 1)
+    ? `<p class="hint">文字はすべて合っています。<strong>語の切れ目</strong>が手本と違うため
+        100点＋ にはなりません（下の 2 行を見比べてください）。</p>`
+    : '';
+
   box.innerHTML = `
-    <div class="score-line">
-      <span class="big">${pct}%</span>
-      <span class="hint">${result.correct} / ${result.total} 文字一致${scoreNote(result)}</span>
-    </div>
+    <div class="score-line">${scoreLine}</div>
     <div class="diff">${diff}</div>
     <div class="diff-legend">
       <span><span class="diff"><span class="ok">■</span></span> 一致</span>
       <span><span class="diff"><span class="missing">■</span></span> 打ち漏らし</span>
       <span><span class="diff"><span class="extra">■</span></span> 余分・誤り</span>
     </div>
+    ${spacingNote}
     <p class="hint">手本: <code>${escapeHtml(paddle.task)}</code></p>
     <p class="hint">あなたの符号: <code>${escapeHtml(sent)}</code></p>`;
 
@@ -3757,6 +3832,9 @@ window.__cw = {
   player, keyer, contest, responder,
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   sendingDiffHtml, comparisonColumns,        // 採点結果の見せ方を検証できるように
+  sameSpacing, spacingUnits,                 // 100点＋（語の切れ目）の判定を検証できるように
+  get paddleState() { return paddle; },
+  redoKeying,                                // 打ち直しの入口を検証できるように
   DRILL_TYPES, makeProblem, termListHtml,    // ドリルの種類と解説を検証できるように
   jccSearch, nearestJcc, toAdif, fromAdif, toCsv, fromCsv, bandFromFreq, logStats,  // ログ帳の検証用
   recordKeyPerChar,                          // 苦手文字の数え方を検証できるように

@@ -92,7 +92,8 @@ const endToEnd = await page.evaluate(async () => {
 });
 console.log('通しの採点:', JSON.stringify(endToEnd));
 if (endToEnd.task?.includes('=')) {
-  ok('画面の採点でも = ↔ <BT> が通る', endToEnd.shown.trim() === '100%', endToEnd.shown);
+  // 表記だけ差し替えた完全一致なので、語の切れ目までそろって 100点＋ になる
+  ok('画面の採点でも = ↔ <BT> が通る', endToEnd.shown.trim() === '100点＋', endToEnd.shown);
 } else {
   ok('= を含む課題が出た', false, `課題: ${endToEnd.task}`);
 }
