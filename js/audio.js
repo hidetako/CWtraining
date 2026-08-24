@@ -231,6 +231,51 @@ export class CWPlayer {
     g.linearRampToValueAtTime(0, off);
   }
 
+  /**
+   * うまく打てたときの短い祝いの音。
+   *
+   * 打鍵側音と同じ音程を土台に、長三和音を駆け上がって終わる。無関係な
+   * チャイムを混ぜると耳が「別のアプリの音」と受け取るので、あくまで
+   * ふだん聞いている側音の延長として鳴らす。
+   *
+   * 送信バスへ流すので、フェージングや受信帯域の演出はかからない。
+   * 全体で 0.5 秒ほど。ユーザー操作（採点する）の中から呼ぶこと。
+   */
+  async fanfare() {
+    await this.resume();
+    const ctx = this.ctx;
+    const base = this.settings.keyerFreq || 700;
+    // 長三和音（1・3・5・8度）を駆け上がる。最後の音だけ少し伸ばす
+    const notes = [
+      { ratio: 1,    at: 0,     len: 0.075 },
+      { ratio: 5 / 4, at: 0.075, len: 0.075 },
+      { ratio: 3 / 2, at: 0.15,  len: 0.075 },
+      { ratio: 2,     at: 0.225, len: 0.30  },
+    ];
+    const t0 = ctx.currentTime + 0.02;
+    for (const n of notes) {
+      const osc = ctx.createOscillator();
+      osc.type = this.settings.wave === 'square' ? 'triangle' : this.settings.wave;
+      osc.frequency.value = base * n.ratio;
+
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      osc.connect(gain);
+      gain.connect(this.txBus);
+
+      // 側音より控えめに。祝いの音が練習の音より大きいと落ち着かない
+      const on = t0 + n.at;
+      const off = on + n.len;
+      gain.gain.setValueAtTime(0, on);
+      gain.gain.linearRampToValueAtTime(0.45, on + 0.008);
+      // 最後の音は余韻を残して減衰させる
+      gain.gain.setTargetAtTime(0, off - 0.02, n.len > 0.1 ? 0.09 : 0.02);
+
+      osc.start(on);
+      osc.stop(off + 0.35);
+    }
+  }
+
   /** 妨害信号として、ずれた周波数でランダムな文字を流し続ける。 */
   _startQrm(start, end, charWpm) {
     const ctx = this.ctx;

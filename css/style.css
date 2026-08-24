@@ -465,7 +465,8 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 }
 .compare .blank { color: var(--text-dim); }
 
-.score-line { display: flex; align-items: baseline; gap: .8rem; margin: .8rem 0; flex-wrap: wrap; }
+/* position は紙吹雪の基準点（末尾の 100点＋ の祝い）に使う */
+.score-line { display: flex; align-items: baseline; gap: .8rem; margin: .8rem 0; flex-wrap: wrap; position: relative; }
 .score-line .big { font-family: var(--mono); font-size: 1.9rem; color: var(--accent); }
 .levelup { color: var(--ok); font-weight: 700; font-size: .85rem; }
 
@@ -980,6 +981,89 @@ kbd {
 .score-line .big.is-plus {
   color: var(--ok);
   text-shadow: 0 0 18px rgba(88, 214, 141, .35);
+}
+
+/* ───────── 100点＋ を出したときの祝い ─────────
+   狙って出せるものではないので、出たときははっきり別格だと分かるようにする。
+   採点欄そのものが一瞬光り、数字が跳ね、紙吹雪が散る。 */
+/* 光る枠は box-shadow の広がりで作る。padding を足すと採点欄の位置が
+   ずれてしまうので、外へはみ出して描けるものだけで済ませる */
+#keyer-result.is-celebrating {
+  border-radius: var(--radius);
+  animation: plus-flash 1.2s ease-out;
+}
+@keyframes plus-flash {
+  0% {
+    background: rgba(88, 214, 141, .14);
+    box-shadow: 0 0 0 .55rem rgba(88, 214, 141, .14),
+                0 0 0 calc(.55rem + 1px) rgba(88, 214, 141, .55);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 .55rem transparent, 0 0 0 calc(.55rem + 1px) transparent;
+  }
+}
+
+.is-celebrating .big.is-plus {
+  display: inline-block;
+  animation: plus-pop .55s cubic-bezier(.2, 1.5, .4, 1);
+}
+@keyframes plus-pop {
+  0%   { transform: scale(.55) rotate(-6deg); opacity: 0; }
+  55%  { transform: scale(1.18) rotate(2deg); opacity: 1; }
+  100% { transform: none; }
+}
+
+/* 前の記録より速かったときだけ出す札 */
+.score-line .plus-best {
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: #0f2a1b;
+  background: var(--ok);
+  border-radius: 999px;
+  padding: .1rem .55rem;
+  white-space: nowrap;
+}
+.is-celebrating .plus-best { animation: plus-pop .55s .12s backwards cubic-bezier(.2, 1.5, .4, 1); }
+
+/* 紙吹雪。数字の位置から扇形に飛ばして落とす。
+   基準点だけ CSS で決め、飛ぶ向きは JS が粒ごとに渡す */
+.confetti {
+  position: absolute;
+  /* JS が「100点＋」の中心を測って上書きする。ここは測れなかったときの逃げ */
+  left: 3.2rem; top: 50%;
+  width: 0; height: 0;
+  pointer-events: none;
+}
+.confetti i {
+  position: absolute;
+  width: 6px; height: 9px;
+  border-radius: 1px;
+  opacity: 0;
+  animation: confetti-fly 1.25s var(--delay, 0s) ease-out forwards;
+}
+@keyframes confetti-fly {
+  0%   { opacity: 1; transform: translate(0, 0) rotate(0); }
+  /* 飛び上がりきったところ。ここから落ちる */
+  35%  { opacity: 1; transform: translate(var(--dx), var(--dy)) rotate(calc(var(--rot) * .4)); }
+  100% { opacity: 0; transform: translate(calc(var(--dx) * 1.35), 90px) rotate(var(--rot)); }
+}
+
+/* 表に加わったばかりの行を、一瞬だけ光らせて目で追えるようにする */
+.plus-table tr.just-in td { animation: plus-row-in .8s ease-out; }
+@keyframes plus-row-in {
+  0%   { background: rgba(88, 214, 141, .25); }
+  100% { background: transparent; }
+}
+
+/* 動きが負担になる人には、祝いを色と音だけにする */
+@media (prefers-reduced-motion: reduce) {
+  #keyer-result.is-celebrating,
+  .is-celebrating .big.is-plus,
+  .is-celebrating .plus-best,
+  .plus-table tr.just-in td { animation: none; }
+  .confetti { display: none; }
 }
 .plus-table {
   border-collapse: collapse;

@@ -1303,7 +1303,12 @@ function redoKeying() {
 
   // 打鍵の採点結果を出している欄。開いていないものは触らない
   ['#keyer-result', '#qso-guide-keyed-result', '#qso-live-result']
-    .forEach((sel) => { const box = $(sel); if (box) box.innerHTML = ''; });
+    .forEach((sel) => {
+      const box = $(sel);
+      if (!box) return;
+      box.innerHTML = '';
+      box.classList.remove('is-celebrating');   // 祝いの余韻も一緒に片付ける
+    });
 
   // 打鍵の採点で点を積んでいたときだけ、採点前の状態に戻す。
   // 聞き取りターンの採点は liveScores に積まないので、ここで取り消すと
@@ -2369,13 +2374,73 @@ function renderKeyerPlus() {
     <table class="plus-table">
       <thead><tr><th>回</th><th>かかった時間</th></tr></thead>
       <tbody>${paddle.runs.map((r, i) => `
-        <tr class="${r.seconds === best ? 'best' : ''}">
+        <tr class="${r.seconds === best ? 'best' : ''}${i === paddle.runs.length - 1 ? ' just-in' : ''}">
           <td class="rank">${i + 1}</td><td>${r.seconds.toFixed(1)} 秒</td>
         </tr>`).join('')}</tbody>
     </table>
     <p class="hint">${paddle.runs.length >= KEYER_PLUS_MAX
       ? `${KEYER_PLUS_MAX} 回そろいました。次の課題に進むと数え直します。`
       : '「打ち直す」を押した時点から、次の 100点＋ が出るまでを計ります。'}</p>`;
+}
+
+/** 紙吹雪の粒の数。多すぎると採点結果が読めなくなる。 */
+const CONFETTI_COUNT = 18;
+
+/**
+ * 100点＋ を出したときの祝い。
+ *
+ * 「間隔までそろった」は狙って出せるものではないので、出たときは
+ * はっきり別格だと分かるようにする。音・跳ねる表示・紙吹雪の 3 つ。
+ *
+ * 動きを減らす設定の人には紙吹雪と跳ねを出さない。祝いは伝えたいが、
+ * 画面が動くこと自体が負担になる人がいるため、色と音だけ残す。
+ */
+function celebrateKeyerPlus(box) {
+  // 同じ課題で続けて出したとき、アニメーションが 2 回目から効かなくなる。
+  // クラスを外して強制的に再計算させてから付け直す
+  box.classList.remove('is-celebrating');
+  void box.offsetWidth;
+  box.classList.add('is-celebrating');
+
+  // 音が出せない環境（AudioContext 不可・無音設定）でも見た目の祝いは続ける
+  player.fanfare().catch(() => {});
+
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+
+  const line = box.querySelector('.score-line');
+  if (!line) return;
+  line.querySelector('.confetti')?.remove();
+
+  const burst = document.createElement('div');
+  burst.className = 'confetti';
+  burst.setAttribute('aria-hidden', 'true');   // 読み上げには関係がない飾り
+
+  // 「100点＋」の真上から散らす。札の幅は文字数で変わるので、位置は
+  // CSS で決め打ちせずに測る。測れなければ CSS の既定位置に任せる
+  const badge = box.querySelector('.big.is-plus');
+  if (badge) {
+    const b = badge.getBoundingClientRect();
+    const l = line.getBoundingClientRect();
+    burst.style.left = `${b.left - l.left + b.width / 2}px`;
+    burst.style.top = `${b.top - l.top + b.height / 2}px`;
+  }
+  const colors = ['var(--ok)', 'var(--accent)', 'var(--rx)', 'var(--tx)', '#ffffff'];
+  for (let i = 0; i < CONFETTI_COUNT; i++) {
+    const bit = document.createElement('i');
+    // 左右へ扇形に散らす。上向きに飛んでから落ちる
+    const angle = (-160 + (140 * i) / (CONFETTI_COUNT - 1)) * (Math.PI / 180);
+    const speed = 60 + Math.random() * 70;
+    bit.style.cssText = `
+      --dx:${Math.round(Math.cos(angle) * speed)}px;
+      --dy:${Math.round(Math.sin(angle) * speed)}px;
+      --rot:${Math.round(-360 + Math.random() * 720)}deg;
+      --delay:${(Math.random() * 0.12).toFixed(3)}s;
+      background:${colors[i % colors.length]};`;
+    burst.appendChild(bit);
+  }
+  line.appendChild(burst);
+  // 落ち終わったら片付ける。残しておくと次の採点でごみが積もる
+  setTimeout(() => burst.remove(), 1600);
 }
 
 /** 交信の中で実際に打つことの多い定型文。 */
@@ -2754,6 +2819,7 @@ function newKeyerTask() {
   paddle.elements = '';
   $('#keyer-elements').textContent = '';
   $('#keyer-result').innerHTML = '';
+  $('#keyer-result').classList.remove('is-celebrating');
   renderKeyedText();
 }
 
@@ -2763,6 +2829,7 @@ function endKeyerTask() {
   paddle.elements = '';
   $('#keyer-elements').textContent = '';
   $('#keyer-result').innerHTML = '';
+  $('#keyer-result').classList.remove('is-celebrating');
   renderKeyedText();
 }
 
@@ -2806,10 +2873,14 @@ function gradeKeying() {
   // 語の切れ目までそろっているかは別に見て、そろっていれば別格に扱う
   const plus = sameSpacing(paddle.task, sent);
   let plusTime = '';
+  let plusBest = false;
   if (plus) {
     if (paddle.startedAt) {
       const seconds = (performance.now() - paddle.startedAt) / 1000;
       plusTime = ` — ${seconds.toFixed(1)} 秒`;
+      // 記録に足す前に見る。1 回目は比べる相手がいないので自己ベストとは言わない
+      plusBest = paddle.runs.length > 0
+        && seconds < Math.min(...paddle.runs.map((r) => r.seconds));
       if (paddle.runs.length < KEYER_PLUS_MAX) paddle.runs.push({ seconds });
       // 記録したら計測を止める。打ち直すまで次の計測は始めない
       paddle.startedAt = 0;
@@ -2819,7 +2890,8 @@ function gradeKeying() {
 
   const scoreLine = plus
     ? `<span class="big is-plus">100点＋</span>
-       <span class="hint">文字も語の切れ目も手本どおり${escapeHtml(plusTime)}</span>`
+       <span class="hint">文字も語の切れ目も手本どおり${escapeHtml(plusTime)}</span>
+       ${plusBest ? '<span class="plus-best">自己ベスト更新</span>' : ''}`
     : `<span class="big">${pct}%</span>
        <span class="hint">${result.correct} / ${result.total} 文字一致${scoreNote(result)}</span>`;
 
@@ -2841,6 +2913,9 @@ function gradeKeying() {
     ${spacingNote}
     <p class="hint">手本: <code>${escapeHtml(paddle.task)}</code></p>
     <p class="hint">あなたの符号: <code>${escapeHtml(sent)}</code></p>`;
+
+  if (plus) celebrateKeyerPlus(box);
+  else box.classList.remove('is-celebrating');
 
   // 次へ進む導線は「採点する・打ち直す」と同じ段に常設してあるので、
   // ここには置かない（同じ操作のボタンが 2 つあると迷う）
