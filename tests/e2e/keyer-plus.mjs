@@ -74,12 +74,19 @@ ok('100点＋ にはならない', await page.locator('#keyer-result .big.is-plu
 ok('理由が書いてある', body2.includes('語の切れ目'), body2.slice(0, 80));
 ok('記録は増えない', await page.$$eval('#keyer-plus .plus-table tbody tr', (e) => e.length) === 1);
 
-// ── 打ち直すと計測が始まり直す ────────────────────
+// ── 外したあとの打ち直しでは数え直さない ──────────
+// 計測は「その課題に挑み始めてから 100点＋ が出るまで」。失敗のたびに
+// 0 に戻すと、最後の 1 回ぶんしか計らないことになる
+const beforeMiss = await page.evaluate(() => window.__cw.paddleState.startedAt);
 await page.click('#btn-keyer-clear');
 await page.waitForTimeout(150);
 ok('打ち直しで記録表は消えない', await page.locator('#keyer-plus .plus-table').count() === 1);
 const startedAt = await page.evaluate(() => window.__cw.paddleState.startedAt);
-ok('打ち直しで計測が始まる', startedAt > 0, String(startedAt));
+ok('計測は続いている', startedAt > 0, String(startedAt));
+ok('外したあとの打ち直しでは数え直さない', startedAt === beforeMiss,
+  `${beforeMiss} → ${startedAt}`);
+ok('画面にもその旨が書いてある',
+  (await page.textContent('#keyer-plus')).includes('途中で外しても'));
 
 await page.waitForTimeout(400);
 await gradeAs(task);
@@ -87,7 +94,9 @@ rows = await page.$$eval('#keyer-plus .plus-table tbody tr', (els) => els.length
 ok('2 回目が記録される', rows === 2, `${rows} 行`);
 const secondTime = await page.evaluate(() => window.__cw.paddleState.runs.at(-1).seconds);
 console.log('2 回目:', secondTime.toFixed(2), '秒');
-ok('2 回目は打ち直しからの時間', secondTime > 0.3 && secondTime < 5, `${secondTime} 秒`);
+// 1 回目の 100点＋ のあとに押した「打ち直す」からの通算。外した回の
+// やり直しを挟んでいるので、その時間もこの中に入る
+ok('2 回目は打ち直しからの通算時間', secondTime > 0.6 && secondTime < 8, `${secondTime} 秒`);
 
 // ── 5 回で打ち止め ────────────────────────────────
 for (let i = 0; i < 5; i++) {

@@ -28,6 +28,9 @@ import {
 import {
   QSO_ERROR, QSO_ERROR_LABEL, loadHighScores, saveHighScore,
 } from './contestlog.js';
+import {
+  CELEBRATIONS, RANDOM_ID, celebrationById, runCelebration, clearCelebration,
+} from './celebrate.js';
 import { Tutorial, TUTORIAL_STEPS } from './tutorial.js';
 import {
   loadSettings, saveSettings, loadStats, saveStats, resetStats,
@@ -1303,7 +1306,12 @@ function redoKeying() {
 
   // 打鍵の採点結果を出している欄。開いていないものは触らない
   ['#keyer-result', '#qso-guide-keyed-result', '#qso-live-result']
-    .forEach((sel) => { const box = $(sel); if (box) box.innerHTML = ''; });
+    .forEach((sel) => {
+      const box = $(sel);
+      if (!box) return;
+      box.innerHTML = '';
+      clearCelebration(box);   // 祝いの余韻も一緒に片付ける
+    });
 
   // 打鍵の採点で点を積んでいたときだけ、採点前の状態に戻す。
   // 聞き取りターンの採点は liveScores に積まないので、ここで取り消すと
@@ -1314,10 +1322,17 @@ function redoKeying() {
     qso.graded = false;
   }
 
-  // パドル送信の課題を打ち直すときは、そこから次の 100点＋ までを計り直す。
+  // 計測は「その課題に挑み始めてから 100点＋ が出るまで」。数え直すのは
+  // 100点＋ を出したあとの「打ち直す」だけで、途中の失敗では数え直さない
+  // （失敗のたびに 0 に戻すと、最後の 1 回ぶんしか計らないことになる）。
+  // 計測中は startedAt が入ったまま、100点＋ を記録した時点で 0 に戻る。
+  //
   // 他のタブの「打ち直す」で計測が始まってしまわないよう、
-  // パドル送信タブを開いていて課題が出ているときだけ
-  if (paddle.task && $('#panel-keyer')?.classList.contains('is-active')) startKeyerAttempt();
+  // パドル送信タブを開いていて課題が出ているときだけ数え直す
+  if (paddle.task && !paddle.startedAt
+      && $('#panel-keyer')?.classList.contains('is-active')) {
+    startKeyerAttempt();
+  }
 
   renderKeyedText();
   syncRedoLabel();
@@ -2369,13 +2384,95 @@ function renderKeyerPlus() {
     <table class="plus-table">
       <thead><tr><th>回</th><th>かかった時間</th></tr></thead>
       <tbody>${paddle.runs.map((r, i) => `
-        <tr class="${r.seconds === best ? 'best' : ''}">
+        <tr class="${r.seconds === best ? 'best' : ''}${i === paddle.runs.length - 1 ? ' just-in' : ''}">
           <td class="rank">${i + 1}</td><td>${r.seconds.toFixed(1)} 秒</td>
         </tr>`).join('')}</tbody>
     </table>
     <p class="hint">${paddle.runs.length >= KEYER_PLUS_MAX
       ? `${KEYER_PLUS_MAX} 回そろいました。次の課題に進むと数え直します。`
-      : '「打ち直す」を押した時点から、次の 100点＋ が出るまでを計ります。'}</p>`;
+      : `100点＋ が出たあと最初に「打ち直す」を押した時点から、次の 100点＋ が
+         出るまでを計ります。途中で外しても、そこでは数え直しません。`}</p>`;
+}
+
+/**
+ * 100点＋ を出したときの祝い。
+ *
+ * 「間隔までそろった」は狙って出せるものではないので、出たときは
+ * はっきり別格だと分かるようにする。祝い方は 10 種類から選べる
+ * （設定・記録 →「100点＋ の祝い方」）。中身は celebrate.js。
+ */
+function celebrateKeyerPlus(box) {
+  runCelebration(box, {
+    id: settings.plusStyle,
+    play: (pattern) => player.fanfare(pattern),
+  });
+}
+
+/** 「おまかせ」を選んだときの説明。祝い方そのものの説明とは別に要る。 */
+const RANDOM_NOTE = '出るたびに 10 種類から選び直します（続けて同じものは出ません）。';
+
+/**
+ * 設定画面の「100点＋ の祝い方」。
+ *
+ * 10 種類を打たずに比べられるよう、その場で動く見本を付ける。
+ * 見本が無いと、選ぶために毎回 100点＋ を出さねばならない。
+ */
+function initPlusStyle() {
+  const sel = $('#set-plus-style');
+  const note = $('#plus-style-note');
+  const preview = $('#plus-preview');
+  if (!sel || !preview) return;
+
+  sel.innerHTML = `<option value="${RANDOM_ID}">おまかせ（毎回変わる）</option>`
+    + CELEBRATIONS
+      .map((c, i) => `<option value="${c.id}">${i + 1}. ${escapeHtml(c.name)}</option>`)
+      .join('');
+  sel.value = settings.plusStyle === RANDOM_ID
+    || CELEBRATIONS.some((c) => c.id === settings.plusStyle)
+    ? settings.plusStyle : RANDOM_ID;
+
+  /** 見本の中身を、採点欄と同じ組み立てで置き直す。 */
+  const frame = (footer) => {
+    // 飾りを重ねる前に器ごと作り直す。前の飾りが残っていると混ざる
+    clearCelebration(preview);
+    preview.innerHTML = `
+      <div class="score-line">
+        <span class="big is-plus">100点＋</span>
+        <span class="hint">文字も語の切れ目も手本どおり — 0.8 秒</span>
+        <span class="plus-best">自己ベスト更新</span>
+      </div>
+      <p class="hint">${footer}</p>`;
+  };
+
+  const show = () => {
+    frame('これは見本です。実際の採点でも同じように出ます。');
+    // どれが出たかは runCelebration が返す。おまかせのときは、
+    // 何が出たのか分からないと見本の意味がないので名前を添える
+    const style = runCelebration(preview, {
+      id: sel.value, play: (p) => player.fanfare(p),
+    });
+    if (note && style) {
+      note.textContent = sel.value === RANDOM_ID
+        ? `${RANDOM_NOTE}　いまのは「${style.name}」。`
+        : style.note;
+    }
+  };
+
+  // 選んだ時点で保存し、そのまま見本を出す。「決定」を押させない
+  sel.addEventListener('change', () => {
+    settings.plusStyle = sel.value;
+    persist();
+    show();
+  });
+  $('#btn-plus-preview')?.addEventListener('click', show);
+
+  // 開いた直後は静かにしておく。音が勝手に鳴ると驚かせる
+  if (note) {
+    note.textContent = sel.value === RANDOM_ID
+      ? RANDOM_NOTE
+      : (CELEBRATIONS.find((c) => c.id === sel.value)?.note ?? '');
+  }
+  frame('「見本を見る」で動きと音を確かめられます。');
 }
 
 /** 交信の中で実際に打つことの多い定型文。 */
@@ -2754,6 +2851,7 @@ function newKeyerTask() {
   paddle.elements = '';
   $('#keyer-elements').textContent = '';
   $('#keyer-result').innerHTML = '';
+  clearCelebration($('#keyer-result'));
   renderKeyedText();
 }
 
@@ -2763,6 +2861,7 @@ function endKeyerTask() {
   paddle.elements = '';
   $('#keyer-elements').textContent = '';
   $('#keyer-result').innerHTML = '';
+  clearCelebration($('#keyer-result'));
   renderKeyedText();
 }
 
@@ -2806,10 +2905,14 @@ function gradeKeying() {
   // 語の切れ目までそろっているかは別に見て、そろっていれば別格に扱う
   const plus = sameSpacing(paddle.task, sent);
   let plusTime = '';
+  let plusBest = false;
   if (plus) {
     if (paddle.startedAt) {
       const seconds = (performance.now() - paddle.startedAt) / 1000;
       plusTime = ` — ${seconds.toFixed(1)} 秒`;
+      // 記録に足す前に見る。1 回目は比べる相手がいないので自己ベストとは言わない
+      plusBest = paddle.runs.length > 0
+        && seconds < Math.min(...paddle.runs.map((r) => r.seconds));
       if (paddle.runs.length < KEYER_PLUS_MAX) paddle.runs.push({ seconds });
       // 記録したら計測を止める。打ち直すまで次の計測は始めない
       paddle.startedAt = 0;
@@ -2819,7 +2922,8 @@ function gradeKeying() {
 
   const scoreLine = plus
     ? `<span class="big is-plus">100点＋</span>
-       <span class="hint">文字も語の切れ目も手本どおり${escapeHtml(plusTime)}</span>`
+       <span class="hint">文字も語の切れ目も手本どおり${escapeHtml(plusTime)}</span>
+       ${plusBest ? '<span class="plus-best">自己ベスト更新</span>' : ''}`
     : `<span class="big">${pct}%</span>
        <span class="hint">${result.correct} / ${result.total} 文字一致${scoreNote(result)}</span>`;
 
@@ -2841,6 +2945,9 @@ function gradeKeying() {
     ${spacingNote}
     <p class="hint">手本: <code>${escapeHtml(paddle.task)}</code></p>
     <p class="hint">あなたの符号: <code>${escapeHtml(sent)}</code></p>`;
+
+  if (plus) celebrateKeyerPlus(box);
+  else clearCelebration(box);
 
   // 次へ進む導線は「採点する・打ち直す」と同じ段に常設してあるので、
   // ここには置かない（同じ操作のボタンが 2 つあると迷う）
@@ -3054,6 +3161,8 @@ function initSettings() {
     persist();
     syncBeginnerToggles();
   });
+
+  initPlusStyle();
 
   // 記録の書き出し（設定・成績・自己ベストをまとめた JSON）
   $('#btn-export-data').addEventListener('click', () => {
@@ -3833,6 +3942,7 @@ window.__cw = {
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   sendingDiffHtml, comparisonColumns,        // 採点結果の見せ方を検証できるように
   sameSpacing, spacingUnits,                 // 100点＋（語の切れ目）の判定を検証できるように
+  CELEBRATIONS, RANDOM_ID, celebrationById, runCelebration, clearCelebration,  // 祝い方 10 種類を検証できるように
   get paddleState() { return paddle; },
   redoKeying,                                // 打ち直しの入口を検証できるように
   DRILL_TYPES, makeProblem, termListHtml,    // ドリルの種類と解説を検証できるように

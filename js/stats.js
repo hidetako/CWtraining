@@ -54,6 +54,9 @@ export const DEFAULT_SETTINGS = {
   keyerTaskType: 'callsign',
   keyerTopic: '',        // 交信の定型文の話題。空ならすべての話題から選ぶ
   keyerFreq: 700,       // 送信側音の高さ Hz（受信の freq とは独立）
+  // 100点＋ を出したときの祝い方（celebrate.js の id）。
+  // 既定は 'random'（毎回 10 種類から選び直す）
+  plusStyle: 'random',
 
   // コンテスト運用
   contestMode: 'pileup',

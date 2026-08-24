@@ -7,6 +7,23 @@ import { tokenize, computeTiming } from './morse.js';
 
 const RAMP_MAX = 0.005; // キークリック防止のための立上り/立下り時間（秒）
 
+/**
+ * 既定のファンファーレ。よくある「タタタ ター」の形。
+ * 三連符で主音を刻み、属音へ跳ね上がり、最後に主和音を重ねて終わる。
+ * 比はすべて打鍵側音に対する倍率（1 = 側音そのもの）。
+ */
+const DEFAULT_FANFARE = [
+  { ratio: 1,     at: 0,    len: 0.085 },
+  { ratio: 1,     at: 0.10, len: 0.085 },
+  { ratio: 5 / 4, at: 0.20, len: 0.085 },
+  { ratio: 3 / 2, at: 0.30, len: 0.20  },
+  // 主和音を重ねて締める。上の 8 度を少し弱めると団子にならない
+  { ratio: 2,     at: 0.52, len: 0.55, decay: 0.16 },
+  { ratio: 3 / 2, at: 0.52, len: 0.55, decay: 0.16, gain: 0.3 },
+  { ratio: 5 / 4, at: 0.52, len: 0.55, decay: 0.16, gain: 0.22 },
+  { ratio: 1,     at: 0.52, len: 0.55, decay: 0.16, gain: 0.22 },
+];
+
 export class CWPlayer {
   constructor() {
     this.ctx = null;
@@ -229,6 +246,64 @@ export class CWPlayer {
     g.linearRampToValueAtTime(peak, on + ramp);
     g.setValueAtTime(peak, Math.max(on + ramp, off - ramp));
     g.linearRampToValueAtTime(0, off);
+  }
+
+  /**
+   * うまく打てたときのファンファーレ。
+   *
+   * 音程は打鍵側音を土台にした比で書く。側音を 700 Hz から動かしている人
+   * でもファンファーレだけ調子が外れて聞こえない、という理由から。
+   *
+   * 音符の書き方（比は側音に対する倍率、時刻と長さは秒）:
+   *   { ratio, at, len }            その高さで鳴らす
+   *   { ratio, at, len, to }        ratio から to へ滑らせる（サイレン・掃引）
+   *   { ratio, at, len, wave }      その音だけ波形を変える
+   *   { ratio, at, len, gain }      その音だけ音量を変える（既定 0.45）
+   *   { ratio, at, len, decay }     余韻の長さ（既定は長さに応じて自動）
+   * 同じ at に複数書けば和音になる。
+   *
+   * 送信バスへ流すので、フェージングや受信帯域の演出はかからない。
+   * ユーザー操作（採点する）の中から呼ぶこと。
+   *
+   * @param {{notes: object[], wave?: string}} [pattern] 省略時は既定の
+   *   ファンファーレ（三連符から属音、最後に主和音）
+   */
+  async fanfare(pattern) {
+    await this.resume();
+    const ctx = this.ctx;
+    const base = this.settings.keyerFreq || 700;
+    const notes = pattern?.notes ?? DEFAULT_FANFARE;
+    // 矩形波は同じ振幅だと耳に刺さるので、祝いの音では使わない
+    const fallbackWave = pattern?.wave
+      ?? (this.settings.wave === 'square' ? 'triangle' : this.settings.wave);
+
+    const t0 = ctx.currentTime + 0.02;
+    for (const n of notes) {
+      const osc = ctx.createOscillator();
+      osc.type = n.wave ?? fallbackWave;
+
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      osc.connect(gain);
+      gain.connect(this.txBus);
+
+      const on = t0 + n.at;
+      const off = on + n.len;
+
+      osc.frequency.setValueAtTime(base * n.ratio, on);
+      if (n.to) osc.frequency.linearRampToValueAtTime(base * n.to, off);
+
+      // 側音より控えめに。祝いの音が練習の音より大きいと落ち着かない
+      const peak = n.gain ?? 0.45;
+      gain.gain.setValueAtTime(0, on);
+      gain.gain.linearRampToValueAtTime(peak, on + 0.008);
+      // 長い音ほど余韻を残す。短い音を長く引くと次の音と濁る
+      const decay = n.decay ?? (n.len > 0.1 ? 0.09 : 0.02);
+      gain.gain.setTargetAtTime(0, Math.max(on + 0.01, off - 0.02), decay);
+
+      osc.start(on);
+      osc.stop(off + decay * 6);
+    }
   }
 
   /** 妨害信号として、ずれた周波数でランダムな文字を流し続ける。 */
