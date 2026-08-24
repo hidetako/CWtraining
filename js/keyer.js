@@ -24,6 +24,42 @@ const LOOKAHEAD = 0.008; // 秒。次要素を決める前倒し量
  */
 const STUCK_LIMIT_MS = 10000;
 
+/**
+ * 解読が「文字の切れ目」「語の切れ目」とみなす無音の長さ（短点いくつ分か）。
+ * 実運用に合わせ、規定の 3 短点・7 短点よりやや手前で切る。
+ * 間隔の判定でも同じ値で分類し、解読の見方と食い違わないようにする。
+ */
+const CHAR_BREAK_DITS = 2.4;
+const WORD_BREAK_DITS = 6;
+
+/**
+ * 語の切れ目まで含めて、解読結果が手本どおりかを見る。
+ *
+ * 文字の採点（compareSending）は語間を照合に使わない。手が一瞬止まった
+ * だけで語間が入るので、そこまで採点すると符号そのものの正誤が見えなく
+ * なるため。こちらは「CQ が C Q に割れていないか」だけを別に見て、
+ * 間隔までそろった打鍵を別格として扱えるようにする。
+ *
+ * 表記ではなく符号で比べるので、= と <BT> の違いは差にならない。
+ */
+export function spacingUnits(text) {
+  const out = [];
+  for (const u of codeUnits(String(text || ''))) {
+    // 連続した空白は 1 つの語間として数える
+    if (u.space) { if (out.length && out[out.length - 1] !== ' ') out.push(' '); }
+    else out.push(u.key);
+  }
+  while (out.length && out[out.length - 1] === ' ') out.pop();
+  return out;
+}
+
+/** 手本と打鍵が、語の切れ目まで一致しているか。 */
+export function sameSpacing(target, sent) {
+  const a = spacingUnits(target);
+  const b = spacingUnits(sent);
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
 /** 送信速度の下限・上限（WPM）。画面のつまみと保存値の両方をこれで抑える。 */
 export const KEYER_WPM_MIN = 5;
 export const KEYER_WPM_MAX = 28;
@@ -282,8 +318,8 @@ export class ElectronicKeyer extends EventTarget {
     clearTimeout(this.wordTimer);
     if (!this.buffer && !this.text) return;
 
-    this.charTimer = setTimeout(() => this._flushChar(), this.dit * 1000 * 2.4);
-    this.wordTimer = setTimeout(() => this._flushWord(), this.dit * 1000 * 6);
+    this.charTimer = setTimeout(() => this._flushChar(), this.dit * 1000 * CHAR_BREAK_DITS);
+    this.wordTimer = setTimeout(() => this._flushWord(), this.dit * 1000 * WORD_BREAK_DITS);
   }
 
   _flushChar() {

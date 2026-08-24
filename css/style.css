@@ -976,6 +976,27 @@ kbd {
 .sup-manual-target { margin: .4rem 0 0; font-size: .95rem; }
 .sup-manual-target code { font-size: 1rem; }
 
+/* 間隔まで手本どおりに打てたときの別格評価 */
+.score-line .big.is-plus {
+  color: var(--ok);
+  text-shadow: 0 0 18px rgba(88, 214, 141, .35);
+}
+.plus-table {
+  border-collapse: collapse;
+  font-size: .78rem;
+  margin-top: .35rem;
+  min-width: 12rem;
+}
+.plus-table th, .plus-table td {
+  text-align: left;
+  padding: .16rem .7rem .16rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.plus-table th { color: var(--text-dim); font-weight: 600; font-size: .7rem; }
+.plus-table td { font-family: var(--mono); }
+.plus-table td.rank { color: var(--text-dim); }
+.plus-table .best td { color: var(--ok); }
+
 /* ───────── ログ帳 ───────── */
 .log-date-row { display: flex; gap: .4rem; align-items: center; }
 .log-date-row input { flex: 1; min-width: 0; }

@@ -73,7 +73,8 @@ ok('打った符号は片付く', (await keyed()) === '', JSON.stringify(await k
 await page.evaluate(() => { window.__cw.keyer.text = window.__cw.keyerTask; });
 await page.click('#btn-keyer-grade');
 await page.waitForTimeout(400);
-ok('採点結果が出る', (await page.textContent('#keyer-result .big')).trim() === '100%',
+// 手本をそのまま与えているので、語の切れ目までそろって 100点＋ になる
+ok('採点結果が出る', (await page.textContent('#keyer-result .big')).trim() === '100点＋',
   await page.textContent('#keyer-result .big'));
 ok('採点結果に同じ操作のボタンを重ねない',
   await page.evaluate(() => document.querySelectorAll('#keyer-result .btn').length) === 0,
