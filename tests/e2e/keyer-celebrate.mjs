@@ -74,8 +74,31 @@ ok('音の並びが種類ごとに違う', new Set(shapes).size === 10, `${new S
 await page.click('.tab[data-panel="settings"]');
 await page.waitForTimeout(300);
 const opts = await page.$$eval('#set-plus-style option', (els) => els.map((e) => e.value));
-ok('設定に 10 種類が並ぶ', opts.length === 10, `${opts.length} 個`);
-ok('並びは定義と同じ', opts.join() === styles.map((s) => s.id).join());
+ok('設定に「おまかせ」＋10 種類が並ぶ', opts.length === 11, `${opts.length} 個`);
+ok('先頭が「おまかせ」', opts[0] === 'random', opts[0]);
+ok('並びは定義と同じ', opts.slice(1).join() === styles.map((s) => s.id).join());
+
+// ── 既定は「おまかせ」 ────────────────────────────
+// 10 種類あっても、選びに行かなければ 1 つしか見ないことになる
+ok('既定はおまかせ',
+  await page.evaluate(() => window.__cw.settings.plusStyle) === 'random',
+  await page.evaluate(() => window.__cw.settings.plusStyle));
+ok('選択欄も初めはおまかせ', await page.inputValue('#set-plus-style') === 'random');
+
+// 出るたびに選び直す。20 回見て、少なくとも半分の種類が出ること
+const picked = await page.evaluate(() => {
+  const out = [];
+  for (let i = 0; i < 20; i++) out.push(window.__cw.celebrationById('random').id);
+  return out;
+});
+ok('おまかせは毎回選び直す', new Set(picked).size >= 5,
+  `${new Set(picked).size} 種類 / 20 回`);
+// 続けて同じものが出ると「おまかせが効いていない」と見えるので避けている
+ok('続けて同じものは出ない',
+  picked.every((id, i) => i === 0 || id !== picked[i - 1]),
+  picked.join(','));
+ok('おまかせが出すのは定義された 10 種類だけ',
+  picked.every((id) => styles.some((s) => s.id === id)));
 
 // 選ぶと保存され、次に開いたときもその祝い方になる
 await page.selectOption('#set-plus-style', 'medal');
@@ -100,6 +123,25 @@ ok('「見本を見る」で出し直せる',
   await page.locator('#plus-preview .celebrate-stage').count() === 1);
 ok('「見本を見る」で音も鳴る',
   await page.evaluate(() => window.__fanfares.length) === before + 1);
+
+// ── おまかせの見本 ────────────────────────────────
+// 何が出たのか分からないと、おまかせの見本は意味がない
+await page.selectOption('#set-plus-style', 'random');
+await page.waitForTimeout(300);
+const randNote = await page.textContent('#plus-style-note');
+ok('おまかせでも出た種類の名前が出る',
+  styles.some((s) => randNote.includes(s.name)), randNote);
+ok('おまかせの説明も出る', randNote.includes('10 種類'), randNote);
+
+// 押すたびに変わる。10 回押して 3 種類以上出ること
+const shown = new Set();
+for (let i = 0; i < 10; i++) {
+  await page.click('#btn-plus-preview');
+  await page.waitForTimeout(140);
+  shown.add(await page.getAttribute('#plus-preview', 'data-celebrate'));
+}
+ok('見本も押すたびに変わる', shown.size >= 3, `${shown.size} 種類 / 10 回`);
+await page.waitForTimeout(2600);
 
 // ── 10 種類それぞれが、実際に違うものを出す ────────
 await page.waitForTimeout(2600);
@@ -186,6 +228,20 @@ ok('遅くても祝いはする',
 const restarted = await page.evaluate(() => document.getAnimations()
   .filter((a) => document.querySelector('#keyer-result')?.contains(a.effect?.target)).length);
 ok('続けて出しても動きがやり直される', restarted >= 1, `${restarted} 本`);
+
+// ── おまかせなら採点のたびに祝い方が変わる ────────
+await page.evaluate(() => { window.__cw.settings.plusStyle = 'random'; });
+const seen = new Set();
+for (let i = 0; i < 10; i++) {
+  await page.click('#btn-keyer-clear');
+  await page.waitForTimeout(120);
+  await gradeAs(page, task, 1.0);
+  seen.add(await page.getAttribute('#keyer-result', 'data-celebrate'));
+}
+ok('おまかせなら採点のたびに変わる', seen.size >= 3, `${seen.size} 種類 / 10 回`);
+ok('おまかせでも定義された 10 種類だけ',
+  [...seen].every((id) => styles.some((s) => s.id === id)), [...seen].join(','));
+await page.waitForTimeout(2400);
 
 // ── 100点＋ でなければ祝わない ────────────────────
 await page.click('#btn-keyer-clear');

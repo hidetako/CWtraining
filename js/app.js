@@ -28,7 +28,9 @@ import {
 import {
   QSO_ERROR, QSO_ERROR_LABEL, loadHighScores, saveHighScore,
 } from './contestlog.js';
-import { CELEBRATIONS, runCelebration, clearCelebration } from './celebrate.js';
+import {
+  CELEBRATIONS, RANDOM_ID, celebrationById, runCelebration, clearCelebration,
+} from './celebrate.js';
 import { Tutorial, TUTORIAL_STEPS } from './tutorial.js';
 import {
   loadSettings, saveSettings, loadStats, saveStats, resetStats,
@@ -2406,6 +2408,9 @@ function celebrateKeyerPlus(box) {
   });
 }
 
+/** 「おまかせ」を選んだときの説明。祝い方そのものの説明とは別に要る。 */
+const RANDOM_NOTE = '出るたびに 10 種類から選び直します（続けて同じものは出ません）。';
+
 /**
  * 設定画面の「100点＋ の祝い方」。
  *
@@ -2418,16 +2423,16 @@ function initPlusStyle() {
   const preview = $('#plus-preview');
   if (!sel || !preview) return;
 
-  sel.innerHTML = CELEBRATIONS
-    .map((c, i) => `<option value="${c.id}">${i + 1}. ${escapeHtml(c.name)}</option>`)
-    .join('');
-  sel.value = CELEBRATIONS.some((c) => c.id === settings.plusStyle)
-    ? settings.plusStyle : CELEBRATIONS[0].id;
+  sel.innerHTML = `<option value="${RANDOM_ID}">おまかせ（毎回変わる）</option>`
+    + CELEBRATIONS
+      .map((c, i) => `<option value="${c.id}">${i + 1}. ${escapeHtml(c.name)}</option>`)
+      .join('');
+  sel.value = settings.plusStyle === RANDOM_ID
+    || CELEBRATIONS.some((c) => c.id === settings.plusStyle)
+    ? settings.plusStyle : RANDOM_ID;
 
   /** 見本の中身を、採点欄と同じ組み立てで置き直す。 */
   const frame = (footer) => {
-    const style = CELEBRATIONS.find((c) => c.id === sel.value) ?? CELEBRATIONS[0];
-    if (note) note.textContent = style.note;
     // 飾りを重ねる前に器ごと作り直す。前の飾りが残っていると混ざる
     clearCelebration(preview);
     preview.innerHTML = `
@@ -2437,12 +2442,20 @@ function initPlusStyle() {
         <span class="plus-best">自己ベスト更新</span>
       </div>
       <p class="hint">${footer}</p>`;
-    return style;
   };
 
   const show = () => {
-    const style = frame('これは見本です。実際の採点でも同じように出ます。');
-    runCelebration(preview, { id: style.id, play: (p) => player.fanfare(p) });
+    frame('これは見本です。実際の採点でも同じように出ます。');
+    // どれが出たかは runCelebration が返す。おまかせのときは、
+    // 何が出たのか分からないと見本の意味がないので名前を添える
+    const style = runCelebration(preview, {
+      id: sel.value, play: (p) => player.fanfare(p),
+    });
+    if (note && style) {
+      note.textContent = sel.value === RANDOM_ID
+        ? `${RANDOM_NOTE}　いまのは「${style.name}」。`
+        : style.note;
+    }
   };
 
   // 選んだ時点で保存し、そのまま見本を出す。「決定」を押させない
@@ -2454,6 +2467,11 @@ function initPlusStyle() {
   $('#btn-plus-preview')?.addEventListener('click', show);
 
   // 開いた直後は静かにしておく。音が勝手に鳴ると驚かせる
+  if (note) {
+    note.textContent = sel.value === RANDOM_ID
+      ? RANDOM_NOTE
+      : (CELEBRATIONS.find((c) => c.id === sel.value)?.note ?? '');
+  }
   frame('「見本を見る」で動きと音を確かめられます。');
 }
 
@@ -3924,7 +3942,7 @@ window.__cw = {
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   sendingDiffHtml, comparisonColumns,        // 採点結果の見せ方を検証できるように
   sameSpacing, spacingUnits,                 // 100点＋（語の切れ目）の判定を検証できるように
-  CELEBRATIONS, runCelebration, clearCelebration,  // 祝い方 10 種類を検証できるように
+  CELEBRATIONS, RANDOM_ID, celebrationById, runCelebration, clearCelebration,  // 祝い方 10 種類を検証できるように
   get paddleState() { return paddle; },
   redoKeying,                                // 打ち直しの入口を検証できるように
   DRILL_TYPES, makeProblem, termListHtml,    // ドリルの種類と解説を検証できるように

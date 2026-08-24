@@ -378,8 +378,28 @@ export const CELEBRATIONS = [
   },
 ];
 
-/** id から祝い方を引く。知らない id は既定（紙吹雪）に落とす。 */
+/** 「おまかせ」を表す id。祝うたびに 10 種類から選び直す。 */
+export const RANDOM_ID = 'random';
+
+/** 直前に出した祝い方。おまかせで 2 回続けて同じものを出さないために覚える。 */
+let lastPicked = null;
+
+/**
+ * id から祝い方を引く。
+ *
+ * おまかせのときは毎回選び直す。ただし直前と同じものは避ける。
+ * 続けて同じものが出ると「おまかせが効いていない」と見えるため。
+ * 知らない id は既定（紙吹雪）に落とす。
+ */
 export function celebrationById(id) {
+  if (id === RANDOM_ID) {
+    const pool = CELEBRATIONS.length > 1
+      ? CELEBRATIONS.filter((c) => c.id !== lastPicked)
+      : CELEBRATIONS;
+    const picked = pool[Math.floor(Math.random() * pool.length)];
+    lastPicked = picked.id;
+    return picked;
+  }
   return CELEBRATIONS.find((c) => c.id === id) ?? CELEBRATIONS[0];
 }
 
@@ -394,9 +414,10 @@ const running = new WeakMap();
  * @param {string} opts.id      祝い方の id
  * @param {(p?: object) => Promise<void>} [opts.play] 音を鳴らす関数
  * @param {boolean} [opts.motion] 動きを出してよいか（既定は OS 設定に従う）
+ * @returns {object|undefined} 実際に出した祝い方（おまかせのときはその回の 1 つ）
  */
 export function runCelebration(box, { id, play, motion } = {}) {
-  if (!box) return;
+  if (!box) return undefined;
   const style = celebrationById(id);
 
   clearTimeout(running.get(box));
@@ -413,7 +434,7 @@ export function runCelebration(box, { id, play, motion } = {}) {
   if (play) play(style.sound)?.catch?.(() => {});
 
   const allowed = motion ?? !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  if (!allowed) return;
+  if (!allowed) return style;
 
   const stage = el('div');
   stage.className = 'celebrate-stage';
@@ -427,6 +448,8 @@ export function runCelebration(box, { id, play, motion } = {}) {
     stage.remove();
     running.delete(box);
   }, style.ms));
+
+  return style;
 }
 
 /** 祝いの跡を消す（打ち直す・次の課題へ進むとき）。 */
