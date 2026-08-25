@@ -19,7 +19,7 @@ import { LocalResponder, gradeField, REACTION_LABELS, FIELD_HINTS } from './qso.
 import { PHASES, PATTERN_SHEET, makeReplyOptions, readDxTurn } from './qsoguide.js';
 import {
   ElectronicKeyer, KEYER_MODES, attachPaddleInput, compareSending, isTextEntry,
-  sameSpacing, spacingUnits,
+  sameSpacing, spacingUnits, spacingDiff,
 } from './keyer.js';
 import {
   ContestRunner, EXCHANGE_TYPES, RUN_MODES,
@@ -1277,6 +1277,46 @@ function compareRowsHtml(marks) {
 
   return `<div class="compare">
       <span class="cmp-label">あなた</span><span class="cmp-label">正解</span>${cells}
+    </div>`;
+}
+
+/**
+ * 100点＋ にならなかった理由（語の切れ目）を、語の単位で見せる。
+ *
+ * 文字がすべて合っているのに別格にならないと、`=` を `<BT>` と解読された
+ * せいだと思ってしまう（実際にはこの 2 つは同じ符号なので差にならない）。
+ * どの語が割れた／つながったのかを名指しし、その語だけを上下に並べる。
+ */
+function spacingNoteHtml(target, sent) {
+  const diff = spacingDiff(target, sent);
+  const head = `<p class="hint">文字はすべて合っています。<strong>語の切れ目</strong>が
+      手本と違うため 100点＋ にはなりません。</p>`;
+  // 文字自体が違って語の組が作れないときは、理由だけ述べて 2 行に頼る
+  if (!diff.pairs.length) {
+    return `${head}<p class="hint">下の「手本」と「あなたの符号」を見比べてください。</p>`;
+  }
+
+  const names = (words) => words.map((w) => `<code>${escapeHtml(w.text)}</code>`).join(' ');
+  // 割れ（1 語 → 2 語以上）とつなぎ（2 語以上 → 1 語）を分けて述べる。
+  // 「切れ目が違う」の中身はこの 2 つしかない
+  const notes = diff.pairs.filter((p) => !p.ok).map((p) => (p.sent.length > p.target.length
+    ? `${names(p.target)} を ${names(p.sent)} に<strong>割って</strong>います。`
+    : `${names(p.target)} を ${names(p.sent)} と<strong>つなげて</strong>います。`));
+
+  // 語と語のあいだに縦棒を立てて、切れ目の位置そのものを示す。
+  // 空白で並べるだけだと「BE GINNER」が 1 語に見えて、どこで割れたのか
+  // 結局読み取れない
+  const cell = (row, words, ok) =>
+    `<span class="${row} ${ok ? 'ok' : (row === 'mine' ? 'bad' : 'want-bad')}">${
+      words.map((w) => escapeHtml(w.text)).join('<i class="brk"></i>')}</span>`;
+  const cells = diff.pairs
+    .map((p) => cell('mine', p.sent, p.ok) + cell('want', p.target, p.ok))
+    .join('');
+
+  return `${head}
+    <p class="hint">${notes.join(' ')}</p>
+    <div class="compare compare-words">
+      <span class="cmp-label">あなた</span><span class="cmp-label">手本</span>${cells}
     </div>`;
 }
 
@@ -2928,10 +2968,10 @@ function gradeKeying() {
        <span class="hint">${result.correct} / ${result.total} 文字一致${scoreNote(result)}</span>`;
 
   // 文字は合っているのに別格にならなかったときは、理由が分かるようにする。
-  // 「CQ」が「C Q」に割れている、のような差はこれを見ないと気づけない
+  // 「語の切れ目が違います」だけでは、どこで割れたのかは 2 行を目で追わないと
+  // 分からない。割れた語そのものを名指しして、上下に並べて見せる
   const spacingNote = (!plus && result.accuracy >= 1)
-    ? `<p class="hint">文字はすべて合っています。<strong>語の切れ目</strong>が手本と違うため
-        100点＋ にはなりません（下の 2 行を見比べてください）。</p>`
+    ? spacingNoteHtml(paddle.task, sent)
     : '';
 
   box.innerHTML = `
@@ -3941,7 +3981,7 @@ window.__cw = {
   player, keyer, contest, responder,
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   sendingDiffHtml, comparisonColumns,        // 採点結果の見せ方を検証できるように
-  sameSpacing, spacingUnits,                 // 100点＋（語の切れ目）の判定を検証できるように
+  sameSpacing, spacingUnits, spacingDiff,    // 100点＋（語の切れ目）の判定を検証できるように
   CELEBRATIONS, RANDOM_ID, celebrationById, runCelebration, clearCelebration,  // 祝い方 10 種類を検証できるように
   get paddleState() { return paddle; },
   redoKeying,                                // 打ち直しの入口を検証できるように
