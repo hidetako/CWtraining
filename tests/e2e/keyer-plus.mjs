@@ -74,6 +74,42 @@ ok('100点＋ にはならない', await page.locator('#keyer-result .big.is-plu
 ok('理由が書いてある', body2.includes('語の切れ目'), body2.slice(0, 80));
 ok('記録は増えない', await page.$$eval('#keyer-plus .plus-table tbody tr', (e) => e.length) === 1);
 
+// どの語が割れたのかを名指しする。「切れ目が違う」だけでは、2 行を目で
+// 追わないと分からない
+ok('割れた語を名指しする', body2.includes('割って'), body2.slice(0, 200));
+ok('語ごとの突き合わせが出る',
+  await page.locator('#keyer-result .compare-words').count() === 1);
+const splitCells = await page.$$eval('#keyer-result .compare-words .mine',
+  (els) => els.map((e) => ({ text: e.textContent, bad: e.classList.contains('bad') })));
+console.log('語の突き合わせ:', JSON.stringify(splitCells));
+ok('割れた語だけに色が付く',
+  splitCells.filter((c) => c.bad).length === 1,
+  JSON.stringify(splitCells.filter((c) => c.bad)));
+
+// ── = と <BT> は語の切れ目でも同じ扱い ────────────
+// 文字が全部合っているのに別格にならないと、= を <BT> と解読された
+// せいだと思ってしまう。この 2 つは同じ符号なので差にならない
+const diff = await page.evaluate(() => window.__cw.spacingDiff(
+  'PSE QRS = I AM BEGINNER HI', 'PSE QRS <BT> I AM BE GINNER HI'));
+const btPair = diff.pairs.find((p) => p.sent[0].text === '<BT>');
+ok('= と <BT> の組は一致扱い', btPair?.ok === true, JSON.stringify(btPair));
+const splitPair = diff.pairs.find((p) => !p.ok);
+ok('割れた語だけが不一致',
+  splitPair?.target.map((w) => w.text).join() === 'BEGINNER'
+  && splitPair?.sent.map((w) => w.text).join() === 'BE,GINNER',
+  JSON.stringify(splitPair));
+ok('= と <BT> だけの違いなら 100点＋',
+  await page.evaluate(() => window.__cw.sameSpacing(
+    'PSE QRS = I AM BEGINNER HI', 'PSE QRS <BT> I AM BEGINNER HI')));
+
+// つなげたときも同じように名指しできる
+const joined = await page.evaluate(() => window.__cw.spacingDiff('CQ TEST', 'CQTEST'));
+ok('つなぎも組にできる', joined.pairs.length === 1 && joined.pairs[0].ok === false,
+  JSON.stringify(joined.pairs.map((p) => [p.target.map((w) => w.text), p.sent.map((w) => w.text)])));
+// 文字そのものが違うときは語では比べられない。無理に組にしない
+const wrong = await page.evaluate(() => window.__cw.spacingDiff('CQ TEST', 'CQ TXST'));
+ok('文字が違えば組にしない', wrong.pairs.length === 0, JSON.stringify(wrong));
+
 // ── 外したあとの打ち直しでは数え直さない ──────────
 // 計測は「その課題に挑み始めてから 100点＋ が出るまで」。失敗のたびに
 // 0 に戻すと、最後の 1 回ぶんしか計らないことになる

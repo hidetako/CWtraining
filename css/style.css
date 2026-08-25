@@ -465,6 +465,23 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
 }
 .compare .blank { color: var(--text-dim); }
 
+/* 語の切れ目の突き合わせ。1 文字ずつではなく語ごとに並べるので、
+   語と語の間はゆったり空けて「ここが切れ目」と読めるようにする */
+.compare-words {
+  font-size: 1rem;
+  gap: .3rem .9rem;
+}
+.compare-words .mine, .compare-words .want { padding: .05em .3em; white-space: nowrap; }
+/* 語と語のあいだに立てる縦棒。ここが切れ目、と一目で分かるようにする */
+.compare-words .brk {
+  display: inline-block;
+  width: 2px; height: 1em;
+  margin: 0 .35em;
+  vertical-align: -.15em;
+  background: currentColor;
+  opacity: .8;
+}
+
 .score-line { display: flex; align-items: baseline; gap: .8rem; margin: .8rem 0; flex-wrap: wrap; }
 .score-line .big { font-family: var(--mono); font-size: 1.9rem; color: var(--accent); }
 .levelup { color: var(--ok); font-weight: 700; font-size: .85rem; }

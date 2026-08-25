@@ -60,6 +60,62 @@ export function sameSpacing(target, sent) {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
+/** 語ごとに区切る。text は画面に出す表記、keys は照合に使う符号。 */
+function codeWords(text) {
+  const words = [];
+  let cur = null;
+  for (const u of codeUnits(String(text || ''))) {
+    if (u.space) { cur = null; continue; }
+    if (!cur) { cur = { text: '', keys: [] }; words.push(cur); }
+    cur.text += u.text;
+    cur.keys.push(u.key);
+  }
+  return words;
+}
+
+/**
+ * 語の切れ目のどこが手本と違うのかを、語の単位で並べて示す。
+ *
+ * 「語の切れ目が違います」とだけ言われても、どこで割れたのかは 2 行を
+ * 目で追わないと分からない。BEGINNER を BE / GINNER と打ってしまった、
+ * のような差は特に見つけにくいので、突き合わせた語の組を返して
+ * 画面側で名指しできるようにする。
+ *
+ * 手本と打鍵の符号列が同じ（＝文字はすべて合っている）ことを前提に、
+ * 符号がそろうところまで両側から語を取って 1 組にする。1 対 1 なら
+ * そのまま、1 対 2 なら割れ、2 対 1 ならつなぎ。文字自体が違って
+ * いて組にできないときは pairs を空で返す（呼び出し側は何も出さない）。
+ *
+ * @returns {{same: boolean, pairs: {target: object[], sent: object[], ok: boolean}[]}}
+ */
+export function spacingDiff(target, sent) {
+  const a = codeWords(target);
+  const b = codeWords(sent);
+  const pairs = [];
+  let i = 0, j = 0;
+
+  while (i < a.length || j < b.length) {
+    const ta = [], tb = [];
+    let ka = '', kb = '';
+    // 符号列がそろうまで、短いほうから語を足していく
+    do {
+      if ((ka.length <= kb.length && i < a.length) || j >= b.length) {
+        if (i >= a.length) return { same: false, pairs: [] };
+        ta.push(a[i]); ka += a[i].keys.join('|') + '|'; i += 1;
+      } else {
+        if (j >= b.length) return { same: false, pairs: [] };
+        tb.push(b[j]); kb += b[j].keys.join('|') + '|'; j += 1;
+      }
+    } while (ka !== kb && (i < a.length || j < b.length));
+
+    // 最後まで来てもそろわない = 文字そのものが違う。語では比べられない
+    if (ka !== kb) return { same: false, pairs: [] };
+    pairs.push({ target: ta, sent: tb, ok: ta.length === 1 && tb.length === 1 });
+  }
+
+  return { same: pairs.every((p) => p.ok), pairs };
+}
+
 /** 送信速度の下限・上限（WPM）。画面のつまみと保存値の両方をこれで抑える。 */
 export const KEYER_WPM_MIN = 5;
 export const KEYER_WPM_MAX = 28;
