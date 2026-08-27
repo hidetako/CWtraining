@@ -1341,6 +1341,7 @@ function scoreNote(result) {
 function redoKeying() {
   keyer.reset();
   paddle.elements = '';
+  paddle.autoGraded = false;
   const el = $('#keyer-elements');
   if (el) el.textContent = '';
 
@@ -2396,6 +2397,8 @@ async function finishContest(score) {
 
 const paddle = {
   detach: null, task: null, elements: '',
+  // 自動採点は 1 回の打鍵につき 1 度だけ。打ち直すまで次は走らせない
+  autoGraded: false,
   // 100点＋（間隔まで手本どおり）が出るまでの時間を計る。
   // startedAt は課題が出た時点／打ち直した時点。runs は今の課題での記録
   startedAt: 0,
@@ -2634,7 +2637,17 @@ function initKeyer() {
     tutorial.pushChar(e.detail.char);
     checkTutorial();
   });
-  keyer.addEventListener('update', renderKeyedText);
+  keyer.addEventListener('update', () => {
+    renderKeyedText();
+    maybeAutoGrade();
+  });
+
+  const auto = $('#keyer-autograde');
+  auto.checked = settings.keyerAutoGrade;
+  auto.addEventListener('change', () => {
+    settings.keyerAutoGrade = auto.checked;
+    persist();
+  });
 
   syncKeyerControls = syncKeyer;
   syncKeyer();
@@ -2889,6 +2902,7 @@ function newKeyerTask() {
 
   keyer.reset();
   paddle.elements = '';
+  paddle.autoGraded = false;
   $('#keyer-elements').textContent = '';
   $('#keyer-result').innerHTML = '';
   clearCelebration($('#keyer-result'));
@@ -2899,10 +2913,42 @@ function newKeyerTask() {
 function endKeyerTask() {
   keyer.reset();
   paddle.elements = '';
+  paddle.autoGraded = false;
   $('#keyer-elements').textContent = '';
   $('#keyer-result').innerHTML = '';
   clearCelebration($('#keyer-result'));
   renderKeyedText();
+}
+
+/**
+ * 打ち終わった瞬間の時刻。100点＋ までの時間はここで止める。
+ *
+ * 解読が確定するのは文字間の待ち時間を過ぎてからで、「採点する」を
+ * 押すのはさらにそのあと。そこで計ると、打ち終わってからの間まで
+ * 打鍵時間に入ってしまう。自動採点と手押しで違う物差しになっては
+ * 記録表で見比べられないので、どちらもこの時刻を使う。
+ */
+function keyingEndedAt() {
+  const at = keyer.lastMarkAt;
+  // まだ何も打っていない（課題を出し直した直後など）なら今の時刻に落とす
+  return at > paddle.startedAt ? at : performance.now();
+}
+
+/**
+ * 手本どおりに打ち切った時点で、押さずに採点する。
+ *
+ * 照合できるのは 100点＋ のときだけ。手本と符号が 1 つでも違えば
+ * 一致しないので、途中で誤って採点が走ることはない。外したときは
+ * これまでどおり「採点する」を押してもらう。
+ */
+function maybeAutoGrade() {
+  if (!settings.keyerAutoGrade) return;
+  if (!paddle.task || paddle.autoGraded) return;
+  if (!$('#panel-keyer')?.classList.contains('is-active')) return;
+  if (!sameSpacing(paddle.task, keyer.text)) return;
+
+  paddle.autoGraded = true;
+  gradeKeying();
 }
 
 function gradeKeying() {
@@ -2948,7 +2994,7 @@ function gradeKeying() {
   let plusBest = false;
   if (plus) {
     if (paddle.startedAt) {
-      const seconds = (performance.now() - paddle.startedAt) / 1000;
+      const seconds = (keyingEndedAt() - paddle.startedAt) / 1000;
       plusTime = ` — ${seconds.toFixed(1)} 秒`;
       // 記録に足す前に見る。1 回目は比べる相手がいないので自己ベストとは言わない
       plusBest = paddle.runs.length > 0
@@ -3982,6 +4028,7 @@ window.__cw = {
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
   sendingDiffHtml, comparisonColumns,        // 採点結果の見せ方を検証できるように
   sameSpacing, spacingUnits, spacingDiff,    // 100点＋（語の切れ目）の判定を検証できるように
+  maybeAutoGrade, keyingEndedAt,             // 自動採点と、時間を止める時刻を検証できるように
   CELEBRATIONS, RANDOM_ID, celebrationById, runCelebration, clearCelebration,  // 祝い方 10 種類を検証できるように
   get paddleState() { return paddle; },
   redoKeying,                                // 打ち直しの入口を検証できるように
