@@ -160,6 +160,12 @@ export class ElectronicKeyer extends EventTarget {
 
     this._straightStart = 0;
     this._lastInput = 0;   // 最後にレバーが動いた時刻。押されたままの検出に使う
+
+    // 最後の符号が鳴り終わる時刻（performance.now() と同じ物差し）。
+    // 「打ち終わった瞬間」を採点の時刻に使うために控える。解読が確定
+    // するのは文字間の待ち時間を過ぎてからなので、そこで計ると
+    // 待ち時間まで打鍵時間に入ってしまう
+    this.lastMarkAt = 0;
   }
 
   /**
@@ -213,6 +219,7 @@ export class ElectronicKeyer extends EventTarget {
     this.lastElement = null;
     this.bPending = false;
     this.squeezed = false;
+    this.lastMarkAt = 0;
     this._emit('update');
   }
 
@@ -276,6 +283,7 @@ export class ElectronicKeyer extends EventTarget {
     // 短点 1.8 個分より長く押していれば長点とみなす
     const element = heldMs > this.dit * 1800 ? '-' : '.';
     this.buffer += element;
+    this.lastMarkAt = performance.now();   // 縦振りは離した瞬間が打ち終わり
     this._emit('element', { element });
     this._armDecodeTimers();
   }
@@ -333,6 +341,10 @@ export class ElectronicKeyer extends EventTarget {
     if (!next) {
       this.sending = false;
       this.bPending = false;
+      // 直前の符号は clock の時刻に鳴り終わる。まだ先の予約なら、
+      // その残り時間を足して「打ち終わる時刻」に直す
+      const ahead = Math.max(0, (this.clock - this.player.currentTime) * 1000);
+      this.lastMarkAt = performance.now() + ahead;
       this._armDecodeTimers();
       return;
     }
