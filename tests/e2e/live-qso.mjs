@@ -28,6 +28,10 @@ await shot('L1-widget');
 
 // ── 2. チュートリアル: 縦振りモード警告
 await page.click('.tab[data-panel="keyer"]'); await page.waitForTimeout(300);
+// チュートリアルは初めからたたんである。中身を触る前に開く
+if (await page.locator('#tutorial.is-collapsed').count()) {
+  await page.click('#btn-tutorial-toggle'); await page.waitForTimeout(200);
+}
 await page.selectOption('#keyer-mode','straight'); await page.waitForTimeout(150);
 await page.locator('.tutorial-dot').nth(7).click(); await page.waitForTimeout(200); // 速度ステップ
 const goal = (await page.textContent('#tutorial-goal')).replace(/\s+/g,' ').trim();

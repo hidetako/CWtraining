@@ -411,12 +411,14 @@
     </p>
   </div>
 
-  <div class="card tutorial-card" id="tutorial">
+  <!-- 初めからたたんでおく。使い方を知っている人に毎回 1 画面ぶん
+       押しのけられては、課題まで届くのにスクロールが要る -->
+  <div class="card tutorial-card is-collapsed" id="tutorial">
     <div class="tutorial-head">
       <h3>チュートリアル</h3>
       <div class="tutorial-head-right">
         <span class="tutorial-count" id="tutorial-count"></span>
-        <button type="button" class="btn btn-ghost" id="btn-tutorial-toggle">たたむ</button>
+        <button type="button" class="btn btn-ghost" id="btn-tutorial-toggle">開く</button>
       </div>
     </div>
     <div class="tutorial-dots" id="tutorial-dots"></div>
@@ -468,10 +470,6 @@
       <button type="button" class="btn" id="btn-keyer-next"
               title="採点せずに次の課題へ進む">次に進む</button>
     </div>
-    <label class="check">
-      <input type="checkbox" id="keyer-autograde">
-      <span>手本どおりに打ち切ったら、押さずに自動で採点する</span>
-    </label>
     <div id="keyer-result"></div>
     <!-- 100点＋の記録。打ち直しても消さないので、採点結果とは別の器に置く -->
     <div id="keyer-plus"></div>
@@ -510,10 +508,6 @@
     <label class="check">
       <input type="checkbox" id="keyer-thumb">
       <span>親指側を長点にする（標準は親指＝短点）</span>
-    </label>
-    <label class="check">
-      <input type="checkbox" id="keyer-global">
-      <span>画面全体でパドル入力を受け付ける（このタブを開いている間のみ・ボタンや入力欄の上は除く）</span>
     </label>
   </div>
 

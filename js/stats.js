@@ -50,12 +50,9 @@ export const DEFAULT_SETTINGS = {
   keyerWpm: 20,
   keyerHand: 'right',   // 'right' | 'left' — パドルを操作する手
   keyerThumb: 'dit',    // 'dit' | 'dah'   — 親指側のレバーが出す要素
-  keyerGlobal: false,
   keyerTaskType: 'callsign',
   keyerTopic: '',        // 交信の定型文の話題。空ならすべての話題から選ぶ
   keyerFreq: 700,       // 送信側音の高さ Hz（受信の freq とは独立）
-  // 手本どおりに打ち切った時点で、押さずに採点する
-  keyerAutoGrade: true,
   // 100点＋ を出したときの祝い方（celebrate.js の id）。
   // 既定は 'random'（毎回 10 種類から選び直す）
   plusStyle: 'random',
