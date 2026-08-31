@@ -2,7 +2,8 @@
 const { chromium } = await import(process.env.PW ?? 'playwright');
 
 const BASE = process.env.BASE ?? 'http://localhost:8123';
-const errors = [];
+const errors = [], fails = [];
+const ok = (l, c, e = '') => { console.log((c ? '✓ ' : '✗ ') + l + (e ? `  [${e}]` : '')); if (!c) fails.push(l); };
 const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
 const page = await browser.newPage({ viewport: { width: 1200, height: 1100 } });
 page.on('console', m => { if (m.type()==='error') errors.push('console: '+m.text()); });
@@ -14,6 +15,17 @@ await page.goto(`${BASE}/index.html`);
 await page.waitForTimeout(500);
 await page.click('.tab[data-panel="keyer"]');
 await page.waitForTimeout(400);
+
+// 使い方を知っている人に毎回 1 画面ぶん押しのけられないよう、
+// チュートリアルは初めからたたんである。開かないと中身は見えない
+ok('初めはたたまれている',
+  await page.locator('#tutorial.is-collapsed').count() === 1);
+ok('たたまれていれば中身は見えない', !(await page.locator('#tutorial-body').isVisible()));
+ok('開くボタンになっている',
+  (await page.textContent('#btn-tutorial-toggle')).trim() === '開く');
+await page.click('#btn-tutorial-toggle');
+await page.waitForTimeout(200);
+ok('押せば開く', await page.locator('#tutorial-body').isVisible());
 
 const step = async () => (await page.textContent('#tutorial-title')).trim();
 const goal = async () => (await page.textContent('#tutorial-goal')).replace(/\s+/g,' ').trim();
@@ -94,8 +106,9 @@ await page.waitForTimeout(300);
 console.log('collapsed:', await page.locator('#tutorial').evaluate(e => e.classList.contains('is-collapsed')));
 await shot('t5-collapsed');
 
-console.log('\n=== ERRORS ===');
+console.log('\n失敗:', fails.length ? fails.join(' / ') : 'なし');
+console.log('=== ERRORS ===');
 console.log(errors.length ? errors.join('\n') : '(none)');
 await browser.close();
 
-process.exit(errors.length ? 1 : 0);
+process.exit(errors.length + fails.length ? 1 : 0);

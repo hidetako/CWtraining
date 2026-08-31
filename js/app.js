@@ -197,8 +197,10 @@ function syncPaddleWidget() {
   const onKeyerTab = $('#panel-keyer')?.classList.contains('is-active');
   syncRedoLabel();
 
-  $('#pw-scope').textContent = (onKeyerTab && settings.keyerGlobal)
-    ? '現在は画面全体でパドル入力を受け付けています（ボタンや入力欄の上を除く）。'
+  // パドル送信タブを開いている間は画面全体で受け付ける。
+  // 打面の上までマウスを運ばないと打てないのでは、練習にならない
+  $('#pw-scope').textContent = onKeyerTab
+    ? '画面全体でパドル入力を受け付けています（ボタンや入力欄の上を除く）。'
     : 'この枠内はいつでもパドル入力を受け付けます（左半分＝左ボタン扱い）。';
 }
 
@@ -2543,7 +2545,6 @@ function initKeyer() {
     $('#keyer-wpm').value = settings.keyerWpm;
     $('#keyer-hand').value = settings.keyerHand;
     $('#keyer-thumb').checked = settings.keyerThumb === 'dah';
-    $('#keyer-global').checked = settings.keyerGlobal;
     weightOut.textContent = `${settings.keyerWeight}%`;
     wpmOut.textContent = `${settings.keyerWpm} WPM`;
     $('#keyer-freq').value = settings.keyerFreq;
@@ -2587,13 +2588,6 @@ function initKeyer() {
     settings.keyerThumb = e.target.checked ? 'dah' : 'dit';
     persist(); syncKeyer(); touched('keyerThumb');
   });
-  $('#keyer-global').addEventListener('change', (e) => {
-    settings.keyerGlobal = e.target.checked;
-    persist();
-    // 取り付け直して捕捉範囲を切り替える
-    setPaddleActive(true);
-  });
-
   // 話題は「交信の定型文」のときだけ意味を持つので、そのときだけ出す
   const topicSel = $('#keyer-topic');
   topicSel.innerHTML = '<option value="">おまかせ（すべての話題）</option>'
@@ -2640,13 +2634,6 @@ function initKeyer() {
   keyer.addEventListener('update', () => {
     renderKeyedText();
     maybeAutoGrade();
-  });
-
-  const auto = $('#keyer-autograde');
-  auto.checked = settings.keyerAutoGrade;
-  auto.addEventListener('change', () => {
-    settings.keyerAutoGrade = auto.checked;
-    persist();
   });
 
   syncKeyerControls = syncKeyer;
@@ -2801,9 +2788,12 @@ function renderKeyedText() {
 }
 
 /**
- * パドル送信タブでの「画面全体で受け付ける」を切り替える。
- * 打面そのものは右のパドル欄が常時受け付けているので、
- * ここで足すのは画面全体への取り付けだけ。
+ * パドル送信タブを開いている間、画面全体でパドル入力を受け付ける。
+ *
+ * 打面そのものは右のパドル欄が常時受け付けているので、ここで足すのは
+ * 画面全体への取り付けだけ。打つたびに打面までマウスを運ばせるのでは
+ * 練習にならないので、切り替えではなく常にこうする。ボタンや入力欄の
+ * 上は attachPaddleInput 側で除いてある（押せなくなっては困るため）。
  */
 function setPaddleActive(active) {
   if (paddle.detach) { paddle.detach(); paddle.detach = null; }
@@ -2819,7 +2809,7 @@ function setPaddleActive(active) {
   // キーボード（Z/X）と、全画面モードのときだけマウスも
   paddle.detach = attachPaddleInput(keyer, document.body, {
     global: true,
-    mouse: settings.keyerGlobal,
+    mouse: true,
     onState: lamps,
   });
 }
@@ -2942,7 +2932,6 @@ function keyingEndedAt() {
  * これまでどおり「採点する」を押してもらう。
  */
 function maybeAutoGrade() {
-  if (!settings.keyerAutoGrade) return;
   if (!paddle.task || paddle.autoGraded) return;
   if (!$('#panel-keyer')?.classList.contains('is-active')) return;
   if (!sameSpacing(paddle.task, keyer.text)) return;

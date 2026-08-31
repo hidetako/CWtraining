@@ -61,10 +61,13 @@ const state = () => page.evaluate(() => ({
   now: performance.now(),
 }));
 
-// ── 既定で入っている ──────────────────────────────
-ok('既定で自動採点が入っている',
-  await page.evaluate(() => window.__cw.settings.keyerAutoGrade) === true);
-ok('チェックも入っている', await page.isChecked('#keyer-autograde'));
+// ── 選択肢ではなく、初めから組み込まれている ──────
+// 切る道を用意すると、打ち切ったのに何も起きない状態が起こりうる。
+// 誤採点しない作りなので、常に効かせてよい
+ok('切り替えのチェックを置かない',
+  await page.locator('#keyer-autograde').count() === 0);
+ok('設定にも残さない',
+  await page.evaluate(() => 'keyerAutoGrade' in window.__cw.settings) === false);
 
 // ── 押さずに採点される ────────────────────────────
 await page.evaluate(() => { window.__cw.paddleState.runs = []; });
@@ -115,38 +118,33 @@ await page.waitForTimeout(300);
 const s3 = await state();
 ok('外しても押せば採点される', s3.big !== '' && s3.plus === 0, s3.big);
 
-// ── 切れば自動では採点しない ──────────────────────
-await page.uncheck('#keyer-autograde');
-await page.waitForTimeout(150);
-ok('切ると設定に残る',
-  await page.evaluate(() => window.__cw.settings.keyerAutoGrade) === false);
-
+// ── 手押しでも同じ物差しで計る ────────────────────
+// 外して打ち直したときは手で押すことになる。自動と違う物差しでは
+// 記録表に並ぶ数字を見比べられない
 await page.click('#btn-keyer-clear');
 await setTask('E');
 const began2 = await startedAt();
+await press('right');              // わざと外して自動採点を起こさない
+await page.waitForTimeout(1200);
+await page.click('#btn-keyer-clear');
+await page.evaluate(() => { window.__cw.paddleState.autoGraded = true; }); // 自動を止めて手押しを見る
 await press('left');
 await page.waitForTimeout(1200);
-const s4 = await state();
-ok('切れば打ち切っても採点しない', s4.big === '', s4.big);
-ok('切れば記録も増えない', s4.rows === 1, `${s4.rows} 行`);
-
-// 押せば採点される。手押しでも時計は同じ（記録表で見比べられなくなるため）
 await page.click('#btn-keyer-grade');
 await page.waitForTimeout(300);
 const s5 = await state();
-ok('切っても押せば 100点＋', s5.big === '100点＋', s5.big);
+ok('押せば 100点＋', s5.big === '100点＋', s5.big);
 ok('手押しでも記録が入る', s5.rows === 2, `${s5.rows} 行`);
 const manual = s5.runs.at(-1);
-console.log('手押しの打鍵時間:', manual.toFixed(3), '秒');
-// 押したのは打ち終わりの 1.2 秒あと。押した時刻で止めていたら 1 秒を超える
-ok('手押しでも打ち終わりで止める', manual < 0.6, `${manual} 秒`);
-ok('手押しの起点も同じ', began2 > 0 && manual * 1000 < s5.now - began2,
-  `${manual} 秒 / 観測まで ${Math.round(s5.now - began2)} ms`);
-
-await page.check('#keyer-autograde');
-await page.waitForTimeout(150);
-ok('入れ直せば設定に戻る',
-  await page.evaluate(() => window.__cw.settings.keyerAutoGrade) === true);
+// 外した回のやり直しを挟んでいるので、その時間も通算に入る（それが定義）
+console.log('手押しの通算:', manual.toFixed(3), '秒 / 観測まで',
+  Math.round(s5.now - began2), 'ms');
+ok('手押しでも通算を計る', manual > 0.5, `${manual} 秒`);
+// 「採点する」を押したのは打ち終わりの 1.2 秒あと。押した時刻で止めていたら
+// その 1.2 秒がまるごと入り、観測時刻との差が詰まるはず
+const slack = (s5.now - began2) - manual * 1000;
+ok('手押しでも打ち終わりで止める（押すまでの間を含めない）', slack > 900,
+  `余り ${Math.round(slack)} ms`);
 
 // ── 課題が無いときは走らせない ────────────────────
 await page.evaluate(() => {
