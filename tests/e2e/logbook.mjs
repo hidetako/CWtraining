@@ -42,6 +42,29 @@ ok('区番号も引ける', /札幌市中央区/.test(ku[0]?.name || '') && ku[0
 const jcg = await jcc('01001');
 ok('JCG（郡）も引ける', jcg[0]?.code === '01001' && jcg[0]?.kind === 'JCG', JSON.stringify(jcg[0]));
 
+// ── QTH は都道府県から書く ────────────────────────
+// 表の生の名前は「札幌」「西」のように県が抜けている。そのまま
+// ログに入れると、どこの市区か分からない記録になってしまう
+const qth = (c) => page.evaluate((x) => window.__cw.jccQth(x), c);
+ok('都道府県はそのまま', await qth('01') === '北海道', await qth('01'));
+ok('市は県＋市名＋市', await qth('0101') === '北海道札幌市', await qth('0101'));
+ok('郡は県＋郡名＋郡', await qth('01001') === '北海道阿寒郡', await qth('01001'));
+// 区は「北海道札幌市中央区」と県から書いてあるものと「西」だけのものが混じる
+ok('県から書いてある区はそのまま', await qth('010101') === '北海道札幌市中央区', await qth('010101'));
+ok('名前だけの区は県と市を補う', await qth('430103') === '熊本県熊本市西区', await qth('430103'));
+ok('さいたま市の区も補う', await qth('134403') === '埼玉県さいたま市大宮区', await qth('134403'));
+// 「四日市」「蒲郡」「原町」は市の名前そのもの。「市」を足してよい
+ok('市名が町や郡で終わっても市を足す', await qth('2102') === '三重県四日市市', await qth('2102'));
+ok('蒲郡も同じ', await qth('2015') === '愛知県蒲郡市', await qth('2015'));
+// 「東京23区」は市ではないので「市」を足さない
+ok('東京23区に市を足さない', await qth('1001') === '東京都東京23区', await qth('1001'));
+ok('知らない番号は空', await qth('999999') === '', await qth('999999'));
+
+// 画面にはこの形で出しているので、県名で引けないと筋が通らない
+const byPref = await jcc('熊本市');
+ok('県から書いた形でも引ける', byPref.some((h) => h.code === '430103'),
+  JSON.stringify(byPref.slice(0, 3).map((h) => h.code)));
+
 // ── バンドの自動判定 ──────────────────────────────
 const band = (f) => page.evaluate((x) => window.__cw.bandFromFreq(x), f);
 ok('7.010 → 7MHz', await band('7.010') === '7MHz');
@@ -88,13 +111,58 @@ ok('2 件になる', await page.locator('#log-rows tr').count() === 2);
 await page.fill('#jcc-query', '札幌');
 await page.waitForTimeout(200);
 ok('検索結果が出る', await page.locator('#jcc-results .jcc-hit').count() >= 1);
+ok('結果も県から書いてある',
+  (await page.textContent('#jcc-results .jcc-hit')).includes('北海道札幌市'),
+  (await page.textContent('#jcc-results .jcc-hit')).replace(/\s+/g, ' ').trim());
 await page.fill('#log-jcc', '');
 await page.fill('#log-qth', '');
 await page.locator('#jcc-results .jcc-hit', { hasText: 'JCC' }).first().click();
 ok('選ぶと JCC 欄に入る', await page.inputValue('#log-jcc') === '0101',
   await page.inputValue('#log-jcc'));
-ok('QTH が空なら市名も入る', await page.inputValue('#log-qth') === '札幌',
+ok('QTH は県から入る', await page.inputValue('#log-qth') === '北海道札幌市',
   await page.inputValue('#log-qth'));
+
+// ── 選び直すと QTH も直る ─────────────────────────
+// 空のときしか入れないと、選び直したのに前の地名が残り、
+// 直したつもりで直っていないログができてしまう
+await page.fill('#jcc-query', '神戸');
+await page.waitForTimeout(250);
+await page.locator('#jcc-results .jcc-hit', { hasText: 'JCC' }).first().click();
+ok('選び直すと JCC が変わる', await page.inputValue('#log-jcc') === '2701',
+  await page.inputValue('#log-jcc'));
+ok('選び直すと QTH も変わる', await page.inputValue('#log-qth') === '兵庫県神戸市',
+  await page.inputValue('#log-qth'));
+
+// 手で書いた QTH も、選び直せば置き換わる
+await page.fill('#log-qth', 'てきとうな地名');
+await page.fill('#jcc-query', '那覇');
+await page.waitForTimeout(250);
+await page.locator('#jcc-results .jcc-hit', { hasText: 'JCC' }).first().click();
+ok('手書きの QTH も選び直しで置き換わる',
+  await page.inputValue('#log-qth') === '沖縄県那覇市', await page.inputValue('#log-qth'));
+
+// ── 編集して保存すると、その QTH が残る ───────────
+await page.fill('#log-call', 'JH9QTH');
+await page.click('#btn-log-add');
+await page.waitForTimeout(300);
+await page.locator('#log-rows tr', { hasText: 'JH9QTH' }).locator('[data-act="edit"]').click();
+await page.waitForTimeout(300);
+ok('編集で QTH が読み込まれる', await page.inputValue('#log-qth') === '沖縄県那覇市',
+  await page.inputValue('#log-qth'));
+await page.fill('#jcc-query', '熊本市西区');
+await page.waitForTimeout(250);
+await page.locator('#jcc-results .jcc-hit').first().click();
+await page.click('#btn-log-add');
+await page.waitForTimeout(300);
+const edited = await page.evaluate(() =>
+  window.__cw.logEntries.find((e) => e.call === 'JH9QTH'));
+ok('更新すると QTH が上書きされる', edited?.qth === '熊本県熊本市西区', JSON.stringify(edited?.qth));
+ok('更新すると JCC も上書きされる', edited?.jcc === '430103', JSON.stringify(edited?.jcc));
+// この局の記録は後段の件数勘定に混ぜたくないので消しておく
+await page.locator('#log-rows tr', { hasText: 'JH9QTH' }).locator('[data-act="delete"]').click();
+await page.waitForTimeout(250);
+await page.fill('#jcc-query', '');
+await page.waitForTimeout(200);
 
 // ── 絞り込み ──────────────────────────────────────
 await page.selectOption('#log-filter-band', '7MHz');
