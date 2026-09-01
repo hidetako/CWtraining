@@ -25,9 +25,57 @@ export function jccEntries() {
   return jccTable;
 }
 
+let jccByCode = null;
+
+/** 番号で 1 件引く。 */
+function jccByCodeMap() {
+  if (!jccByCode) jccByCode = new Map(jccEntries().map((e) => [e.code, e]));
+  return jccByCode;
+}
+
+/**
+ * 番号を、都道府県から書き下した QTH の表記にする。
+ *
+ * JARL の表は種類ごとに書き方が違う。市と郡は「札幌」「阿寒」のように
+ * 素の名前だけ。区は「北海道札幌市中央区」と県から書いてあるものと、
+ * 「西」だけのものが混じっている。ログには都道府県から入れたいので、
+ * ここで形をそろえる。
+ *
+ * 番号の上 2 桁が都道府県を、区では上 4 桁がその市を指す。
+ *
+ *   0101   → 北海道札幌市
+ *   01001  → 北海道阿寒郡
+ *   010101 → 北海道札幌市中央区   （名前が県から書いてあるのでそのまま）
+ *   430103 → 熊本県熊本市西区     （「西」だけなので県と市を補う）
+ */
+export function jccQth(code) {
+  const by = jccByCodeMap();
+  const entry = by.get(String(code || ''));
+  if (!entry) return '';
+  const pref = by.get(entry.code.slice(0, 2))?.name ?? '';
+
+  if (entry.kind === '都道府県') return entry.name;
+  // 「東京23区」は市ではないので「市」を足さない。
+  // 「四日市」「蒲郡」「原町」のような市名はそのまま「市」を足してよい
+  if (entry.kind === 'JCC') {
+    return pref + entry.name + (entry.name.endsWith('区') ? '' : '市');
+  }
+  if (entry.kind === 'JCG') return pref + entry.name + '郡';
+  if (entry.kind === '区') {
+    if (pref && entry.name.startsWith(pref)) return entry.name;   // すでに県から書いてある
+    const city = by.get(entry.code.slice(0, 4));
+    return pref + (city ? `${city.name}市` : '')
+      + entry.name + (entry.name.endsWith('区') ? '' : '区');
+  }
+  return entry.name;
+}
+
 /**
  * 番号または名前で引く。番号は前方一致、名前・ローマ字は部分一致。
  * 「さっぽろ」のような読みは持っていないので、漢字かローマ字で。
+ *
+ * 名前は都道府県から書き下した形（jccQth）でも照合する。画面にはその形で
+ * 出しているので、「北海道」と打って札幌が出ないのでは筋が通らない。
  */
 export function jccSearch(query, limit = 30) {
   const q = String(query || '').trim();
@@ -38,7 +86,9 @@ export function jccSearch(query, limit = 30) {
   }
   const lower = q.toLowerCase();
   return table
-    .filter((e) => e.name.includes(q) || (e.roman && e.roman.toLowerCase().includes(lower)))
+    .filter((e) => e.name.includes(q)
+      || jccQth(e.code).includes(q)
+      || (e.roman && e.roman.toLowerCase().includes(lower)))
     .slice(0, limit);
 }
 

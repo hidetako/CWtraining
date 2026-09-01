@@ -9,7 +9,7 @@ import {
 import { annotateHtml, createTracker, explainText, lookupTerm, termCode, termTitle } from './explain.js';
 import {
   loadLogbook, saveLogbook, newEntry, bandFromFreq, BAND_LABELS,
-  jccSearch, nearestJcc, searchLog, history as logHistory, logStats,
+  jccSearch, jccQth, nearestJcc, searchLog, history as logHistory, logStats,
   toAdif, fromAdif, toCsv, fromCsv,
 } from './logbook.js';
 import { CWDecoder } from './decoder.js';
@@ -3801,24 +3801,33 @@ function startLogEdit(id) {
   $('#log-call').focus();
 }
 
-/** JCC 検索結果の共通描画。選ぶとフォームの JCC 欄（と空なら QTH）に入る。 */
+/**
+ * JCC 検索結果の共通描画。選ぶとフォームの JCC 欄と QTH 欄に入る。
+ *
+ * 名前は都道府県から書き下した形（jccQth）で出す。表の生の名前は
+ * 「札幌」「西」のように県が抜けていて、そのままログに入れると
+ * どこの市区か分からなくなるため。
+ *
+ * QTH は空でなくても入れ直す。選び直したのに前の地名が残っていては、
+ * 直したつもりで直っていないログができてしまう。
+ */
 function renderJccHits(hits, box) {
   box.innerHTML = hits.map((h) => `
-    <button type="button" class="jcc-hit" data-code="${h.code}" data-name="${escapeHtml(h.name)}">
+    <button type="button" class="jcc-hit" data-code="${h.code}">
       <span class="code">${h.code}</span>
-      <span>${escapeHtml(h.name)}</span>
+      <span>${escapeHtml(jccQth(h.code) || h.name)}</span>
       ${h.gone ? '<span class="gone">消滅</span>' : ''}
       <span class="kind">${h.km != null ? `約 ${h.km} km / ` : ''}${h.kind}${h.roman ? ` / ${escapeHtml(h.roman)}` : ''}</span>
     </button>
     ${(h.wards || []).map((w) => `
-      <button type="button" class="jcc-hit jcc-ward" data-code="${w.code}" data-name="${escapeHtml(w.name)}">
+      <button type="button" class="jcc-hit jcc-ward" data-code="${w.code}">
         <span class="code">${w.code}</span>
-        <span>${escapeHtml(w.name)}</span>
+        <span>${escapeHtml(jccQth(w.code) || w.name)}</span>
         <span class="kind">区</span>
       </button>`).join('')}`).join('');
   $$('.jcc-hit', box).forEach((btn) => btn.addEventListener('click', () => {
     $('#log-jcc').value = btn.dataset.code;
-    if (!$('#log-qth').value) $('#log-qth').value = btn.dataset.name;
+    $('#log-qth').value = jccQth(btn.dataset.code);
   }));
 }
 
@@ -4022,7 +4031,7 @@ window.__cw = {
   get paddleState() { return paddle; },
   redoKeying,                                // 打ち直しの入口を検証できるように
   DRILL_TYPES, makeProblem, termListHtml,    // ドリルの種類と解説を検証できるように
-  jccSearch, nearestJcc, toAdif, fromAdif, toCsv, fromCsv, bandFromFreq, logStats,  // ログ帳の検証用
+  jccSearch, jccQth, nearestJcc, toAdif, fromAdif, toCsv, fromCsv, bandFromFreq, logStats,  // ログ帳の検証用
   recordKeyPerChar,                          // 苦手文字の数え方を検証できるように
   addLogEntry,
   get logEntries() { return logbook.entries; },
