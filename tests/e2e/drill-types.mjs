@@ -24,7 +24,7 @@ await page.click('.tab[data-panel="drill"]');
 const types = await page.$$eval('#drill-type option', (els) => els.map((e) => e.value));
 console.log('選べる種類:', types.join(', '));
 ok('種類が増えている', types.length >= 15, `${types.length} 種類`);
-for (const want of ['qcode', 'rst', 'name', 'qth', 'gear', 'phrase', 'exchange']) {
+for (const want of ['qcode', 'rst', 'name', 'qth', 'gear', 'wx', 'phrase', 'exchange']) {
   ok(`${want} が選べる`, types.includes(want));
 }
 ok('もとからある種類が消えていない',

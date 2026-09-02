@@ -2,7 +2,8 @@
 
 import { codeUnits, countSubstitutions } from './morse.js';
 import {
-  ABBREVIATIONS, ALL_KEY_PHRASES, ANTENNAS, FREQUENCY_ORDER, KOCH_ORDER,
+  ABBREVIATIONS, WX_WORDS, WX_PHRASES, WEATHER, ALL_KEY_PHRASES, ANTENNAS,
+  FREQUENCY_ORDER, KOCH_ORDER,
   NAMES, POWERS, QTH, RIGS, RST_POOL, SYMBOL_ORDER,
   makeCallsign, pick, pickInt,
 } from './data.js';
@@ -23,7 +24,28 @@ const COMMON_WORDS = [
   'PWR', 'WX', 'HW', 'PSE', 'AGN', 'GM', 'GA', 'GE', 'OM', 'YL', 'FB', 'ES',
   'HR', 'NW', 'VY', 'GUD', 'TU', 'CFM', 'CUAGN', 'HPE', 'SRI', 'WKD', 'MNI',
   '73', '88', 'QRZ', 'QRM', 'QRN', 'QSB', 'QSY', 'QRP', 'QRS', 'QRQ',
+  // 会話らしい交信で頻繁に出る語。型どおりの交換だけでなく、
+  // 間合いと気持ちを伝える語も取れるようにしておく
+  'ABT', 'DR', 'GLD', 'PSED', 'UFB', 'VFB', 'BTW', 'SA', 'WL', 'WUD',
+  'BTU', 'BCNU', 'MOM', 'AS', 'CL', 'SN', 'NIL', 'QRU', 'QRL', 'QSL',
+  'SOLID', 'CPI', 'CLR', 'RNG', 'WRK', 'MI', 'CU',
 ];
+
+/** 天気の言い方。単語ひとつのものと、2 語つなげて送るものがある。 */
+const WX_MEANING = new Map(
+  [...WX_WORDS, ...ABBREVIATIONS, ...WX_PHRASES].map((a) => [a.code, a.ja]),
+);
+
+/**
+ * 天気の言い方に意味を添える。
+ * まとめた言い方に固有の意味があればそれを、無ければ語ごとの意味をつなぐ。
+ */
+function wxHint(text) {
+  const whole = WX_MEANING.get(text);
+  if (whole) return whole;
+  const parts = text.split(' ').map((w) => WX_MEANING.get(w)).filter(Boolean);
+  return parts.length ? parts.join(' + ') : undefined;
+}
 
 export const DRILL_TYPES = {
   koch: { label: 'コッホ法（文字）', help: 'レベルの文字だけを使った 5 文字ずつのランダム群' },
@@ -37,6 +59,10 @@ export const DRILL_TYPES = {
   name: { label: '名前', help: 'TAKA・BOB など、交信で名乗る名前' },
   qth: { label: '地名（QTH）', help: 'TOKYO・BERLIN など、交信で伝える地名' },
   gear: { label: '設備（RIG・ANT・出力）', help: 'IC-7300・3ELE YAGI・50W など。型番の数字とハイフンに慣れる' },
+  wx: {
+    label: '天気（WX）',
+    help: 'OVERCAST・MUGGY・MOSTLY SUNNY など、実際に送られてくる天候の言い方。答え合わせで意味も表示',
+  },
   phrase: { label: '交信の定型文', help: '実際の交信で送られる一節をまるごと聞き取る' },
   exchange: { label: '実戦の一節', help: 'コールサイン・RST・名前・地名を組み合わせた、交信そのままの並び' },
   symbol: {
@@ -114,6 +140,15 @@ export function makeProblem(type, opts = {}) {
     case 'gear': {
       const gear = pick(GEAR);
       return { text: gear, answer: gear, chars: gear.replace(/\s/g, '').split('') };
+    }
+    case 'wx': {
+      const word = pick(WEATHER);
+      return {
+        text: word,
+        answer: word,
+        hint: wxHint(word),
+        chars: word.replace(/\s/g, '').split(''),
+      };
     }
     case 'phrase': {
       const phrase = fillPlaceholders(pick(ALL_KEY_PHRASES));

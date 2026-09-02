@@ -3,7 +3,7 @@
 import { CWPlayer } from './audio.js';
 import { MORSE_TABLE, computeTiming, toMorseString, estimateDuration, tokenize } from './morse.js';
 import {
-  ABBREVIATIONS, WX_WORDS, FREQUENCY_ORDER, KOCH_ORDER, SYMBOL_ORDER,
+  ABBREVIATIONS, WX_WORDS, WX_PHRASES, FREQUENCY_ORDER, KOCH_ORDER, SYMBOL_ORDER,
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES,
 } from './data.js';
 import { annotateHtml, createTracker, explainText, lookupTerm, termCode, termTitle } from './explain.js';
@@ -3153,8 +3153,9 @@ function initGlossary() {
   const entries = [
     ...ABBREVIATIONS,
     // 天候の語も引けるようにする。略語ではないが、聞こえたときに
-    // 意味が分からないと困るのは同じ
+    // 意味が分からないと困るのは同じ。2 語つなげて送る言い方も並べる
     ...WX_WORDS,
+    ...WX_PHRASES,
     ...SYMBOL_ORDER.map((u) => ({ code: u, ja: lookupTerm(u)?.ja ?? '', symbol: true })),
   ];
 
