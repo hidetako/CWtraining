@@ -273,15 +273,16 @@ export const ABBREVIATIONS = [
 export const WX_WORDS = [
   { code: 'FINE', ja: '晴れ（日本の局の定番。英語圏では「まずまずの陽気」の含みで、天候そのものにはあまり使わない）' },
   { code: 'SUNNY', ja: '日が出ている晴れ' },
-  { code: 'MOSTLY', ja: 'ほとんど（MOSTLY SUNNY = ほぼ晴れ）' },
-  { code: 'PARTLY', ja: '一部（PARTLY SUNNY = 晴れときどき曇り）' },
+  { code: 'MOSTLY', ja: 'ほとんど' },
+  { code: 'PARTLY', ja: '一部' },
   { code: 'CLEAR', ja: '雲ひとつない快晴（夜の晴れにも使う）' },
   { code: 'FAIR', ja: '晴れ（海外の気象情報で見る言い方）' },
   { code: 'CLOUDY', ja: '曇り' },
   { code: 'OVERCAST', ja: '本曇り（空一面が雲に覆われた状態）' },
   { code: 'DULL', ja: 'どんよりとした' },
   { code: 'RAIN', ja: '雨' },
-  { code: 'LIGHT', ja: '弱い（LIGHT RAIN = 小雨）' },
+  { code: 'LIGHT', ja: '弱い・軽い' },
+  { code: 'HEAVY', ja: '強い・激しい' },
   { code: 'SHOWER', ja: 'にわか雨' },
   { code: 'SNOW', ja: '雪' },
   { code: 'HAIL', ja: 'ひょう' },
@@ -305,6 +306,18 @@ export const WX_WORDS = [
   { code: 'CHILLY', ja: '寒々とした' },
   { code: 'COOL', ja: '涼しい' },
   { code: 'FRESH', ja: 'すがすがしい' },
+];
+
+/**
+ * 2 語つなげて送る天候の言い方。語ごとの意味をつなぐと
+ * 「ほとんど + 日が出ている晴れ」のようになって読みにくいので、
+ * まとめた言い方には固有の意味を持たせる。
+ */
+export const WX_PHRASES = [
+  { code: 'MOSTLY SUNNY', ja: 'ほぼ晴れ' },
+  { code: 'PARTLY SUNNY', ja: '晴れときどき曇り' },
+  { code: 'LIGHT RAIN', ja: '小雨' },
+  { code: 'HEAVY RAIN', ja: '強い雨' },
 ];
 
 /**

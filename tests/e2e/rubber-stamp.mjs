@@ -156,6 +156,88 @@ ok('同じ値を入れれば正解になる', grade.graded);
 ok('設備と天気も採点対象に残る',
   ['rig', 'pwr', 'ant', 'wx'].every((k) => grade.keys.includes(k)), grade.keys.join(','));
 
+// ── 聞き取りドリルでも同じ語彙を出す ──────────────
+// 台本に出るだけでは、聞き取れるようにはならない。狙って練習できること
+await page.click('.tab[data-panel="drill"]');
+await page.waitForTimeout(300);
+const drillTypes = await page.$$eval('#drill-type option', (els) => els.map((e) => e.value));
+ok('天気のドリルがある', drillTypes.includes('wx'), drillTypes.join(','));
+
+const wxDrill = await page.evaluate(() => {
+  const seen = new Map();
+  for (let i = 0; i < 400; i++) {
+    const p = window.__cw.makeProblem('wx', {});
+    seen.set(p.answer, p.hint);
+  }
+  return [...seen];
+});
+console.log('天気ドリル:', wxDrill.length, '通り');
+ok('天気の言い方が 30 通り以上出る', wxDrill.length >= 30, `${wxDrill.length} 通り`);
+ok('どれにも意味が付く', wxDrill.every(([, hint]) => hint), 
+  JSON.stringify(wxDrill.filter(([, h]) => !h).slice(0, 3)));
+// 2 語の言い方は語ごとにつながず、まとめた意味を出す
+const two = wxDrill.filter(([w]) => w.includes(' '));
+console.log('2 語の言い方:', JSON.stringify(two));
+ok('2 語の言い方も出る', two.length >= 3, JSON.stringify(two.map(([w]) => w)));
+ok('2 語の意味をつなぎ合わせない', two.every(([, h]) => !h.includes(' + ')),
+  JSON.stringify(two));
+
+// 略語ドリルは表をそのまま引くので、足した語も自然に出る
+const abbrevSeen = await page.evaluate(() => {
+  const seen = new Set();
+  for (let i = 0; i < 3000; i++) seen.add(window.__cw.makeProblem('abbrev', {}).answer);
+  return [...seen];
+});
+const wanted = ['GLD', 'PSED', 'UFB', 'VFB', 'BTW', 'SA', 'WUD', 'RNG', 'SOLID', 'CPI', 'CL'];
+const gotAbbrev = wanted.filter((w) => abbrevSeen.includes(w));
+ok('略語ドリルに足した語が出る', gotAbbrev.length === wanted.length,
+  `出た: ${gotAbbrev.join(',')}`);
+
+// 頻出単語にも会話らしい語を入れてある
+const wordSeen = await page.evaluate(() => {
+  const seen = new Set();
+  for (let i = 0; i < 2000; i++) seen.add(window.__cw.makeProblem('word', {}).answer);
+  return [...seen];
+});
+ok('頻出単語にも会話の語が入る',
+  ['ABT', 'DR', 'GLD', 'BCNU', 'SOLID', 'QRU'].every((w) => wordSeen.includes(w)),
+  wordSeen.length + ' 語');
+
+// ── パドル練習でも同じ語彙を打てる ────────────────
+await page.click('.tab[data-panel="keyer"]');
+await page.waitForTimeout(350);
+const taskTypes = await page.$$eval('#keyer-task-type option', (els) => els.map((e) => e.value));
+console.log('パドルの課題:', taskTypes.join(','));
+ok('パドルにも天気の課題がある', taskTypes.includes('wx'), taskTypes.join(','));
+ok('パドルにも設備の課題がある', taskTypes.includes('gear'), taskTypes.join(','));
+
+for (const [type, want] of [['wx', 12], ['gear', 8]]) {
+  await page.selectOption('#keyer-task-type', type);
+  await page.waitForTimeout(250);
+  const seen = new Set();
+  for (let i = 0; i < 30; i++) {
+    await page.click('#btn-keyer-task');
+    await page.waitForTimeout(35);
+    seen.add(await page.evaluate(() => window.__cw.keyerTask));
+  }
+  console.log(`${type} の課題:`, [...seen].slice(0, 5).join(' / '), `(${seen.size} 通り)`);
+  ok(`${type} の課題が入れ替わる`, seen.size >= want, `${seen.size} 通り`);
+  ok(`${type} の課題が鳴らせる文字だけ`,
+    [...seen].every((t) => /^[A-Z0-9 /?.,<>+=-]+$/.test(t)), [...seen].join(' / '));
+}
+
+// 天気の課題には意味が添う。何を送るのか分からないまま打たせない
+await page.selectOption('#keyer-task-type', 'wx');
+await page.waitForTimeout(250);
+let withMeaning = 0;
+for (let i = 0; i < 12; i++) {
+  await page.click('#btn-keyer-task');
+  await page.waitForTimeout(60);
+  if ((await page.textContent('#keyer-task-terms')).trim()) withMeaning += 1;
+}
+ok('天気の課題に意味が添う', withMeaning >= 10, `${withMeaning} / 12`);
+await page.screenshot({ path: `${DIR}/rs-keyer-wx.png`, fullPage: true });
+
 console.log('\n失敗:', fails.length ? fails.join(' / ') : 'なし');
 console.log('ERRORS:', errors.length ? errors.join('\n') : '(none)');
 await browser.close();
