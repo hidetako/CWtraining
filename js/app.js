@@ -3,7 +3,7 @@
 import { CWPlayer } from './audio.js';
 import { MORSE_TABLE, computeTiming, toMorseString, estimateDuration, tokenize } from './morse.js';
 import {
-  ABBREVIATIONS, FREQUENCY_ORDER, KOCH_ORDER, SYMBOL_ORDER,
+  ABBREVIATIONS, WX_WORDS, FREQUENCY_ORDER, KOCH_ORDER, SYMBOL_ORDER,
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES,
 } from './data.js';
 import { annotateHtml, createTracker, explainText, lookupTerm, termCode, termTitle } from './explain.js';
@@ -15,7 +15,9 @@ import {
 import { CWDecoder } from './decoder.js';
 import { SupportSession, SerialKeyer, keyTimeline } from './support.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
-import { LocalResponder, gradeField, REACTION_LABELS, FIELD_HINTS } from './qso.js';
+import {
+  LocalResponder, gradeField, buildScript, makeStation, REACTION_LABELS, FIELD_HINTS,
+} from './qso.js';
 import { PHASES, PATTERN_SHEET, makeReplyOptions, readDxTurn } from './qsoguide.js';
 import {
   ElectronicKeyer, KEYER_MODES, attachPaddleInput, compareSending, isTextEntry,
@@ -2819,8 +2821,14 @@ function setPaddleActive(active) {
  * 打つ前に何を送ろうとしているのか分かるように。長い解説は
  * ホバーで全文が出るので、ここでは頭の一節だけを見せる。
  */
-/** 1 語に割く長さの上限（見出し＋意味＋符号）。横に何語も並ぶので短く保つ。 */
-const TASK_TERM_BUDGET = 40;
+/**
+ * 1 語に割く長さの上限（見出し＋意味＋符号）。横に何語も並ぶので短く保つ。
+ *
+ * 8 文字の語は符号だけで 30 文字を超える（BLIZZARD で 33 文字）。
+ * 意味を 3 文字まで詰めても 44 になるので、これより下げると
+ * 詰めようのない語が必ずはみ出す。
+ */
+const TASK_TERM_BUDGET = 46;
 
 /**
  * 意味を、その語の符号と並べても収まる長さに詰める。
@@ -3144,6 +3152,9 @@ function initGlossary() {
   // ローマ字以外も覚える対象なので、同じ場所で引けて音も聞けるようにする
   const entries = [
     ...ABBREVIATIONS,
+    // 天候の語も引けるようにする。略語ではないが、聞こえたときに
+    // 意味が分からないと困るのは同じ
+    ...WX_WORDS,
     ...SYMBOL_ORDER.map((u) => ({ code: u, ja: lookupTerm(u)?.ja ?? '', symbol: true })),
   ];
 
@@ -4024,6 +4035,7 @@ init();
 window.__cw = {
   player, keyer, contest, responder,
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
+  buildScript, gradeField, makeStation,       // ラバースタンプの言い回しを検証できるように
   sendingDiffHtml, comparisonColumns,        // 採点結果の見せ方を検証できるように
   sameSpacing, spacingUnits, spacingDiff,    // 100点＋（語の切れ目）の判定を検証できるように
   maybeAutoGrade, keyingEndedAt,             // 自動採点と、時間を止める時刻を検証できるように
