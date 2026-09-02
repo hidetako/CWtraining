@@ -161,6 +161,44 @@ await page.waitForTimeout(150);
 ok('他のタブの打ち直しでは計測を始めない',
   await page.evaluate(() => window.__cw.paddleState.startedAt) === 0);
 
+// ── 採点欄の高さ ──────────────────────────────────
+// 打つたびに読む場所なので、1 画面に収まっていてほしい。
+// 行そのものを減らして詰めてある（凡例は印が出たときだけ、
+// 手本と符号は 1 行、記録の見出しと注記も 1 行）
+await page.click('.tab[data-panel="keyer"]');   // 直前でドリルタブに移っている
+await page.waitForTimeout(300);
+await page.click('#btn-keyer-next');
+await page.waitForTimeout(250);
+const task2 = await page.evaluate(() => window.__cw.keyerTask);
+await gradeAs(task2);
+const box = await page.evaluate(() => {
+  const r = document.querySelector('#keyer-result').getBoundingClientRect();
+  const pl = document.querySelector('#keyer-plus').getBoundingClientRect();
+  return {
+    height: Math.round(pl.bottom - r.top),
+    legend: document.querySelectorAll('#keyer-result .diff-legend').length,
+    pair: document.querySelectorAll('#keyer-result .sent-pair').length,
+    head: document.querySelectorAll('#keyer-plus .plus-head').length,
+    // 手本と自分の符号が同じ行に来ていること
+    sameRow: (() => {
+      const [a, b] = document.querySelectorAll('#keyer-result .sent-pair .hint');
+      return a && b ? Math.abs(a.getBoundingClientRect().top - b.getBoundingClientRect().top) < 4 : false;
+    })(),
+  };
+});
+console.log('採点欄の高さ:', box.height, 'px');
+ok('採点欄が 230px に収まる', box.height <= 230, `${box.height} px`);
+ok('全部合っていれば凡例を出さない', box.legend === 0, `${box.legend} 個`);
+ok('手本と符号は 1 行に並ぶ', box.pair === 1 && box.sameRow, JSON.stringify(box));
+ok('記録の見出しと注記も 1 行', box.head === 1, `${box.head} 個`);
+
+// 誤りがあるときは凡例を出す。色の意味が分からないと読めない
+await page.click('#btn-keyer-clear');
+await page.waitForTimeout(150);
+await gradeAs(`${task2}X`);
+ok('誤りがあれば凡例を出す',
+  await page.locator('#keyer-result .diff-legend').count() === 1);
+
 console.log('\n失敗:', fails.length ? fails.join(' / ') : 'なし');
 console.log('ERRORS:', errors.length ? errors.join('\n') : '(none)');
 await browser.close();

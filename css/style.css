@@ -1469,10 +1469,36 @@ kbd {
   .celebrate-stage { display: none; }
 }
 
+/* ───────── パドル採点欄の詰め ─────────
+   採点結果は打つたびに読む場所なので、1 画面に収まっていてほしい。
+   行そのものを減らし（凡例は印が出たときだけ、手本と符号は 1 行、
+   記録の見出しと注記も 1 行）、そのうえで余白を詰める。 */
+#keyer-result .score-line { margin: .35rem 0 .3rem; }
+#keyer-result .diff { line-height: 1.35; }
+#keyer-result .diff-legend { margin-top: .3rem; }
+#keyer-result > .hint, #keyer-result .compare { margin: .3rem 0 0; }
+#keyer-plus { margin-top: .5rem; }
+
+/* 手本と自分の符号は見比べるものなので、横に並べる。
+   狭いときだけ折り返す */
+.sent-pair {
+  display: flex; flex-wrap: wrap; gap: .2rem 1.4rem;
+  margin-top: .35rem;
+}
+.sent-pair .hint { margin: 0; }
+
+/* 記録の見出しと、計り方の断り書きを同じ行に置く */
+.plus-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .7rem;
+  margin-top: 0;
+}
+.plus-head h4 { margin: 0; }
+.plus-head .hint { margin: 0; }
+
 .plus-table {
   border-collapse: collapse;
   font-size: .78rem;
-  margin-top: .35rem;
+  margin-top: .25rem;
   min-width: 12rem;
 }
 .plus-table th, .plus-table td {

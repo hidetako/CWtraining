@@ -2427,18 +2427,19 @@ function renderKeyerPlus() {
 
   const best = Math.min(...paddle.runs.map((r) => r.seconds));
   box.innerHTML = `
-    <h4>100点＋ の記録</h4>
+    <div class="plus-head">
+      <h4>100点＋ の記録</h4>
+      <span class="hint">${paddle.runs.length >= KEYER_PLUS_MAX
+        ? `${KEYER_PLUS_MAX} 回そろいました。次の課題で数え直します。`
+        : '「打ち直す」から次に出るまでを計ります（途中で外しても数え直しません）'}</span>
+    </div>
     <table class="plus-table">
       <thead><tr><th>回</th><th>かかった時間</th></tr></thead>
       <tbody>${paddle.runs.map((r, i) => `
         <tr class="${r.seconds === best ? 'best' : ''}${i === paddle.runs.length - 1 ? ' just-in' : ''}">
           <td class="rank">${i + 1}</td><td>${r.seconds.toFixed(1)} 秒</td>
         </tr>`).join('')}</tbody>
-    </table>
-    <p class="hint">${paddle.runs.length >= KEYER_PLUS_MAX
-      ? `${KEYER_PLUS_MAX} 回そろいました。次の課題に進むと数え直します。`
-      : `100点＋ が出たあと最初に「打ち直す」を押した時点から、次の 100点＋ が
-         出るまでを計ります。途中で外しても、そこでは数え直しません。`}</p>`;
+    </table>`;
 }
 
 /**
@@ -3017,17 +3018,25 @@ function gradeKeying() {
     ? spacingNoteHtml(paddle.task, sent)
     : '';
 
-  box.innerHTML = `
-    <div class="score-line">${scoreLine}</div>
-    <div class="diff">${diff}</div>
+  // 凡例は、色の付いた印が実際に出ているときだけ。全部合っているのに
+  // 「打ち漏らし・余分」の説明を並べても、読む場所が増えるだけになる
+  const hasMarks = result.marks.some((m) => m.type === 'missing' || m.type === 'extra');
+  const legend = hasMarks ? `
     <div class="diff-legend">
       <span><span class="diff"><span class="ok">■</span></span> 一致</span>
       <span><span class="diff"><span class="missing">■</span></span> 打ち漏らし</span>
       <span><span class="diff"><span class="extra">■</span></span> 余分・誤り</span>
-    </div>
+    </div>` : '';
+
+  box.innerHTML = `
+    <div class="score-line">${scoreLine}</div>
+    <div class="diff">${diff}</div>
+    ${legend}
     ${spacingNote}
-    <p class="hint">手本: <code>${escapeHtml(paddle.task)}</code></p>
-    <p class="hint">あなたの符号: <code>${escapeHtml(sent)}</code></p>`;
+    <div class="sent-pair">
+      <span class="hint">手本: <code>${escapeHtml(paddle.task)}</code></span>
+      <span class="hint">あなたの符号: <code>${escapeHtml(sent)}</code></span>
+    </div>`;
 
   if (plus) celebrateKeyerPlus(box);
   else clearCelebration(box);
