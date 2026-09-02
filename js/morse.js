@@ -49,6 +49,22 @@ const REVERSE_TABLE = (() => {
  *   { type: 'space' }                                   語間スペース
  * 未対応の文字は黙って読み飛ばす。
  */
+/**
+ * 打ち込まれた文字を、照合できる形にそろえる。
+ *
+ * 日本語入力を全角のまま打つと「ＯＪＪＷＷ」のように全角英数で入る。
+ * 見た目はほぼ同じでも符号としては別の文字なので、そのまま比べると
+ * 正しく書けていても 1 文字も一致しない（0 点になる）。
+ * NFKC は全角英数を半角へ、全角スペースを空白へ寄せるので、
+ * 打ち手が入力モードを気にせずに済む。
+ *
+ * 手本側には使わない。手本はこちらが用意した半角の文字列で、
+ * 直す必要が無いうえ、正規化で意図せず形が変わるのを避けたい。
+ */
+export function normalizeTyped(text) {
+  return String(text ?? '').normalize('NFKC');
+}
+
 export function tokenize(text) {
   const src = String(text ?? '').toUpperCase();
   const tokens = [];

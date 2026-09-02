@@ -29,6 +29,7 @@ import {
 } from './contest.js';
 import {
   QSO_ERROR, QSO_ERROR_LABEL, loadHighScores, saveHighScore,
+  ContestLog, normalizeNumber,
 } from './contestlog.js';
 import {
   CELEBRATIONS, RANDOM_ID, celebrationById, runCelebration, clearCelebration,
@@ -4045,6 +4046,7 @@ init();
 window.__cw = {
   player, keyer, contest, responder,
   gradeProblem, compareSending, lookupTerm,  // 採点・用語引きを検証できるように公開する
+  ContestLog, normalizeNumber,               // 全角入力でも採点できることを検証できるように
   buildScript, gradeField, makeStation,       // ラバースタンプの言い回しを検証できるように
   sendingDiffHtml, comparisonColumns,        // 採点結果の見せ方を検証できるように
   sameSpacing, spacingUnits, spacingDiff,    // 100点＋（語の切れ目）の判定を検証できるように

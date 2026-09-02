@@ -3,6 +3,8 @@
 // Morse Runner の Log.pas に対応する。交信は打ち込んだ内容と実際の内容の
 // 両方を持ち、CheckErr で NIL / DUP / RST / NR のいずれかに分類する。
 
+import { normalizeTyped } from './morse.js';
+
 /** 交信のエラー種別。Morse Runner の Err 文字列に対応する。 */
 export const QSO_ERROR = {
   NONE: '',
@@ -60,7 +62,7 @@ export class ContestLog {
 
   /** 過去にこのコールサインと有効な交信をしているか。 */
   isDupe(callsign) {
-    const call = String(callsign || '').toUpperCase();
+    const call = normalizeTyped(callsign).toUpperCase();
     return this.qsos.some((q) => q.call === call && q.err !== QSO_ERROR.NIL);
   }
 
@@ -71,7 +73,7 @@ export class ContestLog {
    *   true* が null なら該当局が存在しなかった（NIL）ことを意味する。
    */
   add(entry) {
-    const call = String(entry.call || '').toUpperCase();
+    const call = normalizeTyped(entry.call).toUpperCase();
     const qso = {
       at: entry.at ?? Date.now(),
       call,
@@ -173,7 +175,8 @@ export function checkErr(qso) {
  * CW では 9 を N、0 を T や O と打つ習慣がある。
  */
 export function normalizeNumber(value) {
-  return String(value ?? '')
+  // 全角で打たれていても読めるようにそろえる（normalizeTyped の説明を参照）
+  return normalizeTyped(value)
     .toUpperCase()
     .replace(/[\s-]/g, '')
     .replace(/N/g, '9')
