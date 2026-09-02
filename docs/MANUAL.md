@@ -967,13 +967,14 @@ OS で「視差効果を減らす／アニメーションを減らす」を有�
 ### 交信の定型文と話題
 
 「種類」で**交信の定型文**を選ぶと、隣に「話題」が出ます。
-実際の交信で打たれる言い回しを話題ごとにまとめてあり、全部で 69 文あります。
+実際の交信で打たれる言い回しを話題ごとにまとめてあり、全部で 111 文あります。
 
 | 話題 | 例 |
 |---|---|
 | 呼び出し・応答 | `CQ CQ CQ DE JA1ABC JA1ABC K` |
+| あいさつ・気持ちを伝える | `GE DR OM = GLD TO WRK U` |
 | 基本の交換（RST・名前・QTH） | `UR RST 599 599 = NAME TARO TARO` |
-| 天気 | `WX HR CLDY = TEMP 12C ES QRN` |
+| 天気 | `WX MOSTLY SUNNY = TEMP ABT 22 C` |
 | 時刻 | `QTR HR 1430 JST` |
 | 場所・地理 | `MY QTH TOKYO = ABT 50 KM N OF TOKYO` |
 | 電波の状況 | `UR SIGS 579 HR = SOME QRN` |
@@ -1320,6 +1321,74 @@ CW 学習で最も大事な考え方なので、独立した章にしていま�
 | `←` `→` `Home` `End` | タブにフォーカスがあるとき、タブを移動 |
 | `Space` | 再生の一時停止／再開（コンテスト運用を除く） |
 | `Esc` | 打った符号があれば打ち直し（焦点はどこでも可）、無ければ練習を終了（コンテスト運用を除く） |
+
+### ラバースタンプの言い回し
+
+型どおりの交換を並べるだけでは、決まり文句の羅列になってしまいます。
+実際の交信では、次のような語を挟んで会話らしくします。台本にもこれらが
+混ざるので、**聞いて慣れることができます**。意味はどれも略語集で引けます。
+
+**あいさつ・気持ち**
+
+| 語 | 意味 | 使い方 |
+|---|---|---|
+| `DR` / `OM` | 親愛なる／相手への敬称 | `GE DR OM` |
+| `GLD` | 嬉しい | `GLD TO WRK U` |
+| `PSED` | 嬉しい | `AM VY PSED TO SU` |
+| `UFB` / `VFB` | この上なく／たいへん素晴らしい | `UR SIG UFB HR` |
+| `BTW` | ところで | `BTW = UR SIG FB` |
+| `SA` | ねえ・それでは | `NW QRU SA 73 SK` |
+| `WL` | では・さて（話の切り替え） | `WL = ITS TIME TO QRT` |
+| `WUD` | 〜したいのですが | `I WUD LIKE TO WRK U AGN` |
+| `C` | はい・そのとおり | `C BK` |
+| `MOM` / `AS` | 少しお待ちください | `MOM PSE` |
+| `BTU` | あなたにお返しします | `BTU JA1ABC DE JH1XYZ KN` |
+| `CFM` | 確認してください | `PSE CFM MI CALL` |
+| `CL` | 閉局します（もう呼ばないでほしい） | `73 <SK> DE JA1ABC CL` |
+| `BCNU` | またお会いしましょう | `73 ES BCNU` |
+| `SN` | まもなく | `I WL CU VY SN` |
+
+**「完全に取れた」と伝える**
+
+`R`（了解）の一歩先で、**どのくらい取れたか**まで伝えられます。
+
+| 言い方 | 意味 |
+|---|---|
+| `SOLID CPI` / `SOLID CPI NW` | 完全にコピーできています |
+| `GUD CPI AGN` | 今回も良好に取れています |
+| `UR SIG LOUD ES CLR` | 非常に強く、かつ明瞭に届いています |
+| `CUTTING THRU QRM` | 混信を突き抜けて届いています |
+
+台本では**自分が出したレポートと辻褄が合う**ものだけを選びます。
+599 を送っておいて「混信を突き抜けて」では話が合わないためです。
+
+**設備の紹介**
+
+| 語 | 意味 | 使い方 |
+|---|---|---|
+| `RNG` | 運用中 (running) | `AM RNG 5W INTO GP` |
+| `BAREFOOT` | リニアを付けない素の出力 | `AM RNG BAREFOOT` |
+| `UP GND` / `MTRS` | 地上高／メートル | `ANT DP = 15 MTRS UP GND` |
+| `DP` `DIPOLE` `YAGI` `VERT` `GP` `LW` | アンテナの種類 | `ANT 3 ELE YAGI` |
+
+**天気**
+
+`FINE` 一辺倒から離れ、海外局が実際に言ってくる語を入れてあります。
+
+| 空模様 | 語 |
+|---|---|
+| 晴れ | `SUNNY` `MOSTLY SUNNY` `PARTLY SUNNY` `CLEAR` `FAIR` |
+| 曇り | `CLOUDY` `OVERCAST` `DULL` |
+| 雨・雪 | `LIGHT RAIN` `SHOWER` `HAIL` `SLEET` `BLIZZARD` `STORMY` |
+| かすみ・霧 | `HAZE` `HAZY` `FOGGY` |
+| 体感 | `MUGGY` `STICKY` `HUMID` `CHILLY` `CALM` `MILD` `BREEZY` `WINDY` |
+
+`FINE` は日本の局の定番ですが、英語圏では「まずまずの陽気」の含みがあり、
+天候そのものにはあまり使われません。
+
+気温は `ABT`（およそ）を添えて `TEMP ABT 22 C`、氷点下は
+`TEMP MINUS 5 DEG C` のように送ります。**天気に見合う気温**を出すので、
+「雪なのに 26 度」のような台本にはなりません。
 
 ### 聞き取りドリル
 

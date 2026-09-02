@@ -3,10 +3,14 @@
 // 送信中の語を morse.js のトークン列と対応付けて追跡し、Q 符号・略語・
 // RST・コールサインなどに解説を付ける。
 
-import { ABBREVIATIONS } from './data.js';
+import { ABBREVIATIONS, WX_WORDS } from './data.js';
 import { PROSIGN_LABEL, prettyCode, tokenize } from './morse.js';
 
-const ABBREV_MAP = new Map(ABBREVIATIONS.map((a) => [a.code, a.ja]));
+// 天候の語も同じ表で引けるようにする。略語ではないが、交信で送られて
+// くる語であることに変わりはなく、意味が出ないと聞いても分からない
+const ABBREV_MAP = new Map(
+  [...ABBREVIATIONS, ...WX_WORDS].map((a) => [a.code, a.ja]),
+);
 
 /** RST の各桁の意味。 */
 const RST_READABILITY = {

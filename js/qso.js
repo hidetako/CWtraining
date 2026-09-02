@@ -7,6 +7,7 @@
 
 import {
   ANTENNAS, POWERS, RIGS, RST_POOL, WEATHER, NAMES, QTH,
+  SOLID_COPY, GLAD_PHRASES,
   greetingForHour, isJapanese, makeCallsign, pick, pickInt,
 } from './data.js';
 
@@ -39,9 +40,24 @@ export const FIELD_HINTS = {
 };
 
 /** 相手局のプロフィールをランダムに作る。 */
+/**
+ * 天気に見合う気温を返す。
+ * 天気と気温を別々に振ると「SNOW ES TEMP 26C」のような台本ができてしまう。
+ */
+function tempFor(wx) {
+  // 語として照合する。部分一致だと CLDY（曇り）が CLD（寒い）に当たる
+  const words = ` ${wx} `;
+  const has = (list) => list.some((k) => words.includes(` ${k} `));
+  if (has(['SNOW', 'BLIZZARD', 'SLEET', 'HAIL', 'CHILLY', 'CLD'])) return pickInt(-8, 6);
+  if (has(['HOT', 'MUGGY', 'STICKY', 'HUMID'])) return pickInt(27, 36);
+  if (has(['WARM', 'SUNNY', 'FINE', 'FAIR', 'CLEAR'])) return pickInt(15, 28);
+  return pickInt(5, 22);
+}
+
 export function makeStation(options = {}) {
   const callsign = options.callsign || makeCallsign(options.region);
   const ja = isJapanese(callsign);
+  const wx = pick(WEATHER);
   return {
     callsign,
     name: pick(ja ? NAMES.JA : NAMES.DX),
@@ -49,8 +65,10 @@ export function makeStation(options = {}) {
     rig: pick(RIGS),
     pwr: pick(POWERS),
     ant: pick(ANTENNAS),
-    wx: pick(WEATHER),
-    temp: `${pickInt(-5, 35)}C`,
+    wx,
+    temp: `${tempFor(wx)}C`,
+    // アンテナの地上高。設備の紹介に「10 MTRS UP GND」を添えるのに使う
+    antHeight: pickInt(6, 20),
     rstGiven: pick(RST_POOL),   // 相手が自局に送るレポート
     rstGot: pick(RST_POOL),     // 自局が相手に送るレポート
   };
@@ -60,6 +78,66 @@ const TAIL = {
   short: ['<AR>', 'K'],
   normal: ['K'],
 };
+
+/**
+ * レポートに添える一言。取りにくかった理由を伝えるのが実際の交信。
+ * 599 のような良好なレポートには付けない（言うことが無いため）。
+ */
+function rstNote(rst) {
+  if (/^5[89]9$/.test(rst) || rst === '5NN') return '';
+  return pick(['', '', ' WID QSB', ' WID QRM', ' WID QRN', ' BUT SOLID CPI']);
+}
+
+/**
+ * 「どのくらい取れたか」の言い方。自分が相手に出したレポートと辻褄を合わせる。
+ * 599 を送っておいて「混信を突き抜けて届いている」では話が合わない。
+ */
+function copyNotes(rstIGave) {
+  const good = /^5[89]9$/.test(rstIGave) || rstIGave === '5NN';
+  return good
+    ? ['ALL SOLID', 'SOLID CPI', 'SOLID CPI NW', 'UR SIG LOUD ES CLR']
+    : ['GUD CPI AGN', 'CUTTING THRU QRM', 'ALL CPI 100 PERCENT', 'SOLID CPI'];
+}
+
+/** 設備の言い方。「MY RIG …」だけでなく、実際に使われる形も混ぜる。 */
+function rigLine(st) {
+  return pick([
+    `MY RIG ${st.rig} PWR ${st.pwr}`,
+    `RIG HR IS ${st.rig} ES PWR ${st.pwr}`,
+    `RIG ${st.rig} = AM RNG ${st.pwr}`,
+    `MY RIG ${st.rig} = RNG ${st.pwr} BAREFOOT`,
+  ]);
+}
+
+/**
+ * アンテナの言い方。地上高を添えるのは実際の交信でよくある。
+ * 値そのもの（ANT の答え）は先頭に置き、高さは = で区切った別の文にする。
+ * 聞き取り練習の答えはアンテナ名だけなので、続けて書くと紛らわしい。
+ */
+function antLine(st) {
+  // 地上高は相手局だけが持つ（自局の設定に高さの項目が無いため）
+  const h = st.antHeight ? pick([
+    '', '',
+    ` = ${st.antHeight} MTRS UP GND`,
+    ` = ${st.antHeight}M H`,
+    ` = ABT ${st.antHeight} MTRS UP GND`,
+  ]) : '';
+  return `ANT ${st.ant}${h}`;
+}
+
+/** 天気の言い方。気温には ABT を添えて、数値をぼかす形を耳に入れる。 */
+function wxLine(st) {
+  // 気温も相手局だけが持つ。無いときは天気だけを言う
+  if (!st.temp) return pick([`WX ${st.wx} HR`, `WX HR ${st.wx}`, `HR WX ${st.wx}`]);
+  const temp = st.temp.startsWith('-')
+    ? `MINUS ${st.temp.slice(1, -1)} DEG C`
+    : `ABT ${st.temp}`;
+  return pick([
+    `WX ${st.wx} TEMP ${temp}`,
+    `WX HR ${st.wx} ES TEMP ${temp}`,
+    `HR WX ${st.wx} = TEMP ${temp}`,
+  ]);
+}
 
 /**
  * ラバースタンプ QSO の台本を組み立てる。
@@ -96,8 +174,9 @@ export function buildScript(profile, options = {}) {
   // 第 1 交換: 自局からレポート・名前・QTH を送る
   add('me', [
     `${dx.callsign} DE ${me.callsign}`,
-    `= ${greet} OM TNX FER ${mode === 'cq' ? 'CALL' : 'CQ'}`,
-    `= UR RST ${dx.rstGot} ${dx.rstGot}`,
+    `= ${greet} ${pick(['DR OM', 'OM', 'DR OM'])} TNX FER ${mode === 'cq' ? 'CALL' : 'CQ'}`,
+    `= ${pick(GLAD_PHRASES)}`,
+    `= UR RST ${dx.rstGot} ${dx.rstGot}${rstNote(dx.rstGot)}`,
     `= NAME ${me.name} ${me.name}`,
     `= QTH ${me.qth} ${me.qth}`,
     `= HW? ${dx.callsign} DE ${me.callsign} ${pick(TAIL[length] || TAIL.normal)}`,
@@ -106,8 +185,8 @@ export function buildScript(profile, options = {}) {
   // 第 2 交換: 相手からの返信。ここが聞き取りの山場になる
   const dxReply = [
     `${me.callsign} DE ${dx.callsign}`,
-    `= R R FB ${me.name} ES TNX FER RPRT`,
-    `= UR RST ${dx.rstGiven} ${dx.rstGiven}`,
+    `= R R ${pick(['FB', 'FB', 'VFB', 'UFB'])} ${me.name} ES TNX FER RPRT`,
+    `= UR RST ${dx.rstGiven} ${dx.rstGiven}${rstNote(dx.rstGiven)}`,
     `= NAME ${dx.name} ${dx.name}`,
     `= QTH ${dx.qth} ${dx.qth}`,
   ];
@@ -118,12 +197,12 @@ export function buildScript(profile, options = {}) {
   ];
 
   if (length !== 'short') {
-    dxReply.push(`= RIG ${dx.rig} PWR ${dx.pwr}`);
-    dxReply.push(`= ANT ${dx.ant}`);
+    dxReply.push(`= ${rigLine(dx)}`);
+    dxReply.push(`= ${antLine(dx)}`);
     dxFields.push(field('rig', dx.rig), field('pwr', dx.pwr), field('ant', dx.ant));
   }
   if (length === 'long') {
-    dxReply.push(`= WX ${dx.wx} TEMP ${dx.temp}`);
+    dxReply.push(`= ${wxLine(dx)}`);
     dxFields.push(field('wx', dx.wx));
   }
   dxReply.push(`= HW? ${me.callsign} DE ${dx.callsign} K`);
@@ -132,12 +211,13 @@ export function buildScript(profile, options = {}) {
   // 第 3 交換: 自局の設備を返して締めに入る
   const meReply = [
     `${dx.callsign} DE ${me.callsign}`,
-    `= R R FB ${dx.name} ALL SOLID`,
-    `= MY RIG ${me.rig} PWR ${me.pwr}`,
-    `= ANT ${me.ant}`,
+    `= R R FB ${dx.name} ${pick(copyNotes(dx.rstGot))}`,
+    `= ${rigLine(me)}`,
+    `= ${antLine(me)}`,
   ];
-  if (length === 'long') meReply.push(`= WX ${me.wx} HR`);
-  meReply.push(`= TNX FER NICE QSO ES 73`);
+  if (length === 'long') meReply.push(`= ${wxLine(me)}`);
+  meReply.push(`= ${pick(['TNX FER NICE QSO ES 73', 'MNI TNX FER FB QSO ES 73',
+    'NW QRU SA 73', 'WL NW QRU = TNX FER QSO ES 73'])}`);
   meReply.push(`= ${dx.callsign} DE ${me.callsign} K`);
   add('me', meReply.join(' '), [], 'exchange2');
 
@@ -145,12 +225,13 @@ export function buildScript(profile, options = {}) {
   add('dx', [
     `${me.callsign} DE ${dx.callsign}`,
     `= R FB TNX FER FB QSO ${me.name}`,
-    `= ${pick(['HPE CUAGN', 'CUAGN SN', 'HPE CUAGN SOON'])}`,
+    `= ${pick(['HPE CUAGN', 'CUAGN SN', 'BCNU', 'I WL CU VY SN', 'HPE CU AGN SN'])}`,
     `= 73 ES GL`,
     `= ${me.callsign} DE ${dx.callsign} <SK>`,
   ].join(' '), [], 'close');
 
-  add('me', `${dx.callsign} DE ${me.callsign} R TU 73 ES CUAGN <SK>`, [], 'close');
+  add('me', `${dx.callsign} DE ${me.callsign} R TU 73 ES ${
+    pick(['CUAGN', 'BCNU', 'CUAGN SN'])} <SK>`, [], 'close');
 
   const script = { station: dx, profile: me, mode, length, turns };
   applyReaction(script, options.reaction);

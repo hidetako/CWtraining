@@ -84,16 +84,12 @@ export const RIGS = [
 ];
 
 export const ANTENNAS = [
-  'DP', 'INV V', 'GP', 'VERTICAL', '3ELE YAGI', '4ELE YAGI', '2ELE HB9CV',
+  'DP', 'DIPOLE', 'INV V', 'GP', 'VERT', 'VERTICAL',
+  '3ELE YAGI', '4ELE YAGI', '5ELE YAGI', '2ELE HB9CV',
   'LOOP', 'MAG LOOP', 'LW', 'EFHW', 'MOBILE WHIP', 'DELTA LOOP',
 ];
 
 export const POWERS = ['5W', '10W', '20W', '50W', '100W', '200W', '500MW'];
-
-export const WEATHER = [
-  'FINE', 'SUNNY', 'CLOUDY', 'RAIN', 'HEAVY RAIN', 'SNOW', 'WINDY',
-  'FOGGY', 'CLEAR', 'HOT', 'CLD', 'MILD',
-];
 
 export const RST_POOL = [
   '599', '599', '599', '589', '579', '569', '559', '549', '539', '449',
@@ -205,7 +201,147 @@ export const ABBREVIATIONS = [
   { code: 'BCNU', ja: 'またお会いしましょう (be seeing you)' },
   { code: 'DX', ja: '遠距離の局・海外局' },
   { code: 'SN', ja: 'まもなく (soon)' },
-  { code: 'WL', ja: '〜でしょう (will)' },
+  { code: 'WL', ja: '〜でしょう (will)／では・さて（話を切り替える）' },
+
+  // ── 会話の間合いと気持ちを伝える語 ──
+  // 型どおりの交換だけでは、決まり文句を並べただけの交信になる。
+  // 「およそ」「嬉しい」「ところで」を挟めるようになると急に会話らしくなる
+  { code: 'C', ja: 'はい・そのとおり (correct) — Yes/No の質問に「C BK」で答える' },
+  { code: 'N', ja: 'いいえ (no)' },
+  { code: 'BTW', ja: 'ところで (by the way)' },
+  { code: 'SA', ja: 'ねえ・それでは (say) — 文頭に添えて呼びかける' },
+  { code: 'GLD', ja: '嬉しい (glad) — GLD TO WRK U（交信できて嬉しい）' },
+  { code: 'PSED', ja: '嬉しい (pleased) — VY PSED TO MEET U' },
+  { code: 'WUD', ja: '〜したいのですが (would) — I WUD LIKE TO…' },
+  { code: 'MOM', ja: '少し待ってください (moment)' },
+  { code: 'AS', ja: 'お待ちください（待機を求める）' },
+  { code: 'CL', ja: '閉局します (closing) — これ以上呼ばないでほしい合図' },
+  { code: 'UFB', ja: 'この上なく素晴らしい (ultra fine business)' },
+  { code: 'VFB', ja: 'たいへん素晴らしい (very fine business)' },
+  { code: 'WRK', ja: '交信する (work)' },
+  { code: 'SU', ja: 'あなたに会う (see you)' },
+  { code: 'CU', ja: 'また会いましょう (see you)' },
+  { code: 'MI', ja: '私の (my)' },
+  { code: 'TONITE', ja: '今夜 (tonight)' },
+  { code: 'TODAY', ja: '今日' },
+  { code: 'MUCH', ja: 'たくさん' },
+
+  // ── 「完全に取れた」と伝える語 ──
+  // R（了解）の一歩先。どのくらい取れたかまで伝えられる
+  { code: 'SOLID', ja: '完全に取れている（100%コピー）' },
+  { code: 'CPI', ja: '受信・コピー (copy) — SOLID CPI NW で「今、完全に取れている」' },
+  { code: 'CLR', ja: '明瞭な (clear) — LOUD ES CLR で「強くはっきり届いている」' },
+  { code: 'LOUD', ja: '（信号が）強い' },
+  { code: 'THRU', ja: '〜を突き抜けて (through) — CUTTING THRU QRM' },
+  { code: 'CUTTING', ja: '切り裂いて届く（混信の中でも届いている）' },
+  { code: 'PERCENT', ja: '％' },
+
+  // ── 設備の紹介で使う語 ──
+  { code: 'RNG', ja: '運用中 (running) — AM RNG 5W INTO GP（5W で GP に出している）' },
+  { code: 'BAREFOOT', ja: 'ベアフット（リニアを付けない素の出力）' },
+  { code: 'INTO', ja: '〜へ（AM RNG 5W INTO GP = 5W を GP へ）' },
+  { code: 'DP', ja: 'ダイポールアンテナ' },
+  { code: 'DIPOLE', ja: 'ダイポールアンテナ' },
+  { code: 'YAGI', ja: '八木アンテナ（3 ELE YAGI = 3 素子八木）' },
+  { code: 'ELE', ja: 'エレメント（素子）' },
+  { code: 'VERT', ja: '垂直系アンテナ (vertical)' },
+  { code: 'VERTICAL', ja: '垂直系（アンテナの形式）' },
+  { code: 'GP', ja: 'グランドプレーンアンテナ (ground plane)' },
+  { code: 'LW', ja: 'ロングワイヤー (long wire)' },
+  { code: 'EFHW', ja: '端給電半波長アンテナ (end fed half wave)' },
+  { code: 'GND', ja: '地面 (ground) — UP GND で地上高' },
+  { code: 'UP', ja: '上へ（UP GND で「地上高〜」）' },
+  { code: 'MTRS', ja: 'メートル (meters)' },
+  { code: 'FT', ja: 'フィート (feet)' },
+  { code: 'DEG', ja: '度 (degree)' },
+  { code: 'DEGREE', ja: '度' },
+  { code: 'CELSIUS', ja: '摂氏' },
+  { code: 'MINUS', ja: 'マイナス（氷点下の気温に添える）' },
+  { code: 'MILES', ja: 'マイル' },
+  { code: 'KM', ja: 'キロメートル' },
+  { code: 'SHACK', ja: 'シャック（無線室）' },
+];
+
+/**
+ * 天候の言い方。
+ *
+ * 日本の交信は WX FINE 一辺倒になりがちだが、海外局は空の様子をそのまま
+ * 言葉にしてくる。聞いて分かるように、実際に送られてくる言い方をそろえた。
+ * 空白を含むもの（LIGHT RAIN など）は語ごとに引けるよう、単語も
+ * ABBREVIATIONS 側と WX_WORDS に入れてある。
+ */
+export const WX_WORDS = [
+  { code: 'FINE', ja: '晴れ（日本の局の定番。英語圏では「まずまずの陽気」の含みで、天候そのものにはあまり使わない）' },
+  { code: 'SUNNY', ja: '日が出ている晴れ' },
+  { code: 'MOSTLY', ja: 'ほとんど（MOSTLY SUNNY = ほぼ晴れ）' },
+  { code: 'PARTLY', ja: '一部（PARTLY SUNNY = 晴れときどき曇り）' },
+  { code: 'CLEAR', ja: '雲ひとつない快晴（夜の晴れにも使う）' },
+  { code: 'FAIR', ja: '晴れ（海外の気象情報で見る言い方）' },
+  { code: 'CLOUDY', ja: '曇り' },
+  { code: 'OVERCAST', ja: '本曇り（空一面が雲に覆われた状態）' },
+  { code: 'DULL', ja: 'どんよりとした' },
+  { code: 'RAIN', ja: '雨' },
+  { code: 'LIGHT', ja: '弱い（LIGHT RAIN = 小雨）' },
+  { code: 'SHOWER', ja: 'にわか雨' },
+  { code: 'SNOW', ja: '雪' },
+  { code: 'HAIL', ja: 'ひょう' },
+  { code: 'SLEET', ja: 'みぞれ' },
+  { code: 'HAZE', ja: 'もや・かすみ' },
+  { code: 'HAZY', ja: 'かすんだ' },
+  { code: 'FOG', ja: '霧' },
+  { code: 'FOGGY', ja: '霧が出ている' },
+  { code: 'MUGGY', ja: '蒸し暑い' },
+  { code: 'STICKY', ja: '湿気が肌にまとわりつく' },
+  { code: 'HUMID', ja: '湿度が高い' },
+  { code: 'WINDY', ja: '風が強い' },
+  { code: 'BREEZY', ja: 'そよ風の' },
+  { code: 'BLIZZARD', ja: '暴風雪' },
+  { code: 'STORM', ja: '嵐' },
+  { code: 'STORMY', ja: '荒れ模様の' },
+  { code: 'CALM', ja: '穏やかでのどかな' },
+  { code: 'MILD', ja: '温暖な' },
+  { code: 'WARM', ja: '暖かい' },
+  { code: 'HOT', ja: '暑い' },
+  { code: 'CHILLY', ja: '寒々とした' },
+  { code: 'COOL', ja: '涼しい' },
+  { code: 'FRESH', ja: 'すがすがしい' },
+];
+
+/**
+ * WX 欄に入る言い方。単語の組み合わせも含む。
+ * 聞き取り練習ではこの文字列がそのまま答えになる。
+ */
+export const WEATHER = [
+  'FINE', 'SUNNY', 'MOSTLY SUNNY', 'PARTLY SUNNY', 'CLEAR', 'FAIR',
+  'CLOUDY', 'CLDY', 'OVERCAST', 'DULL',
+  'RAIN', 'LIGHT RAIN', 'HEAVY RAIN', 'SHOWER',
+  'SNOW', 'HAIL', 'SLEET', 'BLIZZARD',
+  'HAZE', 'HAZY', 'FOGGY', 'MUGGY', 'STICKY', 'HUMID',
+  'WINDY', 'BREEZY', 'STORMY',
+  'CALM', 'MILD', 'WARM', 'HOT', 'CHILLY', 'COOL', 'CLD',
+];
+
+/**
+ * 「完全に取れた」と伝える言い方。R（了解）の一歩先。
+ * 第 3 交換の頭で、どのくらい取れたかを添えるのに使う。
+ */
+export const SOLID_COPY = [
+  'ALL SOLID',
+  'SOLID CPI',
+  'SOLID CPI NW',
+  'GUD CPI AGN',
+  'UR SIG LOUD ES CLR',
+  'CUTTING THRU QRM',
+  'ALL CPI 100 PERCENT',
+];
+
+/** 交信できた嬉しさを伝える言い方。第 1 交換の挨拶に添える。 */
+export const GLAD_PHRASES = [
+  'GLD TO WRK U',
+  'VY GLD TO WRK U',
+  'AM VY PSED TO SU',
+  'VY PSED TO MEET U',
+  'MNI TNX FER NICE QSO',
 ];
 
 /**
@@ -229,6 +365,27 @@ export const KEY_PHRASE_TOPICS = {
     ],
   },
 
+  greet: {
+    label: 'あいさつ・気持ちを伝える',
+    phrases: [
+      '{DX} DE {ME} = GE DR OM = GLD TO WRK U',
+      'AM VY PSED TO SU = TNX FER CALL',
+      'MNI TNX FER NICE QSO DR OM',
+      'BTW = UR SIG UFB HR TODAY',
+      'SA = WL NW QRU = 73 <SK>',
+      'I WUD LIKE TO WRK U AGN SN',
+      'VFB OM = TNX FER FB QSO',
+      'SRI ABT POOR CONDX TONITE',
+      'MOM PSE = QRX 1 MIN',
+      'C BK = THATS RIGHT OM',
+      'PSE CFM MI CALL = {ME} {ME}',
+      'BTU {DX} DE {ME} KN',
+      'NW QRU SA 73 ES BCNU',
+      'WL = ITS TIME TO QRT = 73',
+      '{DX} DE {ME} 73 <SK> DE {ME} CL',
+    ],
+  },
+
   basic: {
     label: '基本の交換（RST・名前・QTH）',
     phrases: [
@@ -239,6 +396,13 @@ export const KEY_PHRASE_TOPICS = {
       'RIG HR {RIG} ES PWR {PWR}',
       'ANT HR {ANT} = HW CPY?',
       'TNX FER RPRT = UR RST 589 HR',
+      'RIG HR IS {RIG} = AM RNG {PWR} BAREFOOT',
+      'AM RNG 5W INTO GP ANT',
+      'ANT {ANT} = 10 MTRS UP GND',
+      'ANT 3 ELE YAGI = 15 MTRS UP GND',
+      'MY ANT DIPOLE ES 12M H',
+      'R R SOLID CPI NW = TNX OM',
+      'UR SIG LOUD ES CLR HR',
     ],
   },
 
@@ -255,6 +419,14 @@ export const KEY_PHRASE_TOPICS = {
       'RAIN STOPPED NW ES SUN OUT HI',
       'WX HR FOGGY = VY DAMP TODAY',
       'TNX FER WX INFO = HR SAME WX',
+      'WX HR OVERCAST ES DULL TODAY',
+      'WX MOSTLY SUNNY = TEMP ABT 22 C',
+      'HR WX LIGHT RAIN ES CHILLY',
+      'WX CLEAR NW = TEMP MINUS 5 DEGREE CELSIUS',
+      'VY MUGGY HR = TEMP ABT 31 C',
+      'WX BLIZZARD HR = VY CLD',
+      'HR WX HAZY ES CALM',
+      'WX BREEZY = TEMP ABT 18 C',
     ],
   },
 
@@ -298,6 +470,10 @@ export const KEY_PHRASE_TOPICS = {
       'BAND CLOSING NW = SIGS DOWN',
       'FB SIGS HR = 599 PLUS 20 DB',
       'CONDX UP ES DWN = HW UR SIDE?',
+      'UR SIG CUTTING THRU QRM FB',
+      'GUD CPI AGN = ALL SOLID HR',
+      'UR RST 559 WID QSB HR',
+      'HVY QRN HR = CPI ABT 80 PERCENT',
     ],
   },
 
@@ -324,6 +500,10 @@ export const KEY_PHRASE_TOPICS = {
       'GB OM ES GL = 73 73 <SK>',
       'QSL VIA BURO = TU 73',
       'MNI TNX FB QSO = 73 ES GB',
+      'NW QRU = TNX FER QSO ES 73 BCNU',
+      'I WL CU VY SN = 73 ES GL',
+      'MY QSL SURE VIA BURO = TU 73',
+      '73 <SK> DE {ME} CL',
     ],
   },
 
@@ -336,6 +516,10 @@ export const KEY_PHRASE_TOPICS = {
       'PSE QRS = I AM BEGINNER HI',
       'SRI OM PSE RPT ALL AFTER RST',
       'QRX PSE = QRL HR = 5 MIN',
+      'PSE RPT UR NAME AGN BK',
+      'MOM PSE = AS AS',
+      'PSE CFM MI CALL SIGN = {ME}',
+      'NIL HR = NO MORE INFO OM',
     ],
   },
 };

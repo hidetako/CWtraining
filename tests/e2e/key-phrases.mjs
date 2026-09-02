@@ -30,7 +30,7 @@ console.log('話題:', JSON.stringify(data.counts), '合計', data.total);
 
 // 依頼された話題がそろっていること
 for (const [key, want] of [['wx', '天気'], ['time', '時刻'], ['qth', '場所'],
-  ['condx', '電波'], ['qsb', 'フェージング']]) {
+  ['condx', '電波'], ['qsb', 'フェージング'], ['greet', 'あいさつ']]) {
   ok(`話題「${want}」がある`, data.keys.includes(key) && data.labels[key].includes(want),
     data.labels[key] ?? '(無し)');
 }
@@ -43,8 +43,11 @@ const onTopic = {
   wx: /\bWX\b|TEMP|RAIN|SNOW|SUNNY|CLDY|CLOUDY|FOGGY|WINDY|HOT|HUMID|SUN\b/,
   time: /QTR|TIME|\b\d{4}\b/,
   qth: /QTH|JCC|KM|ASL|AREA/,
-  condx: /SIG|CONDX|BAND|QRN|QRM|RST|DB/,
+  // どのくらい取れているかも「電波の状況」の話題。SOLID CPI などが入る
+  condx: /SIG|CONDX|BAND|QRN|QRM|RST|DB|CPI|SOLID|COPY/,
   qsb: /QSB|FADING/,
+  // 気持ちや間合いを伝える語が入っていること
+  greet: /GLD|PSED|DR OM|BTW|\bSA\b|\bWL\b|WUD|UFB|VFB|MOM|BTU|QRU|SRI|CFM|C BK|CL$/,
 };
 for (const [key, re] of Object.entries(onTopic)) {
   const off = data.phrases[key].filter((ph) => !re.test(ph));
