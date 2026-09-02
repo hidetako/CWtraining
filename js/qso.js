@@ -10,6 +10,7 @@ import {
   SOLID_COPY, GLAD_PHRASES,
   greetingForHour, isJapanese, makeCallsign, pick, pickInt,
 } from './data.js';
+import { normalizeTyped } from './morse.js';
 
 /** 受信内容の採点対象となる項目の表示名。 */
 export const FIELD_LABELS = {
@@ -442,7 +443,8 @@ export class LocalResponder {
  * 599 と 5NN、O と 0 の混同はカット・ナンバーとして許容する。
  */
 export function gradeField(expected, actual) {
-  const norm = (s) => String(s ?? '')
+  // 全角で打たれていても採点できるようにそろえる（normalizeTyped の説明を参照）
+  const norm = (s) => normalizeTyped(s)
     .toUpperCase()
     .replace(/[\s\-_/.]/g, '')
     .replace(/5NN/g, '599')

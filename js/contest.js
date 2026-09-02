@@ -11,6 +11,7 @@
 // 待たされ続ければ諦めて去る。
 
 import { makeCallsign, pick, pickInt } from './data.js';
+import { normalizeTyped } from './morse.js';
 import { KEYER_WPM_MAX } from './keyer.js';
 import { ContestLog, QSO_ERROR, normalizeNumber } from './contestlog.js';
 
@@ -530,7 +531,7 @@ export class ContestRunner extends EventTarget {
    */
   async exchange(typedCall) {
     if (!this.running) return;
-    const call = String(typedCall || '').toUpperCase().trim();
+    const call = normalizeTyped(typedCall).toUpperCase().trim();
     if (!call) return;
 
     const myNr = this.opts.exchange === 'jarl'
@@ -589,7 +590,7 @@ export class ContestRunner extends EventTarget {
   /** F3 相当: TU を送って交信を確定し、ログに記録する。 */
   async confirm(typedCall, typedNr) {
     if (!this.running) return null;
-    const call = String(typedCall || '').toUpperCase().trim();
+    const call = normalizeTyped(typedCall).toUpperCase().trim();
     if (!call) return null;
 
     await this._send(`TU ${this.opts.myCall}`);
@@ -657,7 +658,7 @@ export class ContestRunner extends EventTarget {
   /** F5: 相手コールサイン。 */
   async hisCall(typedCall) {
     if (!this.running || !typedCall) return;
-    const call = String(typedCall).toUpperCase().trim();
+    const call = normalizeTyped(typedCall).toUpperCase().trim();
     await this._send(call);
     this._dispatchHisCall(call);
   }
@@ -665,7 +666,7 @@ export class ContestRunner extends EventTarget {
   /** F6: QSO B4（重複交信の指摘）。 */
   async b4(typedCall) {
     if (!this.running) return;
-    const call = String(typedCall || '').toUpperCase().trim();
+    const call = normalizeTyped(typedCall).toUpperCase().trim();
     await this._send(`${call} QSO B4`);
 
     // 指摘された局は引き下がり、他の局が呼び直す
@@ -716,7 +717,7 @@ export class ContestRunner extends EventTarget {
 
   /** 呼んでいる局のコールサインを部分一致で補完する（スペースキー相当）。 */
   autoComplete(partial) {
-    const p = String(partial || '').toUpperCase().trim();
+    const p = normalizeTyped(partial).toUpperCase().trim();
     if (p.length < 2) return null;
     const hits = this.stations
       .filter((s) => s.state !== OP_STATE.FAILED && s.callsign.includes(p));
@@ -735,7 +736,7 @@ export class ContestRunner extends EventTarget {
  * Morse Runner の IsMyCall（mcYes / mcAlmost / mcNo）に対応する。
  */
 export function matchCall(typed, actual) {
-  const a = String(typed || '').toUpperCase().trim();
+  const a = normalizeTyped(typed).toUpperCase().trim();
   const b = String(actual || '').toUpperCase().trim();
   if (!a || !b) return 'no';
   if (a === b) return 'yes';

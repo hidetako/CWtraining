@@ -1,6 +1,6 @@
 // 聞き取りドリルの問題生成と採点
 
-import { codeUnits, countSubstitutions } from './morse.js';
+import { codeUnits, countSubstitutions, normalizeTyped } from './morse.js';
 import {
   ABBREVIATIONS, WX_WORDS, WX_PHRASES, WEATHER, ALL_KEY_PHRASES, ANTENNAS,
   FREQUENCY_ORDER, KOCH_ORDER,
@@ -232,7 +232,9 @@ function groupsFromAlphabet(alphabet, opts) {
  */
 export function gradeProblem(problem, input) {
   const expected = String(problem.answer).toUpperCase();
-  const actual = String(input || '').toUpperCase();
+  // 全角で打たれていても採点できるようにそろえる。見た目が同じでも
+  // 全角英数は別の文字なので、そのままでは 1 文字も一致しない
+  const actual = normalizeTyped(input).toUpperCase();
 
   const marks = align(expected, actual);
   const perChar = {};
