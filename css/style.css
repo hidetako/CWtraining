@@ -208,6 +208,15 @@ input[type=range] { accent-color: var(--accent); width: 100%; }
   .countdown { animation: none; }
 }
 
+/* コールサインや略語を書く欄は、打った先から大文字で見せる。
+   autocapitalize はモバイルのソフトキーボード向けで、パソコンでは
+   効かない。CW は大文字で扱うので、画面上でも大文字にそろえる。
+   値そのものは触らないため、日本語入力の変換中に邪魔をしない
+   （採点側は元から大文字に直して比べている）。 */
+input[autocapitalize="characters"] { text-transform: uppercase; }
+/* 書き方の見本まで大文字にすると「Enter」が「ENTER」になってしまう */
+input[autocapitalize="characters"]::placeholder { text-transform: none; }
+
 .answer-field { display: block; margin: 1rem 0 0; }
 
 /* 記号・プロサインの入力補助。山かっこの書き方を知らなくても入れられるように、
