@@ -1,7 +1,7 @@
 // 画面の組み立てとイベント配線
 
 import { CWPlayer } from './audio.js';
-import { MORSE_TABLE, computeTiming, toMorseString, estimateDuration, tokenize } from './morse.js';
+import { MORSE_TABLE, codeUnits, computeTiming, toMorseString, estimateDuration, tokenize } from './morse.js';
 import {
   ABBREVIATIONS, WX_WORDS, WX_PHRASES, FREQUENCY_ORDER, KOCH_ORDER, SYMBOL_ORDER,
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES,
@@ -4063,7 +4063,7 @@ window.__cw = {
   supportChar, supportWordBreak,             // デコーダー → 画面の配線を検証できるように
   get supportSession() { return supportSession(); },
   get supportState() { return support; },
-  MORSE_TABLE,                               // 鳴らせない文字が混ざっていないかを検証できるように
+  MORSE_TABLE, codeUnits,                    // 鳴らせない文字が混ざっていないかを検証できるように
   hintMask, HINT_LEVELS, HINT_MASK,          // 受信ヘルプの伏せ方を検証できるように
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES, ABBREVIATIONS,  // 定型文・語彙を検証できるように
   SYMBOL_ORDER,                              // 記号・プロサインの並びを検証できるように

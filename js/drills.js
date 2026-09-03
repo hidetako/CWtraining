@@ -3,8 +3,8 @@
 import { codeUnits, countSubstitutions, normalizeTyped } from './morse.js';
 import {
   ABBREVIATIONS, WX_WORDS, WX_PHRASES, WEATHER, ALL_KEY_PHRASES, ANTENNAS,
-  FREQUENCY_ORDER, KOCH_ORDER,
-  NAMES, POWERS, QTH, RIGS, RST_POOL, SYMBOL_ORDER,
+  FREQUENCY_ORDER, GLAD_PHRASES, GREETINGS, KOCH_ORDER,
+  NAMES, POWERS, QTH, RIGS, RST_POOL, SOLID_COPY, SYMBOL_ORDER,
   makeCallsign, pick, pickInt,
 } from './data.js';
 
@@ -183,20 +183,73 @@ function fillPlaceholders(text) {
  * 交信そのままの一節を組み立てる。
  * ばらばらの単語を聞き取れても、続けて送られると取れないことが多いので、
  * コールサイン・RST・名前・地名を実際の並びのままつなげて出す。
+ *
+ * 一節は呼び出しから締めまで、交信のどの場面のものも出す。同じ形ばかりだと
+ * 並びのほうを覚えてしまい、聞かずに書けるようになってしまう。場面ごとに
+ * 組み立て方を用意し、差し込む値もそのつど引き直す。
  */
 function makeExchange() {
   const call = makeCallsign();
+  const me = makeCallsign('JA');
   const rst = pick(RST_POOL);
+  const rst2 = pick(RST_POOL);
   const name = pick(ALL_NAMES);
   const place = pick(ALL_QTH);
+  const rig = pick(RIGS);
+  const ant = pick(ANTENNAS);
+  const pwr = pick(POWERS);
+  const wx = pick(WEATHER);
+  const temp = pickInt(-5, 35);
+  const greet = pick(Object.values(GREETINGS));
+  const solid = pick(SOLID_COPY);
+  const glad = pick(GLAD_PHRASES);
 
   const text = pick([
-    `${call} UR ${rst} ${rst}`,
+    // 呼び出しと応答
+    `CQ CQ CQ DE ${me} ${me} K`,
+    `CQ DX CQ DX DE ${me} ${me} PSE K`,
+    `${call} DE ${me} ${me} K`,
+    `QRZ? DE ${me} K`,
+    `${call} DE ${me} = ${greet} DR OM`,
+
+    // 第 1 交換（RST・名前・QTH）
+    `${call} DE ${me} = UR ${rst} ${rst}`,
     `UR ${rst} ${rst} NAME ${name} ${name}`,
-    `NAME ${name} QTH ${place}`,
-    `${call} DE ${makeCallsign('JA')} ${rst}`,
-    `QTH ${place} ES NAME ${name}`,
-    `TNX ${rst} NAME HR ${name}`,
+    `NAME ${name} ${name} QTH ${place} ${place}`,
+    `QTH ${place} ES NAME ${name} = HW?`,
+    `TNX FER CALL = UR RST ${rst} ${rst}`,
+    `${greet} DR OM = TNX FER CALL = UR ${rst}`,
+    `TNX ${rst} NAME HR ${name} = QTH ${place}`,
+    `${call} DE ${me} ${rst} ${name} ${place} K`,
+    `${call} UR ${rst} ${rst}`,
+
+    // 第 2 交換（設備・天気）
+    `RIG HR ${rig} ES PWR ${pwr}`,
+    `RIG ${rig} = ANT ${ant} = PWR ${pwr}`,
+    `MY RIG ${rig} ES ANT ${ant} UP 10 M`,
+    `ANT HR ${ant} = PWR ${pwr} ONLY HI`,
+    `WX HR ${wx} = TEMP ${temp} C`,
+    `WX ${wx} ES TEMP ${temp} C = HW UR WX?`,
+    `HR WX ${wx} = RIG ${rig} PWR ${pwr}`,
+
+    // 第 3 交換（了解の伝え方・信号の様子）
+    `R R ${solid} = TNX DR ${name}`,
+    `${solid} = UR RST ${rst} HR`,
+    `R TNX DR ${name} = ${glad}`,
+    `UR SIG ${rst} WID QSB = PSE AGN`,
+    `UR RST ${rst} NW = B4 ${rst2}`,
+
+    // 聞き返し
+    `PSE RPT UR NAME AGN = QRM HR`,
+    `SRI OM PSE QRS = I AM BEGINNER`,
+    `PSE CFM MI CALL = ${me} ${me}`,
+
+    // 締めくくり
+    `TNX FB QSO DR ${name} = 73 ES CUAGN`,
+    `${call} DE ${me} TU 73 <SK>`,
+    `HPE CUAGN DR ${name} = 73 73 <SK>`,
+    `QSL VIA BURO = TU DR ${name} 73`,
+    `NW QRU = TNX QSO ES 73 GB <SK>`,
   ]);
   return { text, answer: text, chars: text.replace(/\s/g, '').split('') };
 }
