@@ -127,6 +127,46 @@ ok('複数語では全体のモールスも出る', ex.lines.some((l) => l.start
   JSON.stringify(ex.lines));
 await page.screenshot({ path: `${DIR}/dt2-exchange.png`, fullPage: true });
 
+// ── 実戦の一節の幅 ────────────────────────────────
+// 同じ形ばかりだと並びのほうを覚えてしまい、聞かずに書けるようになる。
+// 呼び出しから締めまで、交信のどの場面の一節も出ること。
+// あわせて、鳴らせない文字が混じっていないことも見る（混じると
+// 音は出ないのに答えにだけ現れ、絶対に取れない問題になる）
+const variety = await page.evaluate(() => {
+  const texts = [];
+  const unplayable = new Set();
+  for (let i = 0; i < 600; i++) {
+    const p = window.__cw.makeProblem('exchange');
+    texts.push(p.answer);
+    for (const u of window.__cw.codeUnits(p.answer)) {
+      if (!u.space && String(u.key).startsWith('?')) unplayable.add(u.text);
+    }
+  }
+  // 差し込む値を伏せて「形」だけを数える。値違いは同じ形として扱う
+  const shapes = new Set(texts.map((t) => t.replace(/[A-Z0-9\-]+/g, '_')));
+  const has = (re) => texts.some((t) => re.test(t));
+  return {
+    kinds: new Set(texts).size,
+    shapes: shapes.size,
+    unplayable: [...unplayable],
+    call: has(/^CQ |^QRZ\?/),          // 呼び出し
+    first: has(/\bUR (599|5NN|\d{3})/), // 第 1 交換
+    gear: has(/\bRIG |\bANT |\bPWR /),  // 第 2 交換
+    wx: has(/\bWX /),                   // 天気
+    again: has(/\bPSE (RPT|CFM)|\bQRS\b/), // 聞き返し
+    close: has(/\b73\b/),               // 締めくくり
+  };
+});
+console.log('一節の幅:', JSON.stringify(variety));
+ok('一節の形が増えている', variety.shapes >= 20, `${variety.shapes} 形`);
+ok('中身も毎回引き直す', variety.kinds >= 300, `${variety.kinds} 通り`);
+ok('鳴らせない文字が混じらない', variety.unplayable.length === 0,
+  variety.unplayable.join(' '));
+for (const [scene, seen] of Object.entries({
+  呼び出し: variety.call, 第1交換: variety.first, 設備: variety.gear,
+  天気: variety.wx, 聞き返し: variety.again, 締め: variety.close,
+})) ok(`${scene}の一節が出る`, seen);
+
 // 文字群には解説が付かない（「数字 0537」のような言い換えも出さない）
 const koch = await answerAndRead('koch');
 ok('文字群には解説を出さない', koch.cards.length === 0, JSON.stringify(koch.cards));

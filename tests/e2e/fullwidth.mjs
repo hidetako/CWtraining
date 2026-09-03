@@ -1,9 +1,10 @@
-// 全角で打ち込んでも採点できること
+// 打ち込みの受け方（全角・小文字）
 //
 // 日本語入力を全角英数のまま打つと「ＯＪＪＷＷ」のように入る。見た目は
 // ほぼ同じでも符号としては別の文字なので、そろえずに比べると正しく
 // 書けていても 1 文字も一致しない（0 点になる）。
 // 入力モードを気にせず練習できることを、採点する場所すべてで見る。
+// あわせて、小文字で打っても大文字で見えることも見る。
 const { chromium } = await import(process.env.PW ?? 'playwright');
 
 const BASE = process.env.BASE ?? 'http://localhost:8123';
@@ -108,6 +109,47 @@ const shown = (await page.textContent('#drill-result')).replace(/\s+/g, ' ').tri
 console.log('採点:', shown.slice(0, 70));
 ok('画面でも全角入力が満点になる', shown.startsWith('100%'), shown.slice(0, 40));
 await page.screenshot({ path: `${DIR}/fw-drill.png`, fullPage: true });
+
+// ── 小文字で打っても大文字で見える ────────────────
+// CW は大文字で扱う。autocapitalize はモバイルのソフトキーボード向けで
+// パソコンでは効かないので、画面上でも大文字にそろえる
+const caps = await page.evaluate(() => {
+  const el = document.querySelector('#drill-answer');
+  const cs = getComputedStyle(el);
+  return {
+    field: cs.textTransform,
+    // 見本の文字まで大文字にすると「Enter」が「ENTER」になる
+    placeholder: getComputedStyle(el, '::placeholder').textTransform,
+    // CW ではない欄（日本語が入る）は大文字にしない
+    notes: getComputedStyle(document.querySelector('#log-notes')).textTransform,
+    qth: getComputedStyle(document.querySelector('#log-qth')).textTransform,
+    // 印の付いた欄はすべて対象
+    marked: [...document.querySelectorAll('input[autocapitalize="characters"]')]
+      .map((e) => getComputedStyle(e).textTransform),
+  };
+});
+console.log('大文字表示:', JSON.stringify(caps));
+ok('書き取り欄は大文字で見える', caps.field === 'uppercase', caps.field);
+ok('見本の文字はそのまま', caps.placeholder === 'none', caps.placeholder);
+ok('印の付いた欄はすべて大文字', caps.marked.length >= 5
+  && caps.marked.every((t) => t === 'uppercase'), JSON.stringify(caps.marked));
+ok('日本語が入る欄は大文字にしない',
+  caps.notes !== 'uppercase' && caps.qth !== 'uppercase',
+  `${caps.notes} / ${caps.qth}`);
+
+// 小文字で打ち込んでも満点になる（値は触っていないので採点側が受ける）
+await page.click('#btn-drill-new');
+await page.waitForTimeout(4500);
+const lower = await page.evaluate(() => window.__cw.drillProblem?.answer ?? '');
+await page.fill('#drill-answer', lower.toLowerCase());
+const kept = await page.inputValue('#drill-answer');
+await page.keyboard.press('Enter');
+await page.waitForTimeout(500);
+const lowerShown = (await page.textContent('#drill-result')).replace(/\s+/g, ' ').trim();
+console.log('小文字で入力:', JSON.stringify(kept), '→', lowerShown.slice(0, 40));
+ok('値そのものは書き換えない', kept === lower.toLowerCase(), kept);
+ok('小文字で打っても満点', lowerShown.startsWith('100%'), lowerShown.slice(0, 40));
+await page.screenshot({ path: `${DIR}/fw-caps.png`, fullPage: true });
 
 console.log('\n失敗:', fails.length ? fails.join(' / ') : 'なし');
 console.log('ERRORS:', errors.length ? errors.join('\n') : '(none)');
