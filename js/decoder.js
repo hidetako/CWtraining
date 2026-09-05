@@ -46,10 +46,17 @@ class CwDetector extends AudioWorkletProcessor {
 
     // しきい値はピークと床の間。鳴っている間は低め（ヒステリシス）
     const th = this.floor + (this.peak - this.floor) * (this.on ? 0.3 : 0.5);
-    // バンド内が全体のかなりの割合を占めていることも要求する。
+    // バンド内が全体の一定割合を占めていることも要求する。
     // 合わせている周波数から離れたトーンや音声は、フィルタの裾から
-    // わずかに漏れてくるが、それを「弱い信号」と取り違えないため
-    const inBand = this.env > this.raw * (this.on ? 0.2 : 0.4);
+    // わずかに漏れてくるが、それを「弱い信号」と取り違えないため。
+    //
+    // 割合は 1/10（-20 dB）。以前は 0.4 だったが、それだと別のトーンで
+    // 3 倍強い局がいるだけで、こちらの局が「帯域外の漏れ」と見なされて
+    // 相手のキーイングで刻まれた。複数の局を聞き分けるには、他局の
+    // ぶんだけ全体が大きくなっても自局を通す必要がある。
+    // 1/10 でも、フィルタが 30 dB 落とす 200 Hz 以上離れたトーンだけの
+    // 音は 0.03 程度にしかならず、拾わない。
+    const inBand = this.env > this.raw * (this.on ? 0.05 : 0.1);
     const nowOn = this.peak > this.floor * 5 && this.env > th && inBand;
     if (nowOn !== this.on) {
       this.on = nowOn;
@@ -64,6 +71,22 @@ class CwDetector extends AudioWorkletProcessor {
 }
 registerProcessor('cw-detector', CwDetector);
 `;
+
+/**
+ * Worklet の登録は AudioContext ごとに 1 回でよい。
+ * 局ごとにデコーダーを並べると init() が何度も呼ばれるので、同じ
+ * コンテキストでは最初の読み込みを使い回す。
+ */
+const workletLoaded = new WeakMap();
+function loadWorklet(ctx) {
+  let p = workletLoaded.get(ctx);
+  if (!p) {
+    const url = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'text/javascript' }));
+    p = ctx.audioWorklet.addModule(url).finally(() => URL.revokeObjectURL(url));
+    workletLoaded.set(ctx, p);
+  }
+  return p;
+}
 
 export class CWDecoder extends EventTarget {
   /** @param {AudioContext} ctx */
@@ -99,12 +122,7 @@ export class CWDecoder extends EventTarget {
   }
 
   async init() {
-    const url = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'text/javascript' }));
-    try {
-      await this.ctx.audioWorklet.addModule(url);
-    } finally {
-      URL.revokeObjectURL(url);
-    }
+    await loadWorklet(this.ctx);
     this.node = new AudioWorkletNode(this.ctx, 'cw-detector', {
       numberOfInputs: 2, numberOfOutputs: 0,
     });
@@ -165,6 +183,20 @@ export class CWDecoder extends EventTarget {
     this._sawAnything = false;
   }
 
+  /** 音の経路を外して止める。局を減らしたときに使う。 */
+  dispose() {
+    this.reset();
+    this.detachMic();
+    this.input.disconnect();
+    this.bp1.disconnect();
+    this.bp2.disconnect();
+    if (this.node) {
+      this.node.port.onmessage = null;
+      this.node.disconnect();
+      this.node = null;
+    }
+  }
+
   get wpm() { return Math.round(1.2 / this.dit); }
 
   // ───────── 分類 ─────────
@@ -217,6 +249,221 @@ export class CWDecoder extends EventTarget {
     const char = decodePattern(this.buffer) ?? '＊';
     this.buffer = '';
     this._emit('char', { char, wpm: this.wpm });
+  }
+
+  _emit(type, detail = {}) {
+    this.dispatchEvent(new CustomEvent(type, { detail }));
+  }
+}
+
+/**
+ * 複数の局を、トーンの違いで聞き分ける。
+ *
+ * パイルアップでは、呼んでくる局が少しずつ違う音程で重なる。ひとつの
+ * デコーダーはひとつのトーンにしか合わせられないので、聞こえている
+ * トーンの数だけデコーダーを並べ、同じ受信音を全部に入れる。
+ * 各デコーダーは自分のトーンだけを通し、速度も自分の相手に追従する。
+ *
+ * 分けられるのは音程が離れている局だけで、限界は測ってある:
+ *   200 Hz 以上離れていれば、相手が 20 dB 強くても取れる
+ *   100 Hz なら 10 dB まで。50 Hz は同じ強さのときだけ
+ * 同じ音程で重なった局（ゼロビート）は原理的に分けられない。
+ *
+ * scan() を続けて呼ぶと、鳴っている音のピークを覚えておいて（キーイング
+ * の切れ目で消えないよう、最大値を保持しつつゆっくり下げる）、
+ * 局らしいピークを強い順に返す。setPitches() でそこにデコーダーを置く。
+ */
+export class CWDecoderBank extends EventTarget {
+  /**
+   * @param {AudioContext} ctx
+   * @param {{ max?: number, minGap?: number }} opts
+   *   max    並べる局の最大数
+   *   minGap 別の局と見なす最小の音程差（Hz）。フィルタの幅より広くする
+   */
+  constructor(ctx, { max = 3, minGap = 80 } = {}) {
+    super();
+    this.ctx = ctx;
+    this.max = max;
+    this.minGap = minGap;
+    this.input = ctx.createGain();          // ここへ受信音をつなぐ
+    this.analyser = ctx.createAnalyser();   // 局を探す用
+    this.analyser.fftSize = 4096;
+    // アナライザーの平滑化は使わない。あれは「呼び出しごと」に前回と
+    // 混ぜるので、しばらく読まずにいると、とっくに鳴り終わった局が
+    // 次に読んだときに -6 dB で現れる。時間の平滑化は scan() の
+    // 最大値保持がやる
+    this.analyser.smoothingTimeConstant = 0;
+    this.input.connect(this.analyser);
+
+    /** @type {Array<{ id: number, pitch: number, decoder: CWDecoder }>} */
+    this.channels = [];
+    this._nextId = 1;
+    this._held = null;      // 最大値保持したスペクトル（dB）
+    this.mic = null;
+    this._micSource = null;
+  }
+
+  /** マイク（ライン入力）を開いてつなぐ。 */
+  async attachMic(deviceId) {
+    this.mic = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: deviceId ? { exact: deviceId } : undefined,
+        echoCancellation: false, noiseSuppression: false, autoGainControl: false,
+      },
+    });
+    this._micSource = this.ctx.createMediaStreamSource(this.mic);
+    this._micSource.connect(this.input);
+  }
+
+  detachMic() {
+    this._micSource?.disconnect();
+    this.mic?.getTracks().forEach((t) => t.stop());
+    this.mic = null;
+    this._micSource = null;
+  }
+
+  channel(id) {
+    return this.channels.find((c) => c.id === id) ?? null;
+  }
+
+  /**
+   * スペクトルを 1 回見て、局らしいピークを強い順に返す。
+   * 何度も呼ぶほど、キーイングの切れ目に隠れていた局も拾える。
+   * @returns {Array<{ hz: number, db: number }>}
+   */
+  scan(lo = 300, hi = 1200) {
+    const bins = new Float32Array(this.analyser.frequencyBinCount);
+    this.analyser.getFloatFrequencyData(bins);
+    if (!this._held) this._held = new Float32Array(bins.length).fill(-Infinity);
+    const held = this._held;
+    // 1 回の scan で 1 dB 下げる。100 ms おきなら 3 秒で 30 dB。
+    // 語間や符号の切れ目（1 秒未満）で局が消えない程度に遅く、
+    // 交信が終わった局が次の scan まで残らない程度に速く
+    for (let i = 0; i < bins.length; i++) {
+      held[i] = Math.max(bins[i], held[i] - 1);
+    }
+
+    const hzPerBin = this.ctx.sampleRate / this.analyser.fftSize;
+    const from = Math.max(2, Math.floor(lo / hzPerBin));
+    const to = Math.min(bins.length - 3, Math.ceil(hi / hzPerBin));
+
+    // 床は範囲内の中央値。雑音の高さで、これより十分高いものだけを局とする
+    const sorted = Array.from(held.subarray(from, to + 1)).filter(Number.isFinite).sort((a, b) => a - b);
+    if (!sorted.length) return [];
+    const floor = sorted[Math.floor(sorted.length / 2)];
+
+    // 近くのビンより高い（山の頂上）ところを候補にする
+    const cands = [];
+    for (let i = from; i <= to; i++) {
+      const v = held[i];
+      if (v < floor + 15) continue;
+      if (v < held[i - 1] || v < held[i - 2] || v <= held[i + 1] || v <= held[i + 2]) continue;
+      // 頂上の位置を隣のビンとの差から少し寄せる（ビン幅より細かく）
+      const l = held[i - 1]; const r = held[i + 1];
+      const denom = l - 2 * v + r;
+      const shift = denom ? Math.max(-0.5, Math.min(0.5, 0.5 * (l - r) / denom)) : 0;
+      cands.push({ hz: Math.round((i + shift) * hzPerBin), db: v });
+    }
+    cands.sort((a, b) => b.db - a.db);
+
+    // 強い順に、既に取った局から minGap 以上離れているものだけを取る。
+    // 最も強い局から 25 dB より弱い局は、いても分けられないので出さない
+    const peaks = [];
+    for (const c of cands) {
+      if (peaks.length >= this.max) break;
+      if (peaks.length && c.db < peaks[0].db - 25) break;
+      if (peaks.every((p) => Math.abs(p.hz - c.hz) >= this.minGap)) peaks.push(c);
+    }
+    return peaks;
+  }
+
+  /** 覚えていたピークを忘れる。局を探し直すときに呼ぶ。 */
+  forget() { this._held = null; }
+
+  /**
+   * 一定時間、繰り返し見て局を探す。
+   * 1 回の snapshot は 85 ms ぶんしかなく、キーイングの切れ目に当たると
+   * 局が見えないので、語間より長く見てから答える。
+   */
+  async scanFor(ms = 2000, interval = 100) {
+    this.forget();
+    let peaks = [];
+    const n = Math.max(1, Math.round(ms / interval));
+    for (let i = 0; i < n; i++) {
+      await new Promise((r) => setTimeout(r, interval));
+      peaks = this.scan();
+    }
+    return peaks;
+  }
+
+  /**
+   * 指定した音程にデコーダーを並べる。
+   * 近い音程に既にあるものは合わせ直して使い続け（速度の推定が残る）、
+   * 無くなった音程のものは外す。
+   * @param {number[]} pitches
+   * @returns {Promise<Array<{ id, pitch, decoder }>>}
+   */
+  async setPitches(pitches) {
+    const wanted = [...new Set(pitches.map((p) => Math.round(p)))].slice(0, this.max);
+    const keep = new Set();
+    const next = [];
+    for (const hz of wanted) {
+      let ch = this.channels.find((c) => !keep.has(c) && Math.abs(c.pitch - hz) < this.minGap / 2);
+      if (ch) {
+        ch.pitch = hz;
+        ch.decoder.setPitch(hz);
+      } else {
+        ch = await this._open(hz);
+      }
+      keep.add(ch);
+      next.push(ch);
+    }
+    for (const c of this.channels) if (!keep.has(c)) c.decoder.dispose();
+    this.channels = next;
+    this._emit('channels', { channels: this.channels.map((c) => ({ id: c.id, pitch: c.pitch })) });
+    return this.channels;
+  }
+
+  /** 1 局ぶんの音程を変える（つまみを回したとき）。 */
+  retune(id, hz) {
+    const ch = this.channel(id);
+    if (!ch) return;
+    ch.pitch = Math.round(hz);
+    ch.decoder.setPitch(ch.pitch);
+    this._emit('channels', { channels: this.channels.map((c) => ({ id: c.id, pitch: c.pitch })) });
+  }
+
+  /**
+   * 範囲内でいちばん強い音の周波数（1 局だけ合わせるとき用）。
+   * 一瞬の snapshot では切れ目に当たるので、少しのあいだ見てから答える。
+   */
+  async strongestPitch(lo = 300, hi = 1200, ms = 600) {
+    this.forget();
+    let peaks = [];
+    for (let i = 0; i < Math.max(1, Math.round(ms / 100)); i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      peaks = this.scan(lo, hi);
+    }
+    return peaks[0]?.hz ?? 0;
+  }
+
+  reset() {
+    for (const c of this.channels) c.decoder.reset();
+  }
+
+  async _open(hz) {
+    const decoder = new CWDecoder(this.ctx);
+    await decoder.init();
+    decoder.setPitch(hz);
+    this.input.connect(decoder.input);
+    const ch = { id: this._nextId++, pitch: hz, decoder };
+    // 局ごとの出来事に、どの局かを添えて外へ流す
+    for (const type of ['char', 'word', 'element', 'level']) {
+      decoder.addEventListener(type, (e) => {
+        this._emit(type, { ...e.detail, id: ch.id, pitch: ch.pitch });
+      });
+    }
+    return ch;
   }
 
   _emit(type, detail = {}) {

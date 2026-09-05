@@ -980,6 +980,28 @@ kbd {
 }
 .sup-decoded .empty { color: var(--text-dim); letter-spacing: 0; font-size: .85rem; }
 
+/* 聞き分けている局のレーン。選んでいる局だけが受信欄へ流れる */
+.sup-lanes { display: flex; flex-direction: column; gap: .3rem; margin-top: .6rem; }
+.sup-lane {
+  display: grid; grid-template-columns: 4.5rem 90px 4.5rem 1fr; gap: .6rem; align-items: center;
+  width: 100%; padding: .4rem .6rem; text-align: left; cursor: pointer;
+  background: var(--bg-sunken); color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px; font: inherit;
+}
+.sup-lane:hover { border-color: var(--accent-dim); }
+.sup-lane.is-selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.sup-lane .hz { font-family: var(--mono); font-weight: 600; }
+.sup-lane .wpm { color: var(--text-dim); font-size: .8rem; white-space: nowrap; }
+.sup-lane .txt {
+  font-family: var(--mono); letter-spacing: .08em; min-height: 1.2em;
+  /* 末尾（新しい文字）が見えるように、右寄せにしてはみ出た頭を切る */
+  display: flex; justify-content: flex-end; overflow: hidden; white-space: nowrap; min-width: 0;
+}
+@media (max-width: 640px) {
+  .sup-lane { grid-template-columns: 4rem 60px 1fr; }
+  .sup-lane .wpm { display: none; }
+}
+
 .sup-suggestions { display: flex; flex-direction: column; gap: .35rem; }
 .sup-suggestions .sug {
   display: flex; gap: .8rem; align-items: baseline; text-align: left;

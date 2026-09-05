@@ -534,9 +534,13 @@
         <input type="range" id="sup-pitch" min="300" max="1200" step="10" value="700">
       </label>
       <button type="button" class="btn" id="btn-sup-autopitch" disabled>いちばん強い音に合わせる</button>
+      <button type="button" class="btn" id="btn-sup-scan" disabled
+        title="鳴っている局を音程の違いで見つけて、局ごとにデコーダーを並べます（最大 3 局）">局を探す</button>
       <span class="field"><span>信号</span><span class="sup-meter"><span id="sup-level-bar"></span></span></span>
       <output id="sup-wpm"></output>
     </div>
+    <p class="hint" id="sup-scan-note" hidden></p>
+    <div class="sup-lanes" id="sup-lanes" hidden></div>
     <div class="sup-decoded" id="sup-decoded"><span class="empty">マイクを開くと、解読した文字がここに流れます。</span></div>
     <div class="drill-actions" style="margin-top:.6rem">
       <button type="button" class="btn" id="btn-sup-clear">受信欄をクリア</button>
