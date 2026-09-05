@@ -12,7 +12,7 @@ import {
   jccSearch, jccQth, nearestJcc, searchLog, history as logHistory, logStats,
   toAdif, fromAdif, toCsv, fromCsv,
 } from './logbook.js';
-import { CWDecoder } from './decoder.js';
+import { CWDecoder, CWDecoderBank } from './decoder.js';
 import { SupportSession, SerialKeyer, keyTimeline } from './support.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
 import {
@@ -3450,15 +3450,21 @@ function renderStats() {
 // ═══════════════════════════════════════════ CW 交信サポート
 
 const support = {
-  decoder: null,        // CWDecoder。マイクを初めて開いたときに作る
+  bank: null,           // CWDecoderBank。マイクを初めて開いたときに作る
+  lanes: [],            // 聞き分けている局。[{ id, pitch, text, words, fed, wpm, el... }]
+  selected: null,       // 受信欄と「相手の情報」に流している局の id
+  scanning: false,
   session: null,        // SupportSession
   serial: new SerialKeyer(),
   micOpen: false,
-  word: '',             // 組み立て中の語
+  word: '',             // 組み立て中の語（選んでいる局のぶん）
   autoTimer: null,
   sending: false,
   manualTarget: '',     // 「自分のパドルで打つ」の手本
 };
+
+/** 並べられる局の最大数。フィルタの幅とスペクトルの見やすさからこのくらい */
+const SUPPORT_MAX_STATIONS = 3;
 
 function supportSession() {
   if (!support.session) {
@@ -3488,37 +3494,196 @@ function supportWordBreak() {
   supportSession().feedRx(word);
 }
 
+// ───────── 局の聞き分け（レーン） ─────────
+//
+// 音程の違う局ごとにデコーダーを並べ、それぞれをレーンとして見せる。
+// 受信欄と「相手の情報」に流すのは選んでいる 1 局だけ。他の局の文字は
+// レーンの中にだけ流れるので、呼んでくる局を見比べてから選べる。
+
+function supportLane(id) {
+  return support.lanes.find((l) => l.id === id) ?? null;
+}
+
+/** バンクの局の並びに合わせて、レーンを増減する。 */
+function syncSupportLanes(channels) {
+  const next = [];
+  for (const c of channels) {
+    let lane = supportLane(c.id);
+    if (!lane) lane = { id: c.id, pitch: c.pitch, text: '', words: [], fed: 0, wpm: 0, on: false, level: 0 };
+    lane.pitch = c.pitch;
+    next.push(lane);
+  }
+  // 低い音から順に並べる（強さの順だと探すたびに入れ替わって目で追えない）
+  support.lanes = next.sort((a, b) => a.pitch - b.pitch);
+  if (!supportLane(support.selected)) {
+    support.selected = null;
+    if (next.length) selectSupportLane(next[0].id);
+  }
+  renderSupportLanes();
+}
+
+/**
+ * 局を選ぶ。受信欄をその局の内容に入れ替え、まだ解析に渡していない語を渡す。
+ * 語は局ごとに 1 回しか渡さないので、選び直しても二重に拾わない。
+ */
+function selectSupportLane(id) {
+  const lane = supportLane(id);
+  if (!lane || support.selected === id) return;
+  support.selected = id;
+
+  const box = $('#sup-decoded');
+  if (lane.text) box.textContent = lane.text;
+  else if (!$('.empty', box)) box.innerHTML = '<span class="empty">この局の文字はまだありません。</span>';
+  box.scrollTop = box.scrollHeight;
+
+  for (const w of lane.words.slice(lane.fed)) supportSession().feedRx(w);
+  lane.fed = lane.words.length;
+  support.word = lane.text.slice(lane.text.lastIndexOf(' ') + 1);
+
+  $('#sup-pitch').value = String(lane.pitch);
+  $('#sup-pitch-out').textContent = `${lane.pitch} Hz`;
+  $('#sup-wpm').textContent = lane.wpm ? `${lane.wpm} WPM` : '';
+  renderSupportLanes();
+}
+
+function renderSupportLanes() {
+  const wrap = $('#sup-lanes');
+  wrap.hidden = support.lanes.length < 2;
+  wrap.innerHTML = support.lanes.map((l) => `
+    <button type="button" class="sup-lane${l.id === support.selected ? ' is-selected' : ''}" data-id="${l.id}"
+      title="この局を受信欄と「相手の情報」に流す">
+      <span class="hz">${l.pitch} Hz</span>
+      <span class="sup-meter"><span class="lv${l.on ? ' is-on' : ''}" style="width:${l.level}%"></span></span>
+      <span class="wpm">${l.wpm ? `${l.wpm} WPM` : ''}</span>
+      <span class="txt">${escapeHtml(l.text.slice(-60))}</span>
+    </button>`).join('');
+  for (const l of support.lanes) {
+    l.el = $(`.sup-lane[data-id="${l.id}"]`, wrap);
+  }
+}
+
+/** レーンの表示だけを更新する（文字が来るたびに全部組み直さない）。 */
+function updateSupportLane(lane) {
+  if (!lane.el) return;
+  $('.txt', lane.el).textContent = lane.text.slice(-60);
+  $('.wpm', lane.el).textContent = lane.wpm ? `${lane.wpm} WPM` : '';
+  const lv = $('.lv', lane.el);
+  lv.style.width = `${lane.level}%`;
+  lv.classList.toggle('is-on', lane.on);
+}
+
+/** デコーダーの束を用意する。マイクを開く前に、検証から直接使うこともある。 */
+async function ensureSupportBank() {
+  if (support.bank) return support.bank;
+  await player.resume().catch(() => {});
+  const bank = new CWDecoderBank(player.ctx, { max: SUPPORT_MAX_STATIONS });
+  support.bank = bank;
+
+  bank.addEventListener('channels', (e) => syncSupportLanes(e.detail.channels));
+  bank.addEventListener('char', (e) => {
+    const lane = supportLane(e.detail.id);
+    if (!lane) return;
+    lane.text += e.detail.char;
+    lane.wpm = e.detail.wpm;
+    updateSupportLane(lane);
+    if (lane.id === support.selected) {
+      supportChar(e.detail.char);
+      $('#sup-wpm').textContent = `${e.detail.wpm} WPM`;
+    }
+  });
+  bank.addEventListener('word', (e) => {
+    const lane = supportLane(e.detail.id);
+    if (!lane) return;
+    const word = lane.text.slice(lane.text.lastIndexOf(' ') + 1).trim();
+    if (!word) return;
+    lane.text += ' ';
+    lane.words.push(word);
+    updateSupportLane(lane);
+    if (lane.id === support.selected) {
+      lane.fed = lane.words.length;
+      supportWordBreak();
+    }
+  });
+  bank.addEventListener('level', (e) => {
+    const lane = supportLane(e.detail.id);
+    if (!lane) return;
+    const { env, peak, on } = e.detail;
+    lane.level = Math.min(100, Math.round((env / (peak || 1e-6)) * 100));
+    lane.on = !!on;
+    if (lane.el) {
+      const lv = $('.lv', lane.el);
+      lv.style.width = `${lane.level}%`;
+      lv.classList.toggle('is-on', lane.on);
+    }
+    if (lane.id === support.selected) {
+      const bar = $('#sup-level-bar');
+      bar.style.width = `${lane.level}%`;
+      bar.classList.toggle('is-on', lane.on);
+    }
+  });
+
+  // 最初はつまみの音程に 1 局
+  await bank.setPitches([Number($('#sup-pitch').value)]);
+  return bank;
+}
+
+/**
+ * 鳴っている局を探して、レーンを並べ直す。
+ * 探している間（2 秒）のピークを覚えるので、信号が鳴っているときに押す。
+ */
+async function scanSupportStations() {
+  const bank = await ensureSupportBank();
+  if (support.scanning) return [];
+  support.scanning = true;
+  const btn = $('#btn-sup-scan');
+  const note = $('#sup-scan-note');
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '探しています…';
+  note.hidden = true;
+  try {
+    const peaks = await bank.scanFor(2000);
+    if (!peaks.length) {
+      note.textContent = '局が見つかりませんでした。相手の信号が鳴っているときに押してください。';
+      note.hidden = false;
+      return [];
+    }
+    const before = support.selected;
+    await bank.setPitches(peaks.map((p) => p.hz));
+    // 選んでいた局が残っていればそのまま。無ければいちばん強い局
+    if (!supportLane(before)) {
+      const strongest = bank.channels.find((c) => c.pitch === peaks[0].hz);
+      if (strongest) selectSupportLane(strongest.id);
+    }
+    note.textContent = peaks.length === 1
+      ? `1 局（${peaks[0].hz} Hz）に合わせました。`
+      : `${peaks.length} 局を並べました: ${[...peaks].sort((a, b) => a.hz - b.hz).map((p) => `${p.hz} Hz`).join(' / ')}。クリックで選べます。`;
+    note.hidden = false;
+    return peaks;
+  } finally {
+    support.scanning = false;
+    btn.textContent = label;
+    btn.disabled = !support.micOpen;
+  }
+}
+
 async function openSupportMic() {
   const btn = $('#btn-sup-mic');
   if (support.micOpen) {
-    support.decoder.detachMic();
+    support.bank.detachMic();
     support.micOpen = false;
     btn.textContent = 'マイクを開く';
     $('#btn-sup-autopitch').disabled = true;
+    $('#btn-sup-scan').disabled = true;
     return;
   }
-  await player.resume().catch(() => {});
-  if (!support.decoder) {
-    support.decoder = new CWDecoder(player.ctx);
-    await support.decoder.init();
-    support.decoder.setPitch(Number($('#sup-pitch').value));
-    support.decoder.addEventListener('char', (e) => {
-      supportChar(e.detail.char);
-      $('#sup-wpm').textContent = `${e.detail.wpm} WPM`;
-    });
-    support.decoder.addEventListener('word', supportWordBreak);
-    support.decoder.addEventListener('level', (e) => {
-      const { env, peak, on } = e.detail;
-      const bar = $('#sup-level-bar');
-      bar.style.width = `${Math.min(100, Math.round((env / (peak || 1e-6)) * 100))}%`;
-      bar.classList.toggle('is-on', !!on);
-    });
-  }
+  const bank = await ensureSupportBank();
   try {
-    await support.decoder.attachMic();
+    await bank.attachMic();
     support.micOpen = true;
     btn.textContent = 'マイクを閉じる';
     $('#btn-sup-autopitch').disabled = false;
+    $('#btn-sup-scan').disabled = false;
   } catch (err) {
     $('#sup-decoded').innerHTML = `<span class="empty">マイクを開けませんでした: ${escapeHtml(err.message)}。ブラウザの許可を確認してください。</span>`;
   }
@@ -3630,21 +3795,29 @@ function renderSupport() {
 
 function initSupport() {
   $('#btn-sup-mic').addEventListener('click', openSupportMic);
+  // つまみ・自動合わせは、選んでいる局の音程を動かす
   $('#sup-pitch').addEventListener('input', () => {
-    $('#sup-pitch-out').textContent = `${$('#sup-pitch').value} Hz`;
-    support.decoder?.setPitch(Number($('#sup-pitch').value));
+    const hz = Number($('#sup-pitch').value);
+    $('#sup-pitch-out').textContent = `${hz} Hz`;
+    if (support.bank && support.selected != null) support.bank.retune(support.selected, hz);
   });
-  $('#btn-sup-autopitch').addEventListener('click', () => {
-    const hz = support.decoder?.strongestPitch();
-    if (hz) {
+  $('#btn-sup-autopitch').addEventListener('click', async () => {
+    const hz = await support.bank?.strongestPitch();
+    if (hz && support.selected != null) {
       $('#sup-pitch').value = String(hz);
       $('#sup-pitch-out').textContent = `${hz} Hz`;
-      support.decoder.setPitch(hz);
+      support.bank.retune(support.selected, hz);
     }
   });
+  $('#btn-sup-scan').addEventListener('click', scanSupportStations);
+  $('#sup-lanes').addEventListener('click', (e) => {
+    const el = e.target.closest('.sup-lane');
+    if (el) selectSupportLane(Number(el.dataset.id));
+  });
   $('#btn-sup-clear').addEventListener('click', () => {
-    support.decoder?.reset();
+    support.bank?.reset();
     support.word = '';
+    for (const l of support.lanes) { l.text = ''; l.words = []; l.fed = 0; updateSupportLane(l); }
     $('#sup-decoded').innerHTML = '<span class="empty">マイクを開くと、解読した文字がここに流れます。</span>';
   });
 
@@ -4059,8 +4232,9 @@ window.__cw = {
   recordKeyPerChar,                          // 苦手文字の数え方を検証できるように
   addLogEntry,
   get logEntries() { return logbook.entries; },
-  CWDecoder, SupportSession, SerialKeyer, keyTimeline,  // 交信サポートの検証用
+  CWDecoder, CWDecoderBank, SupportSession, SerialKeyer, keyTimeline,  // 交信サポートの検証用
   supportChar, supportWordBreak,             // デコーダー → 画面の配線を検証できるように
+  ensureSupportBank, scanSupportStations, selectSupportLane,  // 局の聞き分けを検証できるように
   get supportSession() { return supportSession(); },
   get supportState() { return support; },
   MORSE_TABLE, codeUnits,                    // 鳴らせない文字が混ざっていないかを検証できるように
