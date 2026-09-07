@@ -6,6 +6,14 @@
 <title>CW 交信トレーニング</title>
 <meta name="description" content="ブラウザだけで動くモールス符号・CW 交信の練習アプリ">
 <link rel="stylesheet" href="css/style.css">
+<!-- 保存した見た目を最初の描画より前に付けて、標準→切り替えのちらつきを防ぐ。
+     本体の切り替えは js/theme.js -->
+<script>
+  try {
+    var s = JSON.parse(localStorage.getItem('cwtraining.settings.v1') || '{}');
+    if (s.theme && s.theme !== 'default') document.documentElement.dataset.theme = s.theme;
+  } catch (e) { /* 読めなければ標準のまま */ }
+</script>
 
 <!-- タブには簡略版（小さくても潰れない）、ホーム画面には詳細版を使う -->
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -847,6 +855,17 @@
         </select>
       </label>
     </div>
+    <div class="field-grid" style="margin-top:1rem">
+      <label class="field">
+        <span>画面の見た目</span>
+        <select id="set-theme"></select>
+      </label>
+    </div>
+    <p class="hint">
+      <strong>PC-88 風</strong>は、PC-8801mkIISR の復刻にちなんだ見た目です。黒地に 8 色、
+      ドット文字、走査線。日本語のドット文字は読み込みに少しかかり、
+      オフラインでは等幅の字体で代用します。
+    </p>
     <label class="check">
       <input type="checkbox" id="set-showtext">
       <span>再生中に本文を表示する（答えが見えます）</span>

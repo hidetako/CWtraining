@@ -2024,3 +2024,127 @@ input[type=datetime-local] {
 @media (prefers-reduced-motion: reduce) {
   .paddle-rail { transition: none; }
 }
+
+/* ───────── 見た目: PC-88 風 ─────────
+   PC-8801mkIISR の復刻にちなんだ見た目。N88-BASIC の画面のように、
+   黒地に 8 色（白・シアン・黄・緑・赤・マゼンタ・青）、ドット文字、
+   線で描いた枠、選んだところは反転表示。角の丸みと影は使わない。
+   機能は同じで、色と字体だけを差し替える（js/theme.js が属性を付ける）。 */
+[data-theme="pc88"] {
+  --pc-blue: #0000c0;       /* 文字の下地に使う青。純色だとまぶしいので mkIISR のアナログ寄り */
+  --pc-navy: #000040;
+  --bg: #000000;
+  --bg-raised: #000000;
+  --bg-sunken: var(--pc-navy);
+  --line: #00ffff;
+  --line-soft: #008080;
+  --text: #ffffff;
+  --text-dim: #00ffff;
+  --accent: #ffff00;
+  --accent-dim: #808000;
+  --rx: #00ffff;
+  --tx: #00ff00;
+  --ok: #00ff00;
+  --ng: #ff0000;
+  --radius: 0;
+  --mono: "DotGothic16", "PixelMplus10", "MS Gothic", ui-monospace, monospace;
+}
+[data-theme="pc88"] body {
+  font-family: "DotGothic16", "PixelMplus10", "MS Gothic", ui-monospace, monospace;
+  font-size: 16px;            /* ドット文字は 16px で設計されている */
+  line-height: 1.6;
+}
+/* 走査線。目の負担にならない程度に薄く */
+[data-theme="pc88"] body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .22) 0 1px, transparent 1px 3px);
+}
+[data-theme="pc88"] h1, [data-theme="pc88"] h2, [data-theme="pc88"] h3 { letter-spacing: .06em; }
+[data-theme="pc88"] h4 { color: var(--text-dim); }
+/* カーソルの点滅。BASIC の Ok の後ろにあるあれ */
+[data-theme="pc88"] .brand h1::after {
+  content: '■'; margin-left: .35em; color: var(--text);
+  animation: pc88-blink 1s steps(1, end) infinite;
+}
+@keyframes pc88-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { [data-theme="pc88"] .brand h1::after { animation: none; } }
+
+/* 枠は線で描く。二重線が N88 の BOX っぽい */
+[data-theme="pc88"] .app-header { border-bottom: 3px double var(--line); }
+[data-theme="pc88"] .card { border: 3px double var(--line); }
+[data-theme="pc88"] .card-inset, [data-theme="pc88"] .qso-log, [data-theme="pc88"] .sup-decoded,
+[data-theme="pc88"] code { border-radius: 0; }
+[data-theme="pc88"] code { border: 1px solid var(--line-soft); }
+
+/* タブ: 選んだところを反転表示 */
+[data-theme="pc88"] .tabs { background: var(--bg); border-bottom: 1px solid var(--line); }
+[data-theme="pc88"] .tab { border-bottom: none; color: var(--text); padding: .45rem .9rem; }
+[data-theme="pc88"] .tab:hover { color: var(--accent); }
+[data-theme="pc88"] .tab.is-active { background: var(--text); color: var(--bg); }
+
+/* ボタン: 線で囲み、押せる場所は反転で示す */
+[data-theme="pc88"] .btn {
+  background: var(--bg); color: var(--text); border: 1px solid var(--text); border-radius: 0;
+  transition: none;
+}
+[data-theme="pc88"] .btn:hover:not(:disabled) { background: var(--text); color: var(--bg); border-color: var(--text); }
+[data-theme="pc88"] .btn-primary { background: var(--accent); border-color: var(--accent); color: #000; }
+[data-theme="pc88"] .btn-primary:hover:not(:disabled) { background: var(--text); border-color: var(--text); color: #000; }
+[data-theme="pc88"] .btn-ghost { color: var(--text-dim); border-color: var(--text-dim); }
+[data-theme="pc88"] .btn-key.is-down { background: var(--accent); color: #000; border-color: var(--accent); }
+[data-theme="pc88"] .fkey.is-hot, [data-theme="pc88"] .fkey.is-hot b { background: var(--accent); color: #000; border-color: var(--accent); }
+
+/* 入力欄: 青い下地に白い文字（テキストウィンドウの定番） */
+[data-theme="pc88"] input[type=text], [data-theme="pc88"] input[type=number],
+[data-theme="pc88"] input[type=search], [data-theme="pc88"] select, [data-theme="pc88"] textarea {
+  border-radius: 0; border: 1px solid var(--line); background: var(--pc-navy); color: var(--text);
+}
+[data-theme="pc88"] input:focus, [data-theme="pc88"] select:focus, [data-theme="pc88"] textarea:focus {
+  outline: 2px solid var(--accent); outline-offset: 0;
+}
+[data-theme="pc88"] .logsheet .field input:focus { background: var(--pc-blue); }
+
+/* 印・札: 8 色の下地に白か黒 */
+[data-theme="pc88"] .turn-badge.rx, [data-theme="pc88"] .who-dx .pattern-who { background: var(--pc-blue); color: #fff; }
+[data-theme="pc88"] .turn-badge.tx, [data-theme="pc88"] .who-me .pattern-who { background: #00ff00; color: #000; }
+[data-theme="pc88"] .term-qcode    { color: #000; background: #ffff00; }
+[data-theme="pc88"] .term-abbrev   { color: #000; background: #00ff00; }
+[data-theme="pc88"] .term-prosign  { color: #fff; background: #ff00ff; }
+[data-theme="pc88"] .term-rst      { color: #000; background: #00ffff; }
+[data-theme="pc88"] .term-callsign { color: #fff; background: #ff0000; }
+[data-theme="pc88"] .word.is-playing:not(.term) { background: var(--accent); color: #000; box-shadow: none; }
+[data-theme="pc88"] .morse-out .cur { background: var(--accent); color: #000; border-radius: 0; }
+[data-theme="pc88"] .style-option.is-active { background: var(--pc-navy); }
+[data-theme="pc88"] .choice.is-correct { background: #003000; }
+[data-theme="pc88"] .choice.is-wrong { background: #300000; }
+[data-theme="pc88"] .explain-card.is-current, [data-theme="pc88"] .guide-tip { background: var(--pc-navy); }
+[data-theme="pc88"] .reaction-note { background: var(--pc-navy); }
+[data-theme="pc88"] .tutorial-goal.is-cleared { background: #003000; }
+[data-theme="pc88"] .logsheet { background: var(--pc-navy); border-color: var(--line-soft); }
+[data-theme="pc88"] .marks .missing, [data-theme="pc88"] .diff .missing, [data-theme="pc88"] .compare .missing {
+  background: #400000; outline-color: var(--ng);
+}
+[data-theme="pc88"] .marks .extra, [data-theme="pc88"] .diff .extra, [data-theme="pc88"] .compare .bad { background: #404000; }
+[data-theme="pc88"] .marks .ng { background: #400000; }
+
+/* レーン・メーター */
+[data-theme="pc88"] .sup-lane { border-radius: 0; border-color: var(--line-soft); }
+[data-theme="pc88"] .sup-lane.is-selected { border-color: var(--accent); box-shadow: none; background: var(--pc-navy); }
+[data-theme="pc88"] .sup-meter { border-radius: 0; }
+
+/* 丸みはすべて無くす */
+[data-theme="pc88"] .sug, [data-theme="pc88"] .history-item, [data-theme="pc88"] .style-option,
+[data-theme="pc88"] .choice, [data-theme="pc88"] .explain-card, [data-theme="pc88"] .guide-tip,
+[data-theme="pc88"] .fkey, [data-theme="pc88"] .plus-preview, [data-theme="pc88"] details.more,
+[data-theme="pc88"] .tutorial-goal, [data-theme="pc88"] .term, [data-theme="pc88"] .turn-badge,
+[data-theme="pc88"] .pattern-who, [data-theme="pc88"] .word, [data-theme="pc88"] .drill-actions .btn {
+  border-radius: 0;
+}
+
+/* パドルの打面。左右の色差は紺と黒、仕切りはシアン、押した側は黄で反転 */
+[data-theme="pc88"] .pw-pad { border-radius: 0; border-color: var(--line); }
+[data-theme="pc88"] .pw-side:first-child { background: var(--pc-navy); border-right: 3px solid var(--line); }
+[data-theme="pc88"] .pw-side:last-child { background: #000000; }
+[data-theme="pc88"] .pw-side.on { background: var(--accent); color: #000; }
+[data-theme="pc88"] .pw-decoded { border-radius: 0; }
