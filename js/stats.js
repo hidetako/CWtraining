@@ -41,6 +41,7 @@ export const DEFAULT_SETTINGS = {
   qsoStyle: 'guided',      // 'guided'（型を覚える）| 'copy'（聞き取り試験）
   qsoReaction: 'normal',   // 相手の反応のゆらぎ
   showText: false,      // 送信中に本文を表示するか
+  theme: 'default',     // 画面の見た目。'default' | 'pc88'
   beginnerMode: true,   // Q 符号・略語の解説をリアルタイムで出すか
   copyReveal: false,    // 聞き取り練習で、受信中に相手の送信を画面に出すか
 

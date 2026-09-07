@@ -13,6 +13,7 @@ import {
   toAdif, fromAdif, toCsv, fromCsv,
 } from './logbook.js';
 import { CWDecoder, CWDecoderBank } from './decoder.js';
+import { THEMES, applyTheme } from './theme.js';
 import { SupportSession, SerialKeyer, keyTimeline } from './support.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
 import {
@@ -50,6 +51,7 @@ const keyer = new ElectronicKeyer(player);
 const contest = new ContestRunner(player);
 const tutorial = new Tutorial();
 let settings = loadSettings();
+applyTheme(settings.theme);   // 先頭のスクリプトが付けた属性と、設定を一致させる
 let stats = loadStats();
 
 // ═══════════════════════════════════════════ 起動
@@ -3245,6 +3247,15 @@ function initSettings() {
     persist();
   });
 
+  const themeSel = $('#set-theme');
+  themeSel.innerHTML = Object.entries(THEMES)
+    .map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');
+  themeSel.value = THEMES[settings.theme] ? settings.theme : 'default';
+  themeSel.addEventListener('change', () => {
+    settings.theme = applyTheme(themeSel.value);
+    persist();
+  });
+
   const showText = $('#set-showtext');
   showText.checked = settings.showText;
   showText.addEventListener('change', () => {
@@ -4241,6 +4252,7 @@ window.__cw = {
   hintMask, HINT_LEVELS, HINT_MASK,          // 受信ヘルプの伏せ方を検証できるように
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES, ABBREVIATIONS,  // 定型文・語彙を検証できるように
   SYMBOL_ORDER,                              // 記号・プロサインの並びを検証できるように
+  THEMES, applyTheme,                        // 見た目の切り替えを検証できるように
   termCode, termTitle, taskTermsHtml,        // 説明に添える符号を検証できるように
   get hintLines() { return hintBoard.lines.map((l) => ({ ...l })); },
   get settings() { return settings; },
