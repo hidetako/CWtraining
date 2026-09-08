@@ -108,6 +108,19 @@ const unreadable = await page.evaluate(() => {
   return bad;
 });
 ok('地と同じ色の文字が無い', unreadable.length === 0, unreadable.slice(0, 5).join(' | '));
+
+// パドル送信の課題（問題文）は解読結果と同じ大きさ。手本と打った符号を見比べるため
+await page.click('.tab[data-panel="keyer"]');
+await page.selectOption('#keyer-task-type', 'phrase');
+await page.click('#btn-keyer-task');
+await page.waitForTimeout(300);
+const sizes = await page.evaluate(() => {
+  const fs = (sel) => getComputedStyle(document.querySelector(sel)).fontSize;
+  return { task: fs('#keyer-task-text'), term: fs('#keyer-task-text .term') ?? '', decoded: fs('#keyer-decoded') };
+});
+console.log('課題の大きさ:', JSON.stringify(sizes));
+ok('課題の文字は解読結果と同じ大きさ', sizes.task === sizes.decoded && sizes.term === sizes.decoded, JSON.stringify(sizes));
+await page.screenshot({ path: `${DIR}/theme-pc88-keyer.png`, fullPage: true });
 await page.screenshot({ path: `${DIR}/theme-pc88-settings.png`, fullPage: true });
 await page.click('.tab[data-panel="qso"]');
 await page.waitForTimeout(200);

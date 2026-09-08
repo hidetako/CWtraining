@@ -2148,3 +2148,7 @@ input[type=datetime-local] {
 [data-theme="pc88"] .pw-side:last-child { background: #000000; }
 [data-theme="pc88"] .pw-side.on { background: var(--accent); color: #000; }
 [data-theme="pc88"] .pw-decoded { border-radius: 0; }
+
+/* パドル送信の課題（問題文）は、解読結果と同じ大きさで見比べられるように */
+[data-theme="pc88"] #keyer-task-text { font-size: 1.25rem; line-height: 1.6; }
+[data-theme="pc88"] #keyer-task-text .term { font-size: inherit; }
