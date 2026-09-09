@@ -239,6 +239,9 @@ input[autocapitalize="characters"]::placeholder { text-transform: none; }
 }
 .symbol-pad .hint { margin-top: .45rem; }
 .answer-field > span { display: block; font-size: .78rem; font-weight: 600; color: var(--text-dim); margin-bottom: .3rem; }
+/* 聞き取りの書き取り欄は、聞きながら打ち込む主役の欄。採点結果や
+   パドルの解読結果（1.25rem）と同じ大きさで、文字を追いやすくする */
+#drill-answer { font-size: 1.25rem; letter-spacing: .1em; padding: .5rem .7rem; }
 
 /* ───────── ボタン ───────── */
 .btn {

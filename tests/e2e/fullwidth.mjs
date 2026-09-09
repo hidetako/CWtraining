@@ -130,6 +130,15 @@ const caps = await page.evaluate(() => {
 });
 console.log('大文字表示:', JSON.stringify(caps));
 ok('書き取り欄は大文字で見える', caps.field === 'uppercase', caps.field);
+
+// 書き取り欄は主役の欄。パドルの解読結果と同じ大きさで、小さな欄に打ち込ませない
+const size = await page.evaluate(() => ({
+  answer: parseFloat(getComputedStyle(document.querySelector('#drill-answer')).fontSize),
+  decoded: parseFloat(getComputedStyle(document.querySelector('#keyer-decoded')).fontSize),
+  other: parseFloat(getComputedStyle(document.querySelector('#glossary-search')).fontSize),
+}));
+console.log('書き取り欄の大きさ:', JSON.stringify(size));
+ok('書き取り欄は解読結果と同じ大きさ', size.answer === size.decoded && size.answer > size.other, JSON.stringify(size));
 ok('見本の文字はそのまま', caps.placeholder === 'none', caps.placeholder);
 ok('印の付いた欄はすべて大文字', caps.marked.length >= 5
   && caps.marked.every((t) => t === 'uppercase'), JSON.stringify(caps.marked));
