@@ -2033,6 +2033,15 @@ input[type=datetime-local] {
    黒地に 8 色（白・シアン・黄・緑・赤・マゼンタ・青）、ドット文字、
    線で描いた枠、選んだところは反転表示。角の丸みと影は使わない。
    機能は同じで、色と字体だけを差し替える（js/theme.js が属性を付ける）。 */
+/* ゼロだけ斜線入りにする補助フォント。DotGothic16 はゼロと O が輪郭まで
+   同じで、コールサインの 0/O を見分けられない。ゼロ 1 文字だけの派生
+   フォント（fonts/README.md）を字体の先頭に置き、ゼロにだけ当てる */
+@font-face {
+  font-family: "PC88 Zero";
+  src: url("../fonts/pc88-zero.woff2") format("woff2");
+  unicode-range: U+0030;
+  font-display: block;
+}
 [data-theme="pc88"] {
   --pc-blue: #0000c0;       /* 文字の下地に使う青。純色だとまぶしいので mkIISR のアナログ寄り */
   --pc-navy: #000040;
@@ -2050,10 +2059,10 @@ input[type=datetime-local] {
   --ok: #00ff00;
   --ng: #ff0000;
   --radius: 0;
-  --mono: "DotGothic16", "PixelMplus10", "MS Gothic", ui-monospace, monospace;
+  --mono: "PC88 Zero", "DotGothic16", "PixelMplus10", "MS Gothic", ui-monospace, monospace;
 }
 [data-theme="pc88"] body {
-  font-family: "DotGothic16", "PixelMplus10", "MS Gothic", ui-monospace, monospace;
+  font-family: "PC88 Zero", "DotGothic16", "PixelMplus10", "MS Gothic", ui-monospace, monospace;
   font-size: 16px;            /* ドット文字は 16px で設計されている */
   line-height: 1.6;
 }
