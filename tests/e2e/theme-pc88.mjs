@@ -85,6 +85,30 @@ console.log('色:', JSON.stringify(palette));
 const digital = (c) => (c.match(/\d+/g) || []).slice(0, 3).every((v) => v === '0' || v === '255');
 ok('主な色は 8 色の中', Object.values(palette).every(digital), JSON.stringify(palette));
 
+// ゼロと O が見分けられること。DotGothic16 はこの 2 つが輪郭まで同じなので、
+// ゼロ 1 文字だけの斜線入りフォントを先頭に置いてある。字体を実際に描いて比べる
+const zero = await page.evaluate(async () => {
+  await document.fonts.load('16px "PC88 Zero"');
+  const draw = (font, ch) => {
+    const c = document.createElement('canvas'); c.width = 24; c.height = 24;
+    const g = c.getContext('2d');
+    g.font = `16px ${font}`; g.textBaseline = 'top'; g.fillStyle = '#fff'; g.fillText(ch, 2, 2);
+    return Array.from(g.getImageData(0, 0, 24, 24).data).join(',');
+  };
+  const stack = getComputedStyle(document.body).fontFamily;
+  return {
+    loaded: document.fonts.check('16px "PC88 Zero"'),
+    first: stack.split(',')[0].trim(),
+    zeroDiffersFromO: draw(stack, '0') !== draw(stack, 'O'),
+    zeroFontUsed: draw(stack, '0') !== draw(stack.split(',').slice(1).join(','), '0'),
+  };
+});
+console.log('ゼロ:', JSON.stringify(zero));
+ok('ゼロの補助フォントが先頭にある', /PC88 Zero/.test(zero.first), zero.first);
+ok('ゼロの補助フォントが読み込まれる', zero.loaded);
+ok('ゼロと O が違う形で描かれる', zero.zeroDiffersFromO);
+ok('ゼロにだけ補助フォントが当たる', zero.zeroFontUsed);
+
 // 各タブを回って、見えない文字（地と同じ色）が無いことを見る
 const unreadable = await page.evaluate(() => {
   const bad = [];
