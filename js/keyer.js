@@ -10,6 +10,12 @@
 import { codeUnits, countSubstitutions, decodePattern } from './morse.js';
 
 const LOOKAHEAD = 0.008; // 秒。次要素を決める前倒し量
+// 押した瞬間の最初の要素を、今から何秒先に予約するか。
+// 予約時刻が描画スレッドの「今」より過去になると、その要素は鳴らずに消える。
+// currentTime はレンダー量子（128 サンプル ≈ 2.7〜2.9 ms）ごとにしか進まない
+// ので、1 量子＋余裕が下限。以前は 6 ms だったが、押してから鳴るまでの遅れは
+// ここが唯一の削りしろなので、下限まで詰める
+const FIRST_LEAD = 0.004;
 
 /**
  * レバーが押されたままになったと判断するまでの時間（ミリ秒）。
@@ -293,7 +299,7 @@ export class ElectronicKeyer extends EventTarget {
   _begin() {
     this.sending = true;
     const now = this.player.currentTime;
-    this.clock = Math.max(now + 0.006, this.clock);
+    this.clock = Math.max(now + FIRST_LEAD, this.clock);
     this._clearTimers();
     this._step();
   }
@@ -359,7 +365,7 @@ export class ElectronicKeyer extends EventTarget {
     // 音量の予約がすべて過去になり、その要素は鳴らずに消える（解読も ＊ に
     // なる）。取り戻せない遅れは捨てて、今から鳴らし直す
     const now = this.player.currentTime;
-    if (this.clock < now) this.clock = now + 0.004;
+    if (this.clock < now) this.clock = now + FIRST_LEAD;
 
     this.player.scheduleKey(this.clock, tone);
 

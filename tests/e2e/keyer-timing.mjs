@@ -58,6 +58,25 @@ console.log('通常時の先出し(ms):', JSON.stringify(quiet.map((s) => s.lead
 ok('押してすぐ鳴る（20ms 以内）', quiet.length > 0 && quiet.every((s) => s.lead <= 20),
   JSON.stringify(quiet.map((s) => s.lead)));
 ok('過去に予約しない', quiet.every((s) => s.lead >= 0), JSON.stringify(quiet.map((s) => s.lead)));
+// 押してから鳴るまでの遅れで、プログラムが握っているのは最初の要素の前倒しだけ。
+// 1 レンダー量子＋余裕の 4 ms まで詰めてある（以前は 6 ms）
+ok('最初の要素は 4 ms 先に予約する', quiet.length > 0 && quiet[0].lead <= 4, `${quiet[0]?.lead} ms`);
+
+// 設定画面で、この端末の音の遅れを実測して内訳を見せる
+await page.click('.tab[data-panel="settings"]');
+await page.click('#btn-latency');
+await page.waitForTimeout(300);
+const latency = await page.evaluate(() => ({
+  text: document.querySelector('#audio-latency-out').textContent,
+  base: window.__cw.player.ctx.baseLatency, output: window.__cw.player.ctx.outputLatency,
+}));
+console.log('音の遅れ:', JSON.stringify(latency));
+ok('音の遅れの内訳が出る',
+  /合計およそ \d+ ms/.test(latency.text) && /内部バッファ \d+ ms/.test(latency.text)
+  && /前倒し 4 ms/.test(latency.text) && /立ち上がり \d+ ms/.test(latency.text), latency.text);
+ok('内訳の合計が実測と合う', new RegExp(`合計およそ ${Math.round((latency.base + latency.output) * 1000) + 4 + 5} ms`).test(latency.text), latency.text);
+await page.click('.tab[data-panel="keyer"]');
+await page.waitForTimeout(300);
 
 const ctxInfo = await page.evaluate(() => {
   const c = window.__cw.player.ctx;

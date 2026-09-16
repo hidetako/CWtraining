@@ -3198,6 +3198,41 @@ function initGlossary() {
 
 // ═══════════════════════════════════════════ 設定・記録
 
+/**
+ * 押してから側音が鳴るまでの遅れを、この端末で実測して見せる。
+ *
+ * 遅れの大半はブラウザと OS の音声バッファ（baseLatency ＋ outputLatency）で、
+ * プログラムが握っているのは最初の要素の前倒しと立ち上がりだけ。内訳を出す
+ * ことで、Bluetooth や音声の加工など、こちらで直せない原因を切り分けられる。
+ */
+async function measureAudioLatency() {
+  const out = $('#audio-latency-out');
+  out.textContent = '測っています…';
+  await player.resume().catch(() => {});
+  const ctx = player.ctx;
+  if (!ctx) { out.textContent = '音を出せる状態になっていません。'; return { ok: false }; }
+  const ms = (s) => (Number.isFinite(s) ? Math.round(s * 1000) : null);
+  const base = ms(ctx.baseLatency);
+  const output = ms(ctx.outputLatency);
+  const lead = 4;                                // js/keyer.js FIRST_LEAD
+  const ramp = Number(settings.toneRamp ?? 5);
+  const stack = (base ?? 0) + (output ?? 0);
+  const total = stack + lead + ramp;
+  const parts = [
+    `ブラウザの内部バッファ ${base ?? '不明'} ms`,
+    `OS と出力機器 ${output ?? '不明'} ms`,
+    `打鍵の前倒し ${lead} ms`,
+    `立ち上がり ${ramp} ms`,
+  ];
+  let verdict;
+  if (output == null) verdict = 'このブラウザは OS 側の遅れを教えてくれません。';
+  else if (stack > 80) verdict = 'ブラウザと OS で 80 ms を超えています。Bluetooth の機器か、OS の音声の加工（拡張・空間サウンド）を疑ってください。';
+  else if (stack > 40) verdict = '有線としてはやや大きめです。OS の音声の加工を切ると縮むことがあります。';
+  else verdict = '有線として普通の値です。これ以上はプログラムでは縮められません。';
+  out.textContent = `合計およそ ${total} ms（${parts.join(' ＋ ')}）。${verdict}`;
+  return { ok: true, base, output, lead, ramp, total };
+}
+
 function initSettings() {
   const textFields = ['callsign', 'name', 'qth', 'rig', 'pwr', 'ant', 'wx'];
   textFields.forEach((key) => {
@@ -3255,6 +3290,8 @@ function initSettings() {
     settings.theme = applyTheme(themeSel.value);
     persist();
   });
+
+  $('#btn-latency').addEventListener('click', measureAudioLatency);
 
   const showText = $('#set-showtext');
   showText.checked = settings.showText;
@@ -4253,6 +4290,7 @@ window.__cw = {
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES, ABBREVIATIONS,  // 定型文・語彙を検証できるように
   SYMBOL_ORDER,                              // 記号・プロサインの並びを検証できるように
   THEMES, applyTheme,                        // 見た目の切り替えを検証できるように
+  measureAudioLatency,                       // 音の遅れの実測を検証できるように
   termCode, termTitle, taskTermsHtml,        // 説明に添える符号を検証できるように
   get hintLines() { return hintBoard.lines.map((l) => ({ ...l })); },
   get settings() { return settings; },
