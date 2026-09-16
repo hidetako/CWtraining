@@ -2122,9 +2122,12 @@ input[type=datetime-local] {
 [data-theme="pc88"] .turn-badge.tx, [data-theme="pc88"] .who-me .pattern-who { background: #00ff00; color: #000; }
 [data-theme="pc88"] .term-qcode    { color: #000; background: #ffff00; }
 [data-theme="pc88"] .term-abbrev   { color: #000; background: #00ff00; }
-[data-theme="pc88"] .term-prosign  { color: #fff; background: #ff00ff; }
+/* 札の文字と地はコントラスト比 4.5 以上にそろえる。白字をマゼンタや赤に
+   載せると 3〜4 : 1 で読みにくかった。マゼンタは黒字（6.7 : 1）、
+   コールサインは青地に白字（11.9 : 1、テキストウィンドウの定番の組み合わせ） */
+[data-theme="pc88"] .term-prosign  { color: #000; background: #ff00ff; }
 [data-theme="pc88"] .term-rst      { color: #000; background: #00ffff; }
-[data-theme="pc88"] .term-callsign { color: #fff; background: #ff0000; }
+[data-theme="pc88"] .term-callsign { color: #fff; background: var(--pc-blue); }
 [data-theme="pc88"] .word.is-playing:not(.term) { background: var(--accent); color: #000; box-shadow: none; }
 [data-theme="pc88"] .morse-out .cur { background: var(--accent); color: #000; border-radius: 0; }
 [data-theme="pc88"] .style-option.is-active { background: var(--pc-navy); }
@@ -2134,11 +2137,12 @@ input[type=datetime-local] {
 [data-theme="pc88"] .reaction-note { background: var(--pc-navy); }
 [data-theme="pc88"] .tutorial-goal.is-cleared { background: #003000; }
 [data-theme="pc88"] .logsheet { background: var(--pc-navy); border-color: var(--line-soft); }
+/* 打ち漏らしは赤地に赤字だと 4.4 : 1 で薄い。暗い赤地に白字（10.9 : 1）にする */
 [data-theme="pc88"] .marks .missing, [data-theme="pc88"] .diff .missing, [data-theme="pc88"] .compare .missing {
-  background: #400000; outline-color: var(--ng);
+  background: #800000; color: #fff; outline-color: var(--ng);
 }
 [data-theme="pc88"] .marks .extra, [data-theme="pc88"] .diff .extra, [data-theme="pc88"] .compare .bad { background: #404000; }
-[data-theme="pc88"] .marks .ng { background: #400000; }
+[data-theme="pc88"] .marks .ng { background: #800000; color: #fff; }
 
 /* レーン・メーター */
 [data-theme="pc88"] .sup-lane { border-radius: 0; border-color: var(--line-soft); }

@@ -109,6 +109,37 @@ ok('ゼロの補助フォントが読み込まれる', zero.loaded);
 ok('ゼロと O が違う形で描かれる', zero.zeroDiffersFromO);
 ok('ゼロにだけ補助フォントが当たる', zero.zeroFontUsed);
 
+// 札と採点の印は、文字と地のコントラスト比が 4.5 : 1 以上（WCAG AA）。
+// 白字をマゼンタや赤に載せると 3〜4 : 1 で読みにくい、という報告があった
+const contrast = await page.evaluate(() => {
+  const lum = (c) => {
+    const [r, g, b] = (c.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number)
+      .map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a, b) => { const [h, l] = [lum(a), lum(b)].sort((x, y) => y - x); return (h + 0.05) / (l + 0.05); };
+  const out = {};
+  const probe = (html, sel, key) => {
+    const wrap = document.createElement('div'); wrap.innerHTML = html;
+    document.querySelector('.card').appendChild(wrap);
+    const el = wrap.querySelector(sel);
+    const cs = getComputedStyle(el);
+    let bg = cs.backgroundColor; let node = el;
+    while ((bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') && node.parentElement) { node = node.parentElement; bg = getComputedStyle(node).backgroundColor; }
+    out[key] = Math.round(ratio(cs.color, bg) * 10) / 10;
+    wrap.remove();
+  };
+  for (const cls of ['term-qcode', 'term-abbrev', 'term-prosign', 'term-rst', 'term-callsign', 'term-number']) {
+    probe(`<span class="term ${cls}">X</span>`, '.term', cls);
+  }
+  for (const cls of ['ok', 'missing', 'extra']) probe(`<span class="diff"><span class="${cls}">X</span></span>`, `.${cls}`, `diff-${cls}`);
+  for (const cls of ['missing', 'extra', 'ng']) probe(`<span class="marks"><span class="${cls}">X</span></span>`, `.${cls}`, `marks-${cls}`);
+  return out;
+});
+console.log('コントラスト比:', JSON.stringify(contrast));
+ok('札と印の文字は地に対して 4.5 : 1 以上', Object.values(contrast).every((v) => v >= 4.5),
+  JSON.stringify(Object.fromEntries(Object.entries(contrast).filter(([, v]) => v < 4.5))));
+
 // 各タブを回って、見えない文字（地と同じ色）が無いことを見る
 const unreadable = await page.evaluate(() => {
   const bad = [];
