@@ -1238,12 +1238,13 @@ function comparisonColumns(marks) {
     const missing = run.filter((m) => m.type === 'missing');
     const extra = run.filter((m) => m.type === 'extra');
     const paired = Math.min(missing.length, extra.length);
+    // 正解側に語の切れ目があれば列にも持たせる（表示で空きを入れる）
     for (let k = 0; k < paired; k++) {
-      cols.push({ state: 'wrong', mine: extra[k].actual, want: missing[k].expected });
+      cols.push({ state: 'wrong', mine: extra[k].actual, want: missing[k].expected, gap: !!missing[k].gap });
     }
     // 組にならなかった残り。打ち漏らし（正解だけ）と余分（自分だけ）
     for (let k = paired; k < missing.length; k++) {
-      cols.push({ state: 'missing', mine: '', want: missing[k].expected });
+      cols.push({ state: 'missing', mine: '', want: missing[k].expected, gap: !!missing[k].gap });
     }
     for (let k = paired; k < extra.length; k++) {
       cols.push({ state: 'extra', mine: extra[k].actual, want: '' });
@@ -1254,7 +1255,7 @@ function comparisonColumns(marks) {
   for (const m of marks) {
     if (m.type === 'ok') {
       settle();
-      cols.push({ state: 'ok', mine: m.expected, want: m.expected });
+      cols.push({ state: 'ok', mine: m.expected, want: m.expected, gap: !!m.gap });
     } else {
       run.push(m);
     }
@@ -1275,10 +1276,14 @@ function compareRowsHtml(marks) {
   const cell = (row, text, cls) => `<span class="${row} ${cls}">${
     text ? escapeHtml(text) : '<span class="blank">—</span>'}</span>`;
 
+  // 正解側の語の切れ目には、上下そろえて空きの列を挟む。答えに空白が
+  // 無くても列の対応は崩れず、語のまとまりだけが読めるようになる
+  const gapCol = '<span class="mine gap"></span><span class="want gap"></span>';
   const cells = cols.map((c) => {
-    if (c.state === 'ok') return cell('mine', c.mine, 'ok') + cell('want', c.want, 'ok');
+    const lead = c.gap ? gapCol : '';
+    if (c.state === 'ok') return lead + cell('mine', c.mine, 'ok') + cell('want', c.want, 'ok');
     // 自分の答えは「余分・誤り」の色、正解は「取り漏らし」の色。凡例と同じ
-    return cell('mine', c.mine, c.mine ? 'bad' : 'none')
+    return lead + cell('mine', c.mine, c.mine ? 'bad' : 'none')
       + cell('want', c.want, c.want ? 'want-bad' : 'none');
   }).join('');
 
@@ -1755,9 +1760,11 @@ function gradeCurrentProblem() {
   // 全問正解なら 1 段でよい。間違えたときだけ、自分の答えと正解を
   // 上下に並べて見比べられるようにする
   const perfect = result.correct === result.total && !result.extra && !result.wrong;
+  // 正解側の語の切れ目（gap）は空きとして見せる。答えに空白が無くても
+  // 採点には関係なく、見比べるときに語のまとまりが読める
   const detail = perfect
     ? `<div class="marks">${result.marks
-        .map((m) => `<span class="${m.type || (m.ok ? 'ok' : 'ng')}">${
+        .map((m) => `${m.gap ? '<span class="gap"></span>' : ''}<span class="${m.type || (m.ok ? 'ok' : 'ng')}">${
           escapeHtml(m.type === 'extra' ? m.actual : m.expected)}</span>`)
         .join('')}</div>`
     : compareRowsHtml(result.marks);

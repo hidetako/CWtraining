@@ -122,6 +122,74 @@ ok('正解なら見比べ欄は出ない', await page.locator('#drill-result .co
 ok('正解は 1 段で出る', await page.locator('#drill-result > div.marks').count() === 1);
 await page.screenshot({ path: `${DIR}/dc2-perfect.png`, fullPage: true });
 
+
+// ── 正解側に語の切れ目を出す ──────────────────────
+// 「CQ DE JA1ABC」の正解は CQ / DE / JA1ABC のまとまりで見せる。
+// 答えに空白があってもなくても採点は同じ（空白は照合に使わない）
+const gaps = await page.evaluate(() => {
+  const cw = window.__cw;
+  const cols = (a, t) => cw.comparisonColumns(cw.gradeProblem({ answer: a }, t).marks);
+  const noSpace = cw.gradeProblem({ answer: 'CQ DE JA1ABC' }, 'CQDEJA1ABC');
+  const withSpace = cw.gradeProblem({ answer: 'CQ DE JA1ABC' }, 'CQ DE JA1ABC');
+  const wrong = cols('CQ DE JA1ABC', 'CQDEJA1ABX');
+  const groups = cols('KMKMK MKMKM', 'KMKMKMKMKM');
+  return {
+    noSpacePct: Math.round(noSpace.accuracy * 100), withSpacePct: Math.round(withSpace.accuracy * 100),
+    gapsAt: noSpace.marks.map((m, i) => (m.gap ? i : -1)).filter((i) => i >= 0),
+    wrongGapsAt: wrong.map((c, i) => (c.gap ? i : -1)).filter((i) => i >= 0),
+    wrongMine: wrong.map((c) => c.mine).join(''),
+    groupGapsAt: groups.map((c, i) => (c.gap ? i : -1)).filter((i) => i >= 0),
+  };
+});
+console.log('語の切れ目:', JSON.stringify(gaps));
+ok('空白なしで書いても満点', gaps.noSpacePct === 100 && gaps.withSpacePct === 100,
+  `${gaps.noSpacePct} / ${gaps.withSpacePct}`);
+ok('正解側の語の切れ目が印に付く（CQ|DE|JA1ABC）', gaps.gapsAt.join(',') === '2,4', gaps.gapsAt.join(','));
+ok('間違えたときの列にも切れ目が付く', gaps.wrongGapsAt.join(',') === '2,4' && gaps.wrongMine === 'CQDEJA1ABX',
+  `${gaps.wrongGapsAt} / ${gaps.wrongMine}`);
+ok('5 文字の群の区切りも付く', gaps.groupGapsAt.join(',') === '5', gaps.groupGapsAt.join(','));
+
+// 画面でも空きが入ること。満点は 1 段、間違いは 2 段の両方
+await page.click('.tab[data-panel="drill"]');
+await page.selectOption('#drill-type', 'phrase');
+await page.click('#btn-drill-new');
+await page.waitForTimeout(4500);
+const gapAnswer = await page.evaluate(() => window.__cw.drillProblem?.answer ?? '');
+await page.fill('#drill-answer', gapAnswer.replace(/\s+/g, ''));   // 空白を抜いて書く
+await page.keyboard.press('Enter');
+await page.waitForTimeout(500);
+const perfectView = await page.evaluate(() => ({
+  pct: document.querySelector('#drill-result .big')?.textContent,
+  gaps: document.querySelectorAll('#drill-result > div.marks .gap').length,
+  words: (window.__cw.drillProblem?.answer ?? '').trim().split(/\s+/).length,
+  gapWidth: (() => { const g = document.querySelector('#drill-result > div.marks .gap'); return g ? g.getBoundingClientRect().width : 0; })(),
+}));
+console.log('画面（満点）:', JSON.stringify(perfectView));
+ok('空白を抜いて書いても画面で満点', perfectView.pct === '100%', perfectView.pct);
+ok('1 段の表示に語の数 − 1 の空きが入る', perfectView.gaps === perfectView.words - 1 && perfectView.gapWidth > 0,
+  JSON.stringify(perfectView));
+
+await page.click('#btn-drill-next');
+await page.waitForTimeout(4500);
+const gapAnswer2 = await page.evaluate(() => window.__cw.drillProblem?.answer ?? '');
+await page.fill('#drill-answer', gapAnswer2.replace(/\s+/g, '').slice(0, -1) + '%');   // 末尾を書き間違える
+await page.keyboard.press('Enter');
+await page.waitForTimeout(500);
+const wrongView = await page.evaluate(() => {
+  const gapsMine = document.querySelectorAll('#drill-result .compare .mine.gap').length;
+  const gapsWant = document.querySelectorAll('#drill-result .compare .want.gap').length;
+  const words = (window.__cw.drillProblem?.answer ?? '').trim().split(/\s+/).length;
+  // 空きの列は上下で同じ位置にあること（列の対応が崩れていない）
+  const mine = [...document.querySelectorAll('#drill-result .compare .mine.gap')].map((e) => Math.round(e.getBoundingClientRect().left));
+  const want = [...document.querySelectorAll('#drill-result .compare .want.gap')].map((e) => Math.round(e.getBoundingClientRect().left));
+  return { gapsMine, gapsWant, words, aligned: mine.join() === want.join() };
+});
+console.log('画面（間違い）:', JSON.stringify(wrongView));
+ok('2 段の表示にも語の数 − 1 の空きが上下そろって入る',
+  wrongView.gapsMine === wrongView.words - 1 && wrongView.gapsWant === wrongView.words - 1 && wrongView.aligned,
+  JSON.stringify(wrongView));
+await page.screenshot({ path: `${DIR}/dc-gaps.png`, fullPage: true });
+
 console.log('\n失敗:', fails.length ? fails.join(' / ') : 'なし');
 console.log('ERRORS:', errors.length ? errors.join('\n') : '(none)');
 await browser.close();

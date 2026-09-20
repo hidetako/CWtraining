@@ -183,6 +183,31 @@ const keying = await page.evaluate(() => {
 console.log('打鍵の採点:', JSON.stringify(keying));
 ok('打鍵も余分を数える', keying.extra === 4 && keying.pct < 70, JSON.stringify(keying));
 
+
+// ── プロサインは綴りで書いても正解 ─────────────────
+// <BT> <SK> を = / BT / sk のどれで書いても通ること。空白なし・小文字でも
+const pro = await page.evaluate(() => {
+  const g = (a, t) => { const r = window.__cw.gradeProblem({ answer: a }, t); return { pct: Math.round(r.accuracy * 100), wrong: r.wrong, extra: r.extra, marks: r.marks.map((m) => m.type[0]).join('') }; };
+  return {
+    eq: g('UR 599 <BT> NAME BOB <SK>', 'UR 599 = NAME BOB <SK>'),
+    spelled: g('UR 599 <BT> NAME BOB <SK>', 'UR 599 BT NAME BOB SK'),
+    glued: g('UR 599 <BT> NAME BOB <SK>', 'ur599btnamebobsk'),
+    plus: g('K <AR>', 'K +'),
+    wrong: g('UR 599 <BT> NAME', 'UR 599 BX NAME'),
+    dropped: g('UR 599 <BT> NAME', 'UR 599 NAME'),
+    plain: g('CQ DE JA1ABC', 'CQDEJA1ABC'),
+  };
+});
+console.log('プロサインの綴り:', JSON.stringify(pro));
+ok('= で書いても満点', pro.eq.pct === 100, JSON.stringify(pro.eq));
+ok('BT / SK と綴っても満点', pro.spelled.pct === 100, JSON.stringify(pro.spelled));
+ok('空白なし・小文字でも満点', pro.glued.pct === 100, JSON.stringify(pro.glued));
+ok('+ は <AR> として通る', pro.plus.pct === 100, JSON.stringify(pro.plus));
+// 綴りを取り違えたら、それは誤りのまま
+ok('BX は正解にならない', pro.wrong.pct < 100 && pro.wrong.wrong >= 1, JSON.stringify(pro.wrong));
+ok('プロサインを落とせば取り漏らし', pro.dropped.pct === 90 && pro.dropped.marks.includes('m'), JSON.stringify(pro.dropped));
+ok('プロサインの無い問題は変わらない', pro.plain.pct === 100, JSON.stringify(pro.plain));
+
 console.log('\n失敗:', fails.length ? fails.join(' / ') : 'なし');
 console.log('ERRORS:', errors.length ? errors.join('\n') : '(none)');
 await browser.close();

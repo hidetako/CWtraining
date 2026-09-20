@@ -426,6 +426,9 @@ input[autocapitalize="characters"]::placeholder { text-transform: none; }
    7 が ｱ、3 が ヨ、J が チ のように別の字として読めてしまい、
    採点結果に覚えのない文字が混ざったように見える。
    囲みは outline で描く。border と違って字送りに影響しない */
+/* 正解側の語の切れ目。文字は置かず、空きだけを入れる */
+.marks .gap { display: inline-block; width: .7em; }
+.compare .gap { width: .5em; padding: 0; margin: 0; }
 .marks .missing, .marks .extra, .marks .ng {
   border-radius: 3px;
   padding: 0 .14em;

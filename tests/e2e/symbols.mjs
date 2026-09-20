@@ -147,6 +147,7 @@ const counted = await page.evaluate(() => {
   return {
     prosign: g('<AR> <SK>', '<AR> <SK>'),
     asLetters: g('<AR> <SK>', 'AR SK'),
+    misspelled: g('<AR> <SK>', 'AX SK'),
     btForEq: g('= / ?', '<BT> / ?'),
     mixed: g('A = B', 'A <BT> B'),
     wrong: g('= / ?', '= / .'),
@@ -155,7 +156,11 @@ const counted = await page.evaluate(() => {
 console.log('採点:', JSON.stringify(counted));
 ok('プロサインは 1 個', counted.prosign.total === 2 && counted.prosign.pct === 100,
   JSON.stringify(counted.prosign));
-ok('ローマ字で書いたら不正解', counted.asLetters.pct < 100, JSON.stringify(counted.asLetters));
+// 以前は「ローマ字で書いたら不正解」だったが、<AR> の書き方を知らなくても
+// 聞こえたとおり AR と書けば正解にする（1 個の符号として数える）
+ok('ローマ字で綴っても正解', counted.asLetters.pct === 100 && counted.asLetters.total === 2,
+  JSON.stringify(counted.asLetters));
+ok('綴りを取り違えたら不正解', counted.misspelled.pct < 100, JSON.stringify(counted.misspelled));
 ok('= を <BT> と書いても正解', counted.btForEq.pct === 100, JSON.stringify(counted.btForEq));
 ok('文中でも同じ扱い', counted.mixed.pct === 100, JSON.stringify(counted.mixed));
 ok('符号が違えば不正解', counted.wrong.pct < 100, JSON.stringify(counted.wrong));

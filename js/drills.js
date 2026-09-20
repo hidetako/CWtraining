@@ -333,16 +333,42 @@ function align(expected, actual) {
   // 文字ではなく符号の単位で並べる。<AR> のようなプロサインは 1 個として
   // 数え、= と <BT> のように同じ符号を持つ表記は同じものとして扱う
   // （耳では区別が付かないので、どちらで書いても正解にする）
-  const a = codeUnits(expected).filter((u) => !u.space);
+  // 空白は照合に使わないが、手本のどこが語の切れ目かは覚えておく。
+  // 表示で正解側に語間を出すためで、答えの側に空白があるか無いかは
+  // 採点に関係しない（切れ目を入れずに書いても満点になる）
+  const a = [];
+  let afterSpace = false;
+  for (const u of codeUnits(expected)) {
+    if (u.space) { afterSpace = true; continue; }
+    a.push({ ...u, gap: afterSpace && a.length > 0 });
+    afterSpace = false;
+  }
   const b = codeUnits(actual).filter((u) => !u.space);
+
+  // 手本のプロサイン <BT> は、答え側で B T と綴られていても同じものとして
+  // 受ける。<BT> と打ち込む書き方を知らなくても、聞こえたとおりに
+  // 「BT」「SK」と書けば正解になる（= のような同じ符号の記号は元から通る）。
+  // 答え側の j から、a[i] のプロサインの名前どおりの文字が並んでいれば
+  // その文字数を返す。並んでいなければ 0
+  const spelled = (i, j) => {
+    const t = a[i].text;
+    if (!(t.startsWith('<') && t.endsWith('>'))) return 0;
+    const name = t.slice(1, -1);
+    if (j + name.length > b.length) return 0;
+    let s = '';
+    for (let k = 0; k < name.length; k++) s += b[j + k].text;
+    return s === name ? name.length : 0;
+  };
 
   // dp[i][j] = a[i..] と b[j..] の最長共通部分列の長さ
   const dp = Array.from({ length: a.length + 1 }, () => new Uint32Array(b.length + 1));
   for (let i = a.length - 1; i >= 0; i--) {
     for (let j = b.length - 1; j >= 0; j--) {
-      dp[i][j] = a[i].key === b[j].key
-        ? dp[i + 1][j + 1] + 1
-        : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      let best = Math.max(dp[i + 1][j], dp[i][j + 1]);
+      if (a[i].key === b[j].key) best = Math.max(best, dp[i + 1][j + 1] + 1);
+      const n = spelled(i, j);
+      if (n) best = Math.max(best, dp[i + 1][j + n] + 1);
+      dp[i][j] = best;
     }
   }
 
@@ -351,19 +377,27 @@ function align(expected, actual) {
   let j = 0;
 
   while (i < a.length && j < b.length) {
-    if (a[i].key === b[j].key) {
+    const n = spelled(i, j);
+    if (a[i].key === b[j].key && dp[i][j] === dp[i + 1][j + 1] + 1) {
       // 表記が違っても符号が同じなら正解。表示は出題側の表記に揃える
-      marks.push({ type: 'ok', expected: a[i].text, actual: a[i].text, ok: true });
+      marks.push({ type: 'ok', expected: a[i].text, actual: a[i].text, ok: true, gap: a[i].gap });
       i += 1; j += 1;
+    } else if (n && dp[i][j] === dp[i + 1][j + n] + 1) {
+      // プロサインを綴りで書いた。綴りの文字をまとめて 1 個の正解にする
+      marks.push({ type: 'ok', expected: a[i].text, actual: a[i].text, ok: true, gap: a[i].gap });
+      i += 1; j += n;
     } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-      marks.push({ type: 'missing', expected: a[i].text, actual: '', ok: false });
+      marks.push({ type: 'missing', expected: a[i].text, actual: '', ok: false, gap: a[i].gap });
       i += 1;
     } else {
       marks.push({ type: 'extra', expected: '', actual: b[j].text, ok: false });
       j += 1;
     }
   }
-  while (i < a.length) marks.push({ type: 'missing', expected: a[i++].text, actual: '', ok: false });
+  while (i < a.length) {
+    marks.push({ type: 'missing', expected: a[i].text, actual: '', ok: false, gap: a[i].gap });
+    i += 1;
+  }
   while (j < b.length) marks.push({ type: 'extra', expected: '', actual: b[j++].text, ok: false });
 
   return marks;
