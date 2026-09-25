@@ -98,6 +98,29 @@ const engine = await page.evaluate(() => {
   q.start();
   out.advice = q.advise('名前が聞き取れなかった');
 
+  // 仕様の突き合わせで見つかった不具合の再発防止
+  // HW? で終わる送信を「もう一度」と取り違えない
+  q = new MockQso({ me, mode: 'cq', pileup: 'none', reaction: 'nameQuery' });
+  q.start(); q.receive('CQ CQ DE JA1ABC JA1ABC K');
+  const ch = q.callers[0].callsign;
+  q.receive(`${ch} DE JA1ABC UR RST 599 599 QTH TOKYO K`);              // 名前なし → 聞き返し
+  r = q.receive('NAME TARO TARO HW?');
+  out.hwq = { phase: q.phase, kind: r.dx[0]?.kind, got: r.feedback.got };
+  // 応答する側の第 2 交換: 模範解答どおりで RST・名前・QTH が伝わり、締めへ
+  q = new MockQso({ me, mode: 'answer', pileup: 'none', reaction: 'normal' });
+  q.start(); q.receive(`${q.dxCall} DE JA1ABC JA1ABC K`);
+  const ex2exp = q.expected().text;
+  r = q.receive(ex2exp);
+  out.answerEx2 = { hasNameQth: /NAME TARO TARO/.test(ex2exp) && /QTH TOKYO TOKYO/.test(ex2exp), phase: q.phase, kind: r.dx[0]?.kind,
+    heard: { ...q.heard }, missing: r.feedback.missing, early: r.feedback.notes.some((n) => /早め|73 を送ったので/.test(n)) };
+  // 応答する側で RST を落として 73 → 聞き返される。中身の無い 73 <SK> → 締め
+  q = new MockQso({ me, mode: 'answer', pileup: 'none', reaction: 'normal' });
+  q.start(); q.receive(`${q.dxCall} DE JA1ABC JA1ABC K`);
+  r = q.receive('R R FB RIG IC-7300 ANT DP TNX 73 K');
+  out.answerNoRst = { kind: r.dx[0]?.kind, phase: q.phase };
+  r = q.receive(`${q.dxCall} DE JA1ABC SRI QRL 73 <SK>`);
+  out.bare73 = { kind: r.dx[0]?.kind, phase: q.phase };
+
   // BK: こちらが BK で締めれば相手も BK 調。3 往復に 1 回は識別。K で戻る。締めは <SK>
   q = new MockQso({ me, mode: 'cq', pileup: 'none', reaction: 'nameQuery' });
   q.start(); q.receive('CQ CQ DE JA1ABC JA1ABC K');
@@ -141,6 +164,12 @@ ok('パイルアップは複数局が同時に呼ぶ', engine.pileup.callers ===
 ok('取り違えたコールはその局が訂正する', engine.partial.kind === 'correct' && engine.partial.from && !engine.partial.dxSet, JSON.stringify(engine.partial));
 ok('正しく取れば交信相手になる', engine.picked.dx && engine.picked.phase === 'ex2', JSON.stringify(engine.picked));
 ok('応答側のパイルアップでは最初は一部しか取ってもらえない', engine.answerPileup.kind === 'partial' && /JA1\?/.test(engine.answerPileup.text) && engine.answerPileup2.kind === 'ex1', JSON.stringify(engine.answerPileup));
+ok('HW? で終わっても「もう一度」とは取らず、名前を受け取る', engine.hwq.phase === 'ex2' && engine.hwq.kind === 'ex2' && engine.hwq.got.includes('NAME TARO'), JSON.stringify(engine.hwq));
+ok('応答側の第 2 交換の模範解答に RST・名前・QTH が入る', engine.answerEx2.hasNameQth);
+ok('模範解答どおりなら全部伝わって締めへ（早めの 73 扱いにしない）', engine.answerEx2.phase === 'close' && engine.answerEx2.kind === 'close'
+  && engine.answerEx2.heard.rst && engine.answerEx2.heard.name === 'TARO' && engine.answerEx2.heard.qth === 'TOKYO' && !engine.answerEx2.early && engine.answerEx2.missing.length === 0, JSON.stringify(engine.answerEx2));
+ok('応答側で RST を落とせば 73 があっても聞き返される', engine.answerNoRst.kind === 'rstQuery' && engine.answerNoRst.phase === 'ex2', JSON.stringify(engine.answerNoRst));
+ok('中身の無い 73 <SK> は締めとして受ける', engine.bare73.kind === 'close', JSON.stringify(engine.bare73));
 console.log('BK:', JSON.stringify(engine.bk).slice(0, 400));
 ok('BK で締めると相手は前置きなしで BK 締め', engine.bk.firstNoPrefix && engine.bk.firstEndsBk && engine.bk.firstKind === 'nameQuery', engine.bk.first);
 ok('模範解答も BK 調になる', engine.bk.expEndsBk && engine.bk.expNoPrefix, engine.bk.exp);
@@ -182,6 +211,13 @@ ok('鳴り終わると自分の番になる', (await state()).state === 'あな�
 await page.click('#btn-free-reveal');
 const revealed = await page.textContent('#free-rx-text');
 ok('内容を見るで相手の送信が読める', /JA1ABC DE [A-Z0-9]+/.test(revealed), revealed.slice(0, 40));
+
+// 聞き直しは同じ送信を鳴らすだけで、ログには足さない
+const rowsBefore = await page.locator('#qso-log .log-entry').count();
+await page.click('#btn-free-relisten');
+await page.waitForTimeout(300);
+ok('聞き直しでログが増えない', (await page.locator('#qso-log .log-entry').count()) === rowsBefore);
+await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 60000 });
 
 // 打ち終わりの自動送信: K で締めて手を止めれば、押さなくても相手が返事をする。
 // キーヤーの解読結果を直接置いて、打ち終わった状態を作る
@@ -238,10 +274,12 @@ ok('相談すると状況と次の一手が出る', /段階/.test(advice) && /�
 
 // 模範解答と違う内容で送っても、流れに合わせて返す
 const call = await page.evaluate(() => window.__cw.freeState.qso.callers[0].callsign);
+const perCharBefore = await page.evaluate(() => JSON.stringify(window.__cw.stats.keyPerChar || {}));
 await page.evaluate((c) => { window.__cw.sendFree(`${c} DE JA1ABC GA OM UR RST 559 559 QTH TOKYO K`); }, call);   // 名前なし・順不同（ボタン相当）
 await page.waitForTimeout(300);
 const fb = (await page.textContent('#free-feedback')).replace(/\s+/g, ' ');
 ok('相手が受け取った内容と抜けが出る', /✓ RST 559/.test(fb) && /抜け: NAME/.test(fb), fb.slice(0, 120));
+ok('模範解答と違う送り方を苦手文字に数えない', (await page.evaluate(() => JSON.stringify(window.__cw.stats.keyPerChar || {}))) === perCharBefore);
 s = await state();
 ok('名前を落としても交信は続く（聞き返しか次へ）', ['ex1', 'ex2'].includes(s.phase) && s.busy, JSON.stringify(s));
 await page.screenshot({ path: `${DIR}/free-feedback.png`, fullPage: true });

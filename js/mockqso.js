@@ -124,7 +124,9 @@ export function parseSend(text, { myCall = '', dxCalls = [] } = {}) {
     bk: /(^| )BK$/.test(t),
     seventyThree: has(/ 73 /),
     sk: has(/ (<SK>|SK) /),
-    agn: has(/ AGN\?? | PSE AGN | RPT | \? /) || /\?$/.test(t),
+    // 聞き返し。HW?（いかがですか）や QRL?/QRZ? は聞き返しではないので、
+    // 語で見る: AGN / AGN? / RPT / 単独の ? / RST? NAME? QTH? CALL? NR?
+    agn: words.some((w) => /^(AGN\??|RPT|\?|(RST|NAME|QTH|CALL|NR|PSE)\?)$/.test(w)),
     qrs: has(/ QRS /),
     qrz: has(/ QRZ\?? /),
     qrl: has(/ QRL\?? /),
@@ -298,10 +300,13 @@ export class MockQso extends EventTarget {
   _ex2Text(dx) {
     const me = this.me;
     const name = this.dx?.name || 'OM';
-    const rstLine = this.mode === 'answer' && !this.heard.rst
-      ? `= UR RST ${this.dx?.rstGot || '599'} ${this.dx?.rstGot || '599'} `
+    // 応答する側は、ここで初めてレポート・名前・QTH を送る。まだ伝えていない分だけ入れる
+    const rst = this.dx?.rstGot || '599';
+    const intro = this.mode === 'answer'
+      ? [!this.heard.rst && `= UR RST ${rst} ${rst} `, !this.heard.name && `= NAME ${me.name} ${me.name} `,
+        !this.heard.qth && `= QTH ${me.qth} ${me.qth} `].filter(Boolean).join('')
       : '';
-    return `${dx} DE ${me.callsign} = R R FB ${name} ${pick(SOLID_COPY)} ${rstLine}`
+    return `${dx} DE ${me.callsign} = R R FB ${name} ${pick(SOLID_COPY)} ${intro}`
       + `= RIG HR ${me.rig} ES PWR ${me.pwr} = ANT ${me.ant} `
       + `= ${pick(['TNX FER NICE QSO ES 73', 'MNI TNX FER FB QSO ES 73', 'NW QRU SA 73'])} `
       + `= ${dx} DE ${me.callsign} K`;
@@ -350,8 +355,13 @@ export class MockQso extends EventTarget {
       this._callersCall();
       return this._finish(fb);
     }
-    // 早めの 73 / SK。相手も締めに合わせる
-    if ((p.seventyThree || p.sk) && this.dx && this.phase !== 'close') {
+    // 早めの 73 / SK。相手も締めに合わせる。
+    // 第 2 交換の型には 73 が入っている（… TNX FER QSO ES 73 …）ので、
+    // 「早め」と見るのは交換が終わる前（呼び出し〜第 1 交換）だけ
+    const closing = (p.seventyThree || p.sk) && this.dx && !['close', 'done'].includes(this.phase);
+    const hasContent = p.rst || p.name || p.qth || p.rig || p.ant || p.pwr;
+    if (closing && (!hasContent || ['call', 'pickup', 'ex1'].includes(this.phase))) {
+      if (this.phase === 'ex1') this._absorb(p, fb);
       fb.notes.push('73 を送ったので、相手も締めに入ります。まだ交換していない内容はそのままです。');
       this._dxClose(fb, { short: true });
       return this._finish(fb);
