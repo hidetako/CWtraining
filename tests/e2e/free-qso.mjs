@@ -78,7 +78,9 @@ const engine = await page.evaluate(() => {
   r = q.receive('CQ CQ CQ DE JA1ABC JA1ABC K');
   out.pileup = { callers: r.dx.length, together: r.dx.every((d) => d.together), distinctPitch: new Set(r.dx.map((d) => d.station.offset)).size };
   const target = q.callers[2].callsign;
-  r = q.receive(`${target.slice(0, -1)}X DE JA1ABC K`);
+  // 末尾を必ず違う文字にする（元が X で終わっていると同じコールになってしまう）
+  const wrongTail = target.endsWith('X') ? 'Y' : 'X';
+  r = q.receive(`${target.slice(0, -1)}${wrongTail} DE JA1ABC K`);
   out.partial = { kind: r.dx[0]?.kind, from: r.dx[0]?.station.callsign === target, dxSet: !!q.dxCall };
   r = q.receive(`${target} DE JA1ABC UR RST 579 579 NAME TARO QTH TOKYO K`);
   out.picked = { dx: q.dxCall === target, phase: q.phase };
@@ -151,6 +153,53 @@ await page.click('#btn-free-reveal');
 const revealed = await page.textContent('#free-rx-text');
 ok('内容を見るで相手の送信が読める', /JA1ABC DE [A-Z0-9]+/.test(revealed), revealed.slice(0, 40));
 
+// 打ち終わりの自動送信: K で締めて手を止めれば、押さなくても相手が返事をする。
+// キーヤーの解読結果を直接置いて、打ち終わった状態を作る
+const call0 = await page.evaluate(() => window.__cw.freeState.qso.callers[0].callsign);
+await page.evaluate((c) => {
+  const k = window.__cw.keyer;
+  k.text = `${c} DE JA1ABC UR RST 599 599 NAME TARO QTH TOKYO HW?`;   // まだ締めていない
+  k.dispatchEvent(new CustomEvent('update'));
+}, call0);
+await page.waitForTimeout(2200);
+let phaseNow = await page.evaluate(() => window.__cw.freeState.qso.phase);
+ok('締めの符号が無ければ勝手に送らない', phaseNow === 'pickup' && !(await page.evaluate(() => window.__cw.freeState.busy)), phaseNow);
+await page.evaluate(() => {
+  const k = window.__cw.keyer;
+  k.text += ' K';                                                   // K で締めた
+  k.dispatchEvent(new CustomEvent('update'));
+});
+await page.waitForTimeout(300);
+ok('締めを受けたことを知らせる', await page.locator('#free-send-note').isVisible() && /送信します/.test(await page.textContent('#free-send-note')));
+await page.waitForTimeout(2000);
+phaseNow = await page.evaluate(() => window.__cw.freeState.qso.phase);
+ok('K で締めて手を止めると自動で送信される', phaseNow === 'ex2' && (await page.evaluate(() => window.__cw.freeState.busy)), phaseNow);
+await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 90000 });
+
+// Enter でも送れる
+await page.evaluate(() => {
+  const k = window.__cw.keyer;
+  k.text = 'R R FB TNX = RIG IC-7300 = 73 K';
+  k.dispatchEvent(new CustomEvent('update'));
+});
+await page.keyboard.press('Enter');
+await page.waitForTimeout(300);
+phaseNow = await page.evaluate(() => window.__cw.freeState.qso.phase);
+ok('Enter でも送信できる', phaseNow === 'close', phaseNow);
+await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 90000 });
+await page.evaluate(() => { const k = window.__cw.keyer; k.text = 'TU 73 <SK>'; k.dispatchEvent(new CustomEvent('update')); });
+await page.waitForTimeout(2200);
+ok('<SK> で締めても自動で送信され、交信が終わる', await page.evaluate(() => window.__cw.freeState.qso?.done === true));
+await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 60000 });
+await page.waitForTimeout(300);
+ok('自動送信で終えてもまとめが出る', /交信終了/.test(await page.textContent('#qso-turn')));
+
+// もう一局、こんどはボタンで進める流れ（相談・伏せ字・ログ帳）
+await page.click('#btn-free-again');
+await page.waitForTimeout(300);
+await page.evaluate(() => { window.__cw.sendFree('CQ CQ CQ DE JA1ABC JA1ABC K'); });
+await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 60000 });
+
 // 相談
 await page.click('#btn-free-advise');
 await page.waitForTimeout(200);
@@ -159,7 +208,7 @@ ok('相談すると状況と次の一手が出る', /段階/.test(advice) && /�
 
 // 模範解答と違う内容で送っても、流れに合わせて返す
 const call = await page.evaluate(() => window.__cw.freeState.qso.callers[0].callsign);
-await page.evaluate((c) => { window.__cw.sendFree(`${c} DE JA1ABC GA OM UR RST 559 559 QTH TOKYO K`); }, call);   // 名前なし・順不同
+await page.evaluate((c) => { window.__cw.sendFree(`${c} DE JA1ABC GA OM UR RST 559 559 QTH TOKYO K`); }, call);   // 名前なし・順不同（ボタン相当）
 await page.waitForTimeout(300);
 const fb = (await page.textContent('#free-feedback')).replace(/\s+/g, ' ');
 ok('相手が受け取った内容と抜けが出る', /✓ RST 559/.test(fb) && /抜け: NAME/.test(fb), fb.slice(0, 120));
