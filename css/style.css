@@ -2183,6 +2183,7 @@ input[type=datetime-local] {
 .free-rx .free-rx-text { margin-top: .5rem; font-family: var(--mono); letter-spacing: .06em; }
 .free-expected { margin: .6rem 0; }
 .free-expected .annotated { margin-top: .3rem; }
+.free-send-note { color: var(--accent); margin: .2rem 0 0; }
 .free-feedback { margin-top: .6rem; }
 .free-feedback .tag { display: inline-block; margin: .15rem .35rem .15rem 0; padding: .1em .5em; border-radius: 4px; font-size: .82rem; font-family: var(--mono); }
 .free-feedback .tag.got { background: rgba(88, 214, 141, .16); color: var(--ok); }

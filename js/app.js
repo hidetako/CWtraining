@@ -501,6 +501,18 @@ function initQso() {
       + (pending ? `<span class="pending">${escapeHtml(pending)}</span>` : '');
   };
   keyer.addEventListener('update', updateLiveKeyed);
+  // 模擬交信（自由に打つ）: 締めの符号のあと手が止まったら送る
+  keyer.addEventListener('update', armFreeAutoSend);
+  keyer.addEventListener('char', armFreeAutoSend);
+  keyer.addEventListener('word', armFreeAutoSend);
+  // Enter でも送れる（入力欄に焦点があるときは譲る）
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.repeat || !free.qso || free.busy) return;
+    if (!$('#panel-qso').classList.contains('is-active') || !$('#qso-keyed')) return;
+    if (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target.tagName)) return;
+    e.preventDefault();
+    sendFree(keyer.flush());
+  });
   keyer.addEventListener('element', updateLiveKeyed);
   keyer.addEventListener('char', updateLiveKeyed);
 
@@ -935,6 +947,8 @@ const free = {
   lastSent: '',
   sends: 0,
   complete: 0,        // 要点が全部そろった送信の数
+  autoTimer: null,    // 締めの符号のあと、手が止まるのを待つ
+  nudgeTimer: null,   // 締めずに手が止まったときの知らせ
 };
 
 function startFreeQso() {
@@ -967,7 +981,47 @@ function startFreeQso() {
   if (first.length) playFreeRx(first);
 }
 
+/**
+ * 打ち終わりを検出して、押さずに送信する。
+ *
+ * 実際の交信に「送信する」ボタンは無い。K（どうぞ）や <SK> で締めて手を止めれば
+ * 相手の番になる。ここでも同じにする: 打った文が K / KN / BK / <SK> / <AR> で
+ * 終わっていて、そのあと手が止まったら自動で送る。締めずに手が止まったときは、
+ * どうすれば返事が来るのかを画面で知らせる（ボタンや Enter でも送れる）。
+ */
+const FREE_TURNOVER_RE = /(^|\s)(K|KN|BK|<SK>|<AR>|SK|AR)$/;
+const FREE_AUTO_SEND_MS = 1600;   // 締めの符号のあと、手が止まってから送るまで
+const FREE_NUDGE_MS = 6000;       // 締めずに手が止まったとき、知らせるまで
+
+function armFreeAutoSend() {
+  clearTimeout(free.autoTimer);
+  clearTimeout(free.nudgeTimer);
+  if (!free.qso || free.busy || free.qso.done) return;
+  const text = keyer.text.trim();
+  if (!text) return;
+  const note = $('#free-send-note');
+  if (FREE_TURNOVER_RE.test(text) && !keyer.buffer) {
+    if (note) { note.textContent = '締めの符号を受けました。手を止めると送信します…'; note.hidden = false; }
+    free.autoTimer = setTimeout(() => {
+      if (!free.qso || free.busy) return;
+      const now = keyer.text.trim();
+      if (FREE_TURNOVER_RE.test(now) && !keyer.buffer) sendFree(keyer.flush());
+    }, FREE_AUTO_SEND_MS);
+  } else {
+    if (note) note.hidden = true;
+    free.nudgeTimer = setTimeout(() => {
+      if (!free.qso || free.busy || !keyer.text.trim()) return;
+      if (note) {
+        note.textContent = '打ち終わったら K（どうぞ）か <SK> で締めると、手を止めたときに自動で送信します。今すぐ送るなら「送信する」か Enter。';
+        note.hidden = false;
+      }
+    }, FREE_NUDGE_MS);
+  }
+}
+
 function stopFree({ keepStage = false } = {}) {
+  clearTimeout(free.autoTimer);
+  clearTimeout(free.nudgeTimer);
   for (const v of free.voices) v.stop?.();
   free.voices = [];
   free.qso = null;
@@ -1076,6 +1130,9 @@ function renderFreeTurn() {
 
     <h4>あなたの符号</h4>
     <div class="live-keyed" id="qso-keyed"><span class="empty hint">パドルで打ち始めてください。</span></div>
+    <p class="hint" style="margin:.3rem 0 0">打ち終わりは <code>K</code>（どうぞ）か <code>&lt;SK&gt;</code>（終える）。
+      締めて手を止めると<strong>自動で送信</strong>し、相手が返事をします。すぐ送るなら「送信する」か <kbd>Enter</kbd>。</p>
+    <p class="hint free-send-note" id="free-send-note" hidden></p>
     <div class="turn-actions">
       <button type="button" class="btn btn-primary" id="btn-free-send" ${free.busy ? 'disabled' : ''}>送信する</button>
       <button type="button" class="btn btn-ghost" id="btn-free-clear" title="打った符号を消して打ち直す（Esc）">打ち直す</button>
@@ -1127,6 +1184,8 @@ function renderFreeTurn() {
  */
 async function sendFree(text) {
   const q = free.qso;
+  clearTimeout(free.autoTimer);
+  clearTimeout(free.nudgeTimer);
   if (!q || free.busy) return;
   const sent = String(text || '').trim();
   if (!sent) {
@@ -4711,7 +4770,7 @@ window.__cw = {
   SYMBOL_ORDER,                              // 記号・プロサインの並びを検証できるように
   THEMES, applyTheme,                        // 見た目の切り替えを検証できるように
   MockQso, parseSend, ClaudeAssist, keepsEssentials,  // 模擬交信（自由に打つ）を検証できるように
-  sendFree, startFreeQso,
+  sendFree, startFreeQso, armFreeAutoSend,
   get freeState() { return free; },
   measureAudioLatency,                       // 音の遅れの実測を検証できるように
   termCode, termTitle, taskTermsHtml,        // 説明に添える符号を検証できるように
