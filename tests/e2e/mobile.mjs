@@ -259,6 +259,31 @@ console.log('低いパソコンの窓:', JSON.stringify(shortInfo));
 ok('低いだけのパソコンは 2 列のまま', shortInfo.isSheet === false, JSON.stringify(shortInfo));
 await shortDesk.close();
 
+
+// ── iPhone: 音の遅れをパドル欄で測れる・iOS の案内が出る・重い飾りを出さない ──
+// iPhone 13 の見立て（UA は Safari、pointer: coarse）
+const ios = await page.evaluate(async () => {
+  const cw = window.__cw;
+  document.querySelector('#btn-pw-latency').click();
+  await new Promise((r) => setTimeout(r, 400));
+  const out = document.querySelector('#pw-latency-out').textContent;
+  cw.applyTheme('pc88');
+  const overlay = getComputedStyle(document.body, '::after').display;
+  cw.applyTheme('default');
+  return {
+    isIos: cw.isIosWebKit(),
+    noteShown: !document.querySelector('#pw-ios-note').hidden,
+    noteText: document.querySelector('#pw-ios-note').textContent,
+    latency: out,
+    overlay,
+  };
+});
+console.log('iOS:', JSON.stringify(ios).slice(0, 300));
+ok('iPhone と判定する', ios.isIos);
+ok('iOS では Safari・Bluetooth の案内をパドル欄に出す', ios.noteShown && /Safari/.test(ios.noteText) && /Bluetooth/.test(ios.noteText));
+ok('パドル欄で音の遅れを測れる', /合計およそ \d+ ms/.test(ios.latency), ios.latency.slice(0, 60));
+ok('タッチ端末では PC-88 風の走査線を描かない', ios.overlay === 'none', ios.overlay);
+
 console.log('\n失敗:', fails.length ? fails.join(' / ') : 'なし');
 console.log('ERRORS:', errors.length ? errors.join('\n') : '(none)');
 await browser.close();

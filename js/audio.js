@@ -60,7 +60,9 @@ export class CWPlayer {
       this.ctx = new Ctor({ latencyHint: 'interactive' });
       this._buildGraph();
     }
-    if (this.ctx.state === 'suspended') await this.ctx.resume();
+    // iOS は電話や他のアプリの音のあとに 'interrupted' になる。
+    // 'suspended' だけ見ていると、そのまま鳴らないか、遅れて鳴る
+    if (this.ctx.state !== 'running') await this.ctx.resume();
     return this.ctx;
   }
 
