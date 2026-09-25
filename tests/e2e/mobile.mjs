@@ -144,8 +144,26 @@ console.log('下まで届くか:', JSON.stringify(reach));
 ok('引き出しの下に隠れた操作まで届く', reach.reachable, JSON.stringify(reach));
 await page.screenshot({ path: `${DIR}/m3-keyer.png` });
 
-await page.click('.tab[data-panel="drill"]');
-await page.waitForTimeout(400);
+// パドル送信タブでは画面全体がパドルになるが、それはマウスの話。
+// 指で閉じるボタンやタブに触れたときまで打鍵にしてしまうと、
+// 閉じることもタブを選ぶこともできなくなる（iPhone で実際に起きた）。
+// page.click はマウス扱いなので、ここは本物のタッチで押す
+await page.evaluate(() => window.__cw.keyer.reset());
+const closeBox = await page.locator('#pw-close').boundingBox();
+await page.touchscreen.tap(closeBox.x + closeBox.width / 2, closeBox.y + closeBox.height / 2);
+await page.waitForTimeout(450);
+const closedByTouch = await sheet();
+ok('打鍵タブでも指で閉じるボタンが効く', closedByTouch.open === false, JSON.stringify(closedByTouch));
+const tabBox = await page.locator('.tab[data-panel="drill"]').boundingBox();
+await page.touchscreen.tap(tabBox.x + tabBox.width / 2, tabBox.y + tabBox.height / 2);
+await page.waitForTimeout(700);
+const touched = await page.evaluate(() => ({
+  tab: document.querySelector('.tab.is-active')?.dataset.panel,
+  keyed: window.__cw.keyer.text + window.__cw.keyer.buffer,
+}));
+console.log('指でタブ:', JSON.stringify(touched));
+ok('打鍵タブでも指でタブを選べる', touched.tab === 'drill', JSON.stringify(touched));
+ok('閉じるボタンやタブに触れても打鍵にならない', touched.keyed.trim() === '', JSON.stringify(touched));
 ok('別のタブへ移ると畳む', (await sheet()).open === false);
 
 // 実技の打鍵ターンでも開く

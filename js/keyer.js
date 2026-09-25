@@ -472,7 +472,7 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
     const side = sideOf(e.button);
     if (!side) return;
     // 全画面モードでも、操作ボタンやフォームの上では通常のクリックを優先する
-    if (opts.global && e.target.closest('button, input, select, textarea, a, label')) return;
+    if (opts.global && e.target.closest('button, input, select, textarea, a, label, summary')) return;
     e.preventDefault();
     buttons.set(e.button, side);
     if (e.button === 0) state.left = true; else if (e.button === 2) state.right = true;
@@ -584,6 +584,13 @@ export function attachPaddleInput(keyer, pad, opts = {}) {
     target.addEventListener('mousedown', onDown);
     window.addEventListener('mouseup', onUp);      // パッド外で離しても取りこぼさない
     target.addEventListener('contextmenu', onContextMenu);
+  }
+  // 指の打面は打面そのものだけ。画面全体（global）には付けない。
+  // 全画面に付けると、タブや閉じるボタンに触れただけで打鍵になり、既定の動作を
+  // 止めるので押した扱いにもならず、閉じることもタブを選ぶこともできなくなる
+  // （iPhone で実際に起きた）。ページのスクロールも止まる。マウスと違って
+  // 指は打面まで運ぶ手間がないので、全画面で受ける理由もない
+  if (opts.mouse !== false && !opts.global) {
     pad.addEventListener('touchstart', onTouchStart, { passive: false });
     pad.addEventListener('touchend', onTouchEnd, { passive: false });
     pad.addEventListener('touchcancel', onTouchEnd, { passive: false });
