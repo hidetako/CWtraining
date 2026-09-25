@@ -97,6 +97,29 @@ const engine = await page.evaluate(() => {
   q = new MockQso({ me, mode: 'cq', pileup: 'none', reaction: 'normal' });
   q.start();
   out.advice = q.advise('名前が聞き取れなかった');
+
+  // BK: こちらが BK で締めれば相手も BK 調。3 往復に 1 回は識別。K で戻る。締めは <SK>
+  q = new MockQso({ me, mode: 'cq', pileup: 'none', reaction: 'nameQuery' });
+  q.start(); q.receive('CQ CQ DE JA1ABC JA1ABC K');
+  const cb = q.callers[0].callsign;
+  r = q.receive(`${cb} DE JA1ABC UR RST 599 599 BK`);                 // RST だけ・BK → 名前を聞き返される
+  const bk1 = r.dx[0];
+  const bkExp = q.expected();
+  r = q.receive('NAME TARO TARO BK');                                  // → 第 2 交換（BK 調）
+  const bk2 = r.dx[0];
+  r = q.receive('PSE AGN BK');                                         // → 繰り返し（3 往復目、識別付き）
+  const bk3 = r.dx[0];
+  const bkAdvice = q.advise();
+  r = q.receive(`R R FB RIG IC-7300 ANT DP 73 ${cb} DE JA1ABC K`);    // K で戻す
+  const back = r.dx[0];
+  out.bk = {
+    first: bk1.text, firstKind: bk1.kind, firstNoPrefix: !bk1.text.startsWith('JA1ABC DE'), firstEndsBk: / BK$/.test(bk1.text),
+    exp: bkExp.text, expEndsBk: / BK$/.test(bkExp.text), expNoPrefix: !bkExp.text.startsWith(cb),
+    second: bk2.text, secondNoPrefix: !bk2.text.startsWith('JA1ABC DE'),
+    third: bk3.text, thirdIdentifies: bk3.text.startsWith(`JA1ABC DE ${cb}`) && / BK$/.test(bk3.text),
+    advice: bkAdvice.some((l) => /BK/.test(l)),
+    back: back.text, backKind: back.kind, backSk: /<SK>$/.test(back.text), bkOff: q.bkMode === false,
+  };
   return out;
 });
 console.log('エンジン:', JSON.stringify(engine).slice(0, 400));
@@ -118,6 +141,13 @@ ok('パイルアップは複数局が同時に呼ぶ', engine.pileup.callers ===
 ok('取り違えたコールはその局が訂正する', engine.partial.kind === 'correct' && engine.partial.from && !engine.partial.dxSet, JSON.stringify(engine.partial));
 ok('正しく取れば交信相手になる', engine.picked.dx && engine.picked.phase === 'ex2', JSON.stringify(engine.picked));
 ok('応答側のパイルアップでは最初は一部しか取ってもらえない', engine.answerPileup.kind === 'partial' && /JA1\?/.test(engine.answerPileup.text) && engine.answerPileup2.kind === 'ex1', JSON.stringify(engine.answerPileup));
+console.log('BK:', JSON.stringify(engine.bk).slice(0, 400));
+ok('BK で締めると相手は前置きなしで BK 締め', engine.bk.firstNoPrefix && engine.bk.firstEndsBk && engine.bk.firstKind === 'nameQuery', engine.bk.first);
+ok('模範解答も BK 調になる', engine.bk.expEndsBk && engine.bk.expNoPrefix, engine.bk.exp);
+ok('2 往復目も BK 調', engine.bk.secondNoPrefix && / BK$/.test(engine.bk.second), engine.bk.second);
+ok('3 往復目は識別を頭に付ける', engine.bk.thirdIdentifies, engine.bk.third);
+ok('相談に BK の説明が出る', engine.bk.advice);
+ok('K で締め直せば通常の型に戻り、締めは <SK>', engine.bk.backKind === 'close' && engine.bk.backSk && engine.bk.bkOff, engine.bk.back);
 ok('相談で状況・模範解答・コツが出る', engine.advice.some((l) => /段階/.test(l)) && engine.advice.some((l) => /次に送る例/.test(l)) && engine.advice.some((l) => /AGN\?/.test(l)), JSON.stringify(engine.advice).slice(0, 160));
 
 // ── 画面から通しで（CQ を出す側） ──────────────────

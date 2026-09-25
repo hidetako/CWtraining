@@ -20,6 +20,26 @@ import { matchCall } from './contest.js';
 const CALLSIGN_RE = /^[A-Z0-9]{1,3}[0-9][A-Z]{1,4}(?:\/[A-Z0-9]{1,3})?$/;
 const RST_RE = /^(?:[1-5][1-9N][1-9N]|5NN)$/;
 
+/** BK 調に直す対象の送信。締め（<SK>）と呼び出し・QRZ? は型のまま。 */
+const BK_KINDS = new Set(['ex1', 'ex2', 'ack', 'rstQuery', 'nameQuery', 'agn', 'correct']);
+
+function editDistance(a, b) {
+  if (a === b) return 0;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+function esc(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /** 相手局の速度の範囲（WPM）。 */
 export const DX_WPM_RANGE = { min: 8, max: 35 };
 
@@ -53,14 +73,21 @@ export function parseSend(text, { myCall = '', dxCalls = [] } = {}) {
   // 相手のコール。呼んでいる相手を、知っている局の中から探す（部分一致も）
   // matchCall は yes / almost / no を返す。コールサインらしい語（数字を含む）
   // だけを候補にして、TNX や NAME のような語を「惜しい」と取り違えない
+  // 「惜しい」局が複数いるときは、いちばん近い（編集距離の小さい）局を取る。
+  // パイルアップで似たコールが並ぶと、先に見つかった別の局が訂正に出てしまう
   let calledCall = '';
   let calledMatch = 'none';
+  let bestDist = Infinity;
   for (const w of words) {
     if (w === 'DE' || w === myCall || !/[0-9]/.test(w)) continue;
+    const typed = w.replace(/\?$/, '');
     for (const c of dxCalls) {
-      const m = matchCall(w.replace(/\?$/, ''), c);
+      const m = matchCall(typed, c);
       if (m === 'yes') { calledCall = c; calledMatch = 'exact'; break; }
-      if (m === 'almost' && !calledCall) { calledCall = c; calledMatch = 'partial'; }
+      if (m === 'almost') {
+        const d = editDistance(typed, c);
+        if (d < bestDist) { bestDist = d; calledCall = c; calledMatch = 'partial'; }
+      }
     }
     if (calledMatch === 'exact') break;
   }
@@ -94,6 +121,7 @@ export function parseSend(text, { myCall = '', dxCalls = [] } = {}) {
     hw: has(/ HW\?? /),
     roger: has(/ R R | R FB | RR /) || /^R\b/.test(t),
     endsK: /(^| )(K|KN|BK)$/.test(t),
+    bk: /(^| )BK$/.test(t),
     seventyThree: has(/ 73 /),
     sk: has(/ (<SK>|SK) /),
     agn: has(/ AGN\?? | PSE AGN | RPT | \? /) || /\?$/.test(t),
@@ -156,6 +184,10 @@ export class MockQso extends EventTarget {
     //       応答する側 … dxCq(相手の CQ) → call → ex1(相手から) → ex2 → close → done
     this.phase = this.mode === 'cq' ? 'myCq' : 'call';
     this.pendingDx = [];      // 次に鳴らす相手の送信
+    // ブレークイン。こちらが BK で締めたら、相手も前置きなしで要点だけを
+    // 返して BK で締める。識別が抜けないよう、数往復に 1 回はコールを付ける
+    this.bkMode = false;
+    this.bkTurns = 0;
   }
 
   /** 交信を始める。応答モードなら相手の CQ が流れる。 */
@@ -187,6 +219,27 @@ export class MockQso extends EventTarget {
    * @returns {{ label: string, text: string, why: string }}
    */
   expected() {
+    const full = this._expectedFull();
+    if (!this.bkMode || !this.dx || !full.text || this.phase === 'close' || this.phase === 'done') return full;
+    // BK で来ているので、こちらも前置きなしの要点だけ。3 往復に 1 回は識別を入れる
+    const me = this.me.callsign;
+    const dx = this.dx.callsign;
+    let t = full.text
+      .replace(new RegExp(`^${esc(dx)} DE ${esc(me)}(?: ${esc(me)})?\\s*=?\\s*`), '')
+      .replace(new RegExp(`\\s*=?\\s*(?:HW\\?\\s*)?${esc(dx)} DE ${esc(me)}\\s*K$`), '')
+      .replace(/\s*(?:HW\?)?\s*K$/, '')
+      .trim();
+    const identify = this.bkTurns % 3 === 0;
+    if (identify) t = `${dx} DE ${me} ${t}`;
+    return {
+      label: `${full.label}（BK 調）`,
+      text: `${t} BK`,
+      why: `相手が BK で返してきたので、前置きなしで要点だけを送り、BK で締めます。${
+        identify ? 'この回は識別（相手 DE 自局）を頭に入れます。' : ''}通常の型に戻すなら K で締めます。`,
+    };
+  }
+
+  _expectedFull() {
     const me = this.me;
     const dx = this.dxCall || '？？？';
     switch (this.phase) {
@@ -266,6 +319,18 @@ export class MockQso extends EventTarget {
     this.pendingDx = [];
     this.turns += 1;
     const fb = { phase: this.phase, got: [], missing: [], notes: [] };
+
+    // BK で締めれば相手も BK 調に、K で締め直せば通常の型に戻る。
+    // 相手がまだ決まっていない（呼んできた局を取る）送信でも受け付ける。
+    // 型に直すのは相手の送信を組み立てるときなので、その時点では決まっている
+    if (p.bk) {
+      if (!this.bkMode) fb.notes.push('BK で締めたので、相手も前置きなしの短いやり取り（BK 調）で返します。数往復に 1 回は識別が入ります。');
+      this.bkMode = true;
+    } else if (p.endsK || p.sk) {
+      if (this.bkMode) fb.notes.push('K で締めたので、通常の型（コール付き）に戻ります。');
+      this.bkMode = false;
+      this.bkTurns = 0;
+    }
 
     // どの段階でも効く、こちらからの頼みごと
     if (p.qrs && this.dx) {
@@ -522,12 +587,35 @@ export class MockQso extends EventTarget {
   }
 
   _repeatLast(fb) {
-    for (const d of this.lastDx) this._dxSend(d.station, d.text, d.kind, { together: d.together, keep: true });
+    // BK 調に直す前の文から作り直す。直した文にもう一度かけると崩れるし、
+    // 繰り返しも 1 回の送信なので識別の数え方は続ける
+    for (const d of this.lastDx) this._dxSend(d.station, d.raw, d.kind, { together: d.together, keep: true });
     if (!this.lastDx.length) fb.notes.push('まだ相手の送信がありません。');
   }
 
+  /**
+   * BK 調に直す。頭の「自局 DE 相手」と、尻の「HW? 自局 DE 相手 K」を落として
+   * BK で締める。3 往復に 1 回は識別（自局 DE 相手）を頭に残す。
+   * 締め（<SK>）と呼び出しの類は対象にしない。
+   */
+  _bkStyle(text, kind) {
+    if (!this.bkMode || !this.dx || !BK_KINDS.has(kind)) return text;
+    const me = this.me.callsign;
+    const dx = this.dx.callsign;
+    let t = text
+      .replace(new RegExp(`^${esc(me)} DE ${esc(dx)}(?: ${esc(dx)})?\\s*=?\\s*`), '')
+      .replace(new RegExp(`\\s*=?\\s*(?:HW\\?\\s*)?${esc(me)} DE ${esc(dx)}\\s*K$`), '')
+      .replace(/\s*(?:HW\?)?\s*K$/, '')
+      .trim();
+    this.bkTurns += 1;
+    if (this.bkTurns % 3 === 0) t = `${me} DE ${dx} ${t}`;   // 3 往復に 1 回は識別
+    return `${t} BK`;
+  }
+
   _dxSend(station, text, kind, { together = false, keep = false } = {}) {
-    const entry = { text, station, wpm: station.wpm, kind, together };
+    const raw = text;
+    text = this._bkStyle(text, kind);
+    const entry = { text, raw, station, wpm: station.wpm, kind, together };
     this.pendingDx.push(entry);
     this.transcript.push({ dir: 'rx', text, station: station.callsign });
     if (!keep) {
@@ -554,6 +642,7 @@ export class MockQso extends EventTarget {
       const got = [h.rst && `RST ${h.rst}`, h.name && `NAME ${h.name}`, h.qth && `QTH ${h.qth}`].filter(Boolean);
       lines.push(got.length ? `相手が受け取った内容: ${got.join('・')}` : '相手はまだレポートを受け取っていません。');
     }
+    if (this.bkMode) lines.push('BK（ブレークイン）でやり取りしています。相手コールも自局コールも付けず、要点だけを打って BK で締めます。数往復に 1 回は識別を入れ、通常の型に戻すときは K で締めます。');
     if (exp.text) lines.push(`次に送る例: ${exp.text}`, exp.why);
     if (info.tip) lines.push(`コツ: ${info.tip}`);
     const q = String(question || '').trim();
