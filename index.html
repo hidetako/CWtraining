@@ -1035,6 +1035,18 @@
       <output id="pw-wpm-out"></output>
     </label>
 
+    <!-- 音の遅れ。スマホでは設定タブまで行かずにここで測れるようにする -->
+    <p class="pw-latency">
+      <button type="button" class="btn btn-ghost" id="btn-pw-latency">音の遅れを測る</button>
+      <span id="pw-latency-out"></span>
+    </p>
+    <!-- 引き出しの高さは決まっているので、たたんだ 1 行だけを足す -->
+    <details class="pw-ios" id="pw-ios-note" hidden>
+      <summary>iPhone / iPad で反応が遅いときは</summary>
+      <p>Chrome や Firefox も中身は Safari で、Web Audio の遅れが Safari 本体より大きいことがあります。
+        <strong>Safari で開く</strong> → <strong>Bluetooth のイヤホンを外す</strong>（AirPods は 150〜250 ms 遅れます）
+        → 上の「音の遅れを測る」で数字を見る、の順に試してください。</p>
+    </details>
     <p class="pw-scope" id="pw-scope"></p>
   </div>
 </aside>

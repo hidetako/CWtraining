@@ -23,10 +23,11 @@ if [ "${1:-}" = "--remote" ]; then
   # 公開中の実ファイルを取り寄せ、それを配信して検証する
   REMOTE="${BASE:?--remote には BASE=公開URL が必要です}"
   ROOT="$(mktemp -d)"
-  mkdir -p "$ROOT/css" "$ROOT/js"
-  # 画面を動かすファイルに加えて、アイコンなど配信されている静的ファイルも取り寄せる。
+  mkdir -p "$ROOT/css" "$ROOT/js" "$ROOT/fonts"
+  # 画面を動かすファイルに加えて、アイコンや字体など配信されている静的ファイルも取り寄せる。
   # これが抜けていると、公開側は正しいのにテストだけ落ちる
-  for f in index.html css/style.css $(ls js/*.js) \
+  # （fonts/ が無くて、公開版ではゼロの補助フォントが当たらない、と誤って出た）
+  for f in index.html css/style.css $(ls js/*.js) $(ls fonts/*.woff2) \
            favicon.svg icon.svg apple-touch-icon.png icon-512.png; do
     curl -fsS -o "$ROOT/$f" "$REMOTE/$f" || { echo "取得失敗: $f"; exit 1; }
   done

@@ -82,8 +82,25 @@ function init() {
 // 打てるようにする。キーボード(Z/X)はパドル送信タブ側の接続が担当するので
 // ここでは繋がない（二重発火防止）。
 
+/** iPhone / iPad か。iPadOS 13 以降は Mac を名乗るので、タッチ点数でも見る。 */
+function isIosWebKit() {
+  const ua = navigator.userAgent || '';
+  return /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 function initPaddleWidget() {
   const padBody = $('#pw-pad');
+
+  // 音の遅れは、スマホでは設定タブまで行かずにパドル欄で測れるようにする
+  $('#btn-pw-latency').addEventListener('click', () => measureAudioLatency($('#pw-latency-out')));
+  // iOS では Chrome/Firefox も WebKit で、音の遅れが Safari より大きいことがある
+  if (isIosWebKit()) $('#pw-ios-note').hidden = false;
+  // 画面に戻ってきたとき、止まっていた音を起こす（iOS は裏に回ると止める）
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && player.ctx && player.ctx.state !== 'running') {
+      player.ctx.resume().catch(() => {});
+    }
+  });
 
   // 最初の操作で側音ラインを開く（AudioContext はユーザー操作が必要）
   const ensureLine = () => { player.openKeyLine(); };
@@ -3657,8 +3674,8 @@ function initGlossary() {
  * プログラムが握っているのは最初の要素の前倒しと立ち上がりだけ。内訳を出す
  * ことで、Bluetooth や音声の加工など、こちらで直せない原因を切り分けられる。
  */
-async function measureAudioLatency() {
-  const out = $('#audio-latency-out');
+async function measureAudioLatency(outEl) {
+  const out = outEl || $('#audio-latency-out');
   out.textContent = '測っています…';
   await player.resume().catch(() => {});
   const ctx = player.ctx;
@@ -3743,7 +3760,7 @@ function initSettings() {
     persist();
   });
 
-  $('#btn-latency').addEventListener('click', measureAudioLatency);
+  $('#btn-latency').addEventListener('click', () => measureAudioLatency());
 
   // 模擬交信で Claude を使う（任意）。キーは設定とは別に、この端末にだけ保存する
   const cEnabled = $('#set-claude-enabled');
@@ -4775,7 +4792,7 @@ window.__cw = {
   MockQso, parseSend, ClaudeAssist, keepsEssentials,  // 模擬交信（自由に打つ）を検証できるように
   sendFree, startFreeQso, armFreeAutoSend,
   get freeState() { return free; },
-  measureAudioLatency,                       // 音の遅れの実測を検証できるように
+  measureAudioLatency, isIosWebKit,          // 音の遅れの実測と iOS の案内を検証できるように
   termCode, termTitle, taskTermsHtml,        // 説明に添える符号を検証できるように
   get hintLines() { return hintBoard.lines.map((l) => ({ ...l })); },
   get settings() { return settings; },

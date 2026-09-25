@@ -126,7 +126,10 @@ export function parseSend(text, { myCall = '', dxCalls = [] } = {}) {
     sk: has(/ (<SK>|SK) /),
     // 聞き返し。HW?（いかがですか）や QRL?/QRZ? は聞き返しではないので、
     // 語で見る: AGN / AGN? / RPT / 単独の ? / RST? NAME? QTH? CALL? NR?
-    agn: words.some((w) => /^(AGN\??|RPT|\?|(RST|NAME|QTH|CALL|NR|PSE)\?)$/.test(w)),
+    // 「GUD CPI AGN」（よく取れた、また）のように、AGN 単独は繰り返しの頼みではない。
+    // 頼みは AGN? / PSE AGN / RPT / 単独の ? / RST? などの形
+    agn: words.some((w, i) => /^(AGN\?|RPT|\?|(RST|NAME|QTH|CALL|NR|PSE)\?)$/.test(w)
+      || (w === 'AGN' && words[i - 1] === 'PSE')),
     qrs: has(/ QRS /),
     qrz: has(/ QRZ\?? /),
     qrl: has(/ QRL\?? /),

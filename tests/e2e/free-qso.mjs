@@ -121,6 +121,16 @@ const engine = await page.evaluate(() => {
   r = q.receive(`${q.dxCall} DE JA1ABC SRI QRL 73 <SK>`);
   out.bare73 = { kind: r.dx[0]?.kind, phase: q.phase };
 
+  // 「GUD CPI AGN」の AGN は繰り返しの頼みではない（公開版の検証で見つかった）
+  q = new MockQso({ me, mode: 'cq', pileup: 'none', reaction: 'normal' });
+  q.start(); q.receive('CQ CQ DE JA1ABC JA1ABC K');
+  const ca = q.callers[0].callsign;
+  q.receive(`${ca} DE JA1ABC UR RST 599 599 NAME TARO QTH TOKYO HW? K`);
+  r = q.receive(`${ca} DE JA1ABC = R R FB GUD CPI AGN = RIG HR IC-7300 ES PWR 50W = ANT DP = TNX FER QSO ES 73 = ${ca} DE JA1ABC K`);
+  out.gudCpiAgn = { phase: q.phase, kind: r.dx[0]?.kind };
+  r = new MockQso({ me, mode: 'cq' });
+  out.pseAgn = { agn: window.__cw.parseSend('SRI QRM PSE AGN K').agn, bare: window.__cw.parseSend('GUD CPI AGN K').agn, q: window.__cw.parseSend('NAME AGN?').agn };
+
   // BK: こちらが BK で締めれば相手も BK 調。3 往復に 1 回は識別。K で戻る。締めは <SK>
   q = new MockQso({ me, mode: 'cq', pileup: 'none', reaction: 'nameQuery' });
   q.start(); q.receive('CQ CQ DE JA1ABC JA1ABC K');
@@ -170,6 +180,8 @@ ok('模範解答どおりなら全部伝わって締めへ（早めの 73 扱い
   && engine.answerEx2.heard.rst && engine.answerEx2.heard.name === 'TARO' && engine.answerEx2.heard.qth === 'TOKYO' && !engine.answerEx2.early && engine.answerEx2.missing.length === 0, JSON.stringify(engine.answerEx2));
 ok('応答側で RST を落とせば 73 があっても聞き返される', engine.answerNoRst.kind === 'rstQuery' && engine.answerNoRst.phase === 'ex2', JSON.stringify(engine.answerNoRst));
 ok('中身の無い 73 <SK> は締めとして受ける', engine.bare73.kind === 'close', JSON.stringify(engine.bare73));
+ok('GUD CPI AGN の AGN では繰り返さず、締めに入る', engine.gudCpiAgn.phase === 'close' && engine.gudCpiAgn.kind === 'close', JSON.stringify(engine.gudCpiAgn));
+ok('PSE AGN と AGN? は頼み、AGN 単独は頼みではない', engine.pseAgn.agn && engine.pseAgn.q && !engine.pseAgn.bare, JSON.stringify(engine.pseAgn));
 console.log('BK:', JSON.stringify(engine.bk).slice(0, 400));
 ok('BK で締めると相手は前置きなしで BK 締め', engine.bk.firstNoPrefix && engine.bk.firstEndsBk && engine.bk.firstKind === 'nameQuery', engine.bk.first);
 ok('模範解答も BK 調になる', engine.bk.expEndsBk && engine.bk.expNoPrefix, engine.bk.exp);
