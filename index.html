@@ -104,6 +104,13 @@
           呼び出しから 73 までを通しで運用する練習です。
         </span>
       </button>
+      <button type="button" class="style-option" data-style="free">
+        <span class="style-name">模擬交信（自由に打つ）</span>
+        <span class="style-desc">
+          台本なし。相手局は、こちらが実際に打った内容に合わせて返事をします。
+          模範解答は出ますが、そのとおりでなくて構いません。迷ったら相談できます。
+        </span>
+      </button>
       <button type="button" class="style-option" data-style="copy">
         <span class="style-name">聞き取り練習</span>
         <span class="style-desc">
@@ -134,6 +141,21 @@
         <select id="qso-reaction"></select>
       </label>
       <button type="button" class="btn btn-primary" id="btn-qso-start">交信開始</button>
+    </div>
+    <div class="field-row" id="free-setup-row" hidden>
+      <label class="field" style="min-width:200px">
+        <span>相手の速度 <output id="free-dxwpm-out">18 WPM</output></span>
+        <input type="range" id="free-dxwpm" min="8" max="35" step="1" value="18">
+      </label>
+      <label class="field">
+        <span>パイルアップ</span>
+        <select id="free-pileup"></select>
+      </label>
+      <label class="field">
+        <span>相手のゆらぎ</span>
+        <select id="free-reaction"></select>
+      </label>
+      <span class="field"><span>Claude</span><output id="free-claude-note">使わない</output></span>
     </div>
     <p class="hint">
       自局のコールサインや名前は「設定・記録」タブで変更できます。
@@ -882,6 +904,35 @@
       初心者モードは受信中も語の意味を表示するため、聞き取りの答えが部分的に見えます。
       実力を試すときはオフにしてください。
     </p>
+  </div>
+
+  <div class="card">
+    <h3>模擬交信で Claude を使う（任意）</h3>
+    <p class="hint">
+      模擬交信（自由に打つ）で、相手局の言い回しに流動性を持たせ、相談に自由文で答えます。
+      使わなくても交信はできます。API キーは<strong>この端末の中にだけ</strong>保存され、
+      要求はブラウザから Anthropic へ直接送ります（記録の書き出しには含めません）。
+      通信に失敗しても交信は止まらず、規則で作った返事に戻ります。
+    </p>
+    <label class="check" style="margin-top:.6rem">
+      <input type="checkbox" id="set-claude-enabled">
+      <span>模擬交信で Claude を使う</span>
+    </label>
+    <div class="field-grid" style="margin-top:.8rem">
+      <label class="field">
+        <span>API キー</span>
+        <input type="password" id="set-claude-key" placeholder="sk-ant-…" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>モデル</span>
+        <select id="set-claude-model"></select>
+      </label>
+      <div class="field">
+        <span>&nbsp;</span>
+        <button class="btn" id="btn-claude-test" type="button">つながるか確かめる</button>
+      </div>
+    </div>
+    <p class="hint" id="claude-test-out"></p>
   </div>
 
   <div class="card">

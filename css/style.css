@@ -2171,3 +2171,36 @@ input[type=datetime-local] {
 /* パドル送信の課題（問題文）は、解読結果と同じ大きさで見比べられるように */
 [data-theme="pc88"] #keyer-task-text { font-size: 1.25rem; line-height: 1.6; }
 [data-theme="pc88"] #keyer-task-text .term { font-size: inherit; }
+
+/* ───────── 模擬交信（自由に打つ） ───────── */
+.free-rx {
+  margin: .6rem 0; padding: .7rem .9rem; border-radius: 8px;
+  background: var(--bg-sunken); border-left: 3px solid var(--rx);
+}
+.free-rx .free-rx-head { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; }
+.free-rx .free-rx-state { color: var(--text-dim); font-size: .82rem; }
+.free-rx .free-rx-state.is-playing { color: var(--rx); }
+.free-rx .free-rx-text { margin-top: .5rem; font-family: var(--mono); letter-spacing: .06em; }
+.free-expected { margin: .6rem 0; }
+.free-expected .annotated { margin-top: .3rem; }
+.free-feedback { margin-top: .6rem; }
+.free-feedback .tag { display: inline-block; margin: .15rem .35rem .15rem 0; padding: .1em .5em; border-radius: 4px; font-size: .82rem; font-family: var(--mono); }
+.free-feedback .tag.got { background: rgba(88, 214, 141, .16); color: var(--ok); }
+.free-feedback .tag.missing { background: rgba(255, 123, 114, .16); color: var(--ng); }
+.free-feedback ul { margin: .4rem 0 0; padding-left: 1.2em; }
+.free-advice {
+  margin-top: .8rem; padding: .7rem .9rem; border-radius: 8px;
+  background: var(--bg-sunken); border-left: 3px solid var(--accent);
+}
+.free-advice p { margin: .25rem 0; }
+.free-advice .answer { white-space: pre-wrap; margin-top: .5rem; }
+.free-advice textarea { width: 100%; min-height: 3.2em; margin-top: .5rem; }
+.src-badge {
+  display: inline-block; padding: 0 .45em; border-radius: 999px; font-size: .72rem;
+  border: 1px solid var(--line); color: var(--text-dim); vertical-align: middle; margin-left: .4rem;
+}
+.src-badge.claude { border-color: var(--accent-dim); color: var(--accent); }
+[data-theme="pc88"] .free-rx, [data-theme="pc88"] .free-advice { border-radius: 0; background: var(--pc-navy); }
+[data-theme="pc88"] .free-feedback .tag.got { background: #003000; color: #00ff00; }
+[data-theme="pc88"] .free-feedback .tag.missing { background: #800000; color: #fff; }
+[data-theme="pc88"] .src-badge { border-radius: 0; }
