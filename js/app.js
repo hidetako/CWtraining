@@ -222,8 +222,11 @@ function syncPaddleWidget() {
   syncRedoLabel();
 
   // パドル送信タブを開いている間は画面全体で受け付ける。
-  // 打面の上までマウスを運ばないと打てないのでは、練習にならない
-  $('#pw-scope').textContent = onKeyerTab
+  // 打面の上までマウスを運ばないと打てないのでは、練習にならない。
+  // ただし指（タッチ）は打面だけ。全画面で受けるとタブも閉じるボタンも
+  // 押せなくなるので、案内もそのように出す
+  const touchOnly = window.matchMedia('(pointer: coarse)').matches;
+  $('#pw-scope').textContent = (onKeyerTab && !touchOnly)
     ? '画面全体でパドル入力を受け付けています（ボタンや入力欄の上を除く）。'
     : 'この枠内はいつでもパドル入力を受け付けます（左半分＝左ボタン扱い）。';
 }
