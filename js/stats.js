@@ -42,6 +42,13 @@ export const DEFAULT_SETTINGS = {
   qsoReaction: 'normal',   // 相手の反応のゆらぎ
   showText: false,      // 送信中に本文を表示するか
   theme: 'default',     // 画面の見た目。'default' | 'pc88'
+
+  // 模擬交信（自由に打つ）
+  freeDxWpm: 18,        // 相手の速度
+  freePileup: 'none',   // 呼んでくる局の数
+  freeReaction: 'random',
+  claudeEnabled: false, // 相手の返事と相談に Claude を使うか（API キーは別に保存）
+  claudeModel: 'claude-opus-5',
   beginnerMode: true,   // Q 符号・略語の解説をリアルタイムで出すか
   copyReveal: false,    // 聞き取り練習で、受信中に相手の送信を画面に出すか
 

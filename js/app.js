@@ -14,6 +14,8 @@ import {
 } from './logbook.js';
 import { CWDecoder, CWDecoderBank } from './decoder.js';
 import { THEMES, applyTheme } from './theme.js';
+import { MockQso, PILEUP_OPTIONS, FREE_REACTIONS, DX_WPM_RANGE, parseSend } from './mockqso.js';
+import { ClaudeAssist, CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL, CLAUDE_KEY_STORAGE, keepsEssentials } from './claudeqso.js';
 import { SupportSession, SerialKeyer, keyTimeline } from './support.js';
 import { DRILL_TYPES, gradeProblem, makeProblem, shouldLevelUp } from './drills.js';
 import {
@@ -450,6 +452,27 @@ function initQso() {
     syncQsoStyle();
   });
 
+  // 模擬交信（自由に打つ）の条件
+  const dxWpm = $('#free-dxwpm');
+  dxWpm.min = String(DX_WPM_RANGE.min); dxWpm.max = String(DX_WPM_RANGE.max);
+  dxWpm.value = String(settings.freeDxWpm);
+  $('#free-dxwpm-out').textContent = `${settings.freeDxWpm} WPM`;
+  dxWpm.addEventListener('input', () => {
+    settings.freeDxWpm = Number(dxWpm.value);
+    $('#free-dxwpm-out').textContent = `${settings.freeDxWpm} WPM`;
+    persist();
+  });
+  const pileupSel = $('#free-pileup');
+  pileupSel.innerHTML = Object.entries(PILEUP_OPTIONS)
+    .map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+  pileupSel.value = PILEUP_OPTIONS[settings.freePileup] ? settings.freePileup : 'none';
+  pileupSel.addEventListener('change', () => { settings.freePileup = pileupSel.value; persist(); });
+  const freeReact = $('#free-reaction');
+  freeReact.innerHTML = Object.entries(FREE_REACTIONS)
+    .map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  freeReact.value = FREE_REACTIONS[settings.freeReaction] ? settings.freeReaction : 'random';
+  freeReact.addEventListener('change', () => { settings.freeReaction = freeReact.value; persist(); });
+
   $('#qso-copy-reveal').addEventListener('change', (e) => {
     settings.copyReveal = e.target.checked; persist();
   });
@@ -519,6 +542,23 @@ function syncQsoStyle() {
   // 受信内容を出すかどうかは、聞き取り練習でしか効かない
   $('#copy-reveal-row').hidden = settings.qsoStyle !== 'copy';
   $('#qso-copy-reveal').checked = settings.copyReveal;
+  // 自由に打つ模擬交信には、台本の長さと反応の代わりに、速度とパイルアップ
+  const free = settings.qsoStyle === 'free';
+  $('#free-setup-row').hidden = !free;
+  $('#qso-length').closest('.field').hidden = free;
+  $('#qso-reaction').closest('.field').hidden = free;
+  syncClaudeNote();
+}
+
+function syncClaudeNote() {
+  const on = settings.claudeEnabled && !!claudeApiKey();
+  $('#free-claude-note').textContent = on
+    ? `使う（${CLAUDE_MODELS[settings.claudeModel] ? settings.claudeModel : DEFAULT_CLAUDE_MODEL}）`
+    : (settings.claudeEnabled ? '使う（API キー未設定）' : '使わない');
+}
+
+function claudeApiKey() {
+  try { return localStorage.getItem(CLAUDE_KEY_STORAGE) || ''; } catch { return ''; }
 }
 
 /** 型の早見表を描く。自局・相手局のコールサインは実際の設定を当てはめる。 */
@@ -557,6 +597,7 @@ function updateMyProfileLine() {
 }
 
 async function startQso() {
+  if (settings.qsoStyle === 'free') return startFreeQso();
   player.stop();
   qso.script = await responder.buildScript(settings, {
     mode: settings.qsoMode,
@@ -578,6 +619,7 @@ async function startQso() {
 
 /** 交信を途中でやめて、開始前の状態に戻す。 */
 function endQso() {
+  if (free.qso) stopFree();
   if (!qso.script) return;
   qso.script = null;
   qso.index = 0;
@@ -875,6 +917,347 @@ function revealDxTurn(turn, box) {
   $('#btn-guide-next').addEventListener('click', () => advanceTurn(turn, { reveal: true }));
 
   if (isTwist) qso.hadTwist = true;
+}
+
+// ───────── 模擬交信（自由に打つ） ─────────
+//
+// 台本は無い。相手局（MockQso）は、こちらが実際に打った内容に反応する。
+// 画面は「相手の送信を聞く → 模範解答を見る（任意）→ 打つ → 送信する」を
+// 繰り返す。迷ったら「相談する」で、状況と次の一手を出す。
+
+const free = {
+  qso: null,          // MockQso
+  claude: null,       // ClaudeAssist（使うときだけ）
+  voices: [],         // 鳴っている相手の音
+  revealed: false,    // 相手の送信内容を画面に出しているか
+  busy: false,        // 相手が送信中（こちらの送信ボタンを止める）
+  lastRx: [],         // 直前の相手の送信（聞き直し用）
+  lastSent: '',
+  sends: 0,
+  complete: 0,        // 要点が全部そろった送信の数
+};
+
+function startFreeQso() {
+  player.stop();
+  stopFree({ keepStage: true });
+  free.qso = new MockQso({
+    me: settings,
+    mode: settings.qsoMode,
+    dxWpm: settings.freeDxWpm,
+    pileup: settings.freePileup,
+    reaction: settings.freeReaction,
+  });
+  free.claude = settings.claudeEnabled && claudeApiKey()
+    ? new ClaudeAssist({ apiKey: claudeApiKey(), model: settings.claudeModel })
+    : null;
+  free.revealed = false;
+  free.sends = 0;
+  free.complete = 0;
+  free.lastRx = [];
+  free.lastSent = '';
+  qso.script = null;
+  player.openKeyLine();
+  keyer.reset();
+
+  $('#qso-stage').hidden = false;
+  $('#qso-log').innerHTML = '';
+  renderFreeTurn();
+  $('#qso-turn').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const first = free.qso.start();
+  if (first.length) playFreeRx(first);
+}
+
+function stopFree({ keepStage = false } = {}) {
+  for (const v of free.voices) v.stop?.();
+  free.voices = [];
+  free.qso = null;
+  free.busy = false;
+  if (!keepStage) {
+    $('#qso-stage').hidden = true;
+    $('#qso-turn').innerHTML = '';
+  }
+  syncRedoLabel();
+}
+
+/**
+ * 相手の送信を鳴らす。together の局は少しずらして重ねる（パイルアップ）。
+ * 鳴り終わるまで「送信する」は押せない。
+ */
+async function playFreeRx(entries) {
+  if (!free.qso) return;
+  free.busy = true;
+  free.lastRx = entries;
+  for (const e of entries) {
+    const el = appendLog({ side: 'dx', text: e.text }, { reveal: free.revealed });
+    if (!free.revealed) $('.body', el).textContent = '（受信）';
+  }
+  // 「相手の送信」の欄も今回の内容に差し替える（伏せたままなら見えない）
+  const rxText = $('#free-rx-text');
+  if (rxText) rxText.innerHTML = freeRxTextHtml();
+  renderFreeRxState('受信中…');
+  $('#btn-free-send')?.setAttribute('disabled', '');
+
+  await player.resume().catch(() => {});
+  let cursor = player.currentTime + 0.4;
+  let endsAt = cursor;
+  for (const e of entries) {
+    const startAt = e.together ? cursor + Math.random() * 0.6 : Math.max(cursor, endsAt + 0.9);
+    const voice = await player.voice(e.text, {
+      bus: 'rx',
+      charWpm: e.wpm,
+      effWpm: e.wpm,
+      freq: settings.freq + (e.station.offset || 0),
+      level: e.station.level ?? 1,
+      startAt,
+    });
+    free.voices.push(voice);
+    endsAt = Math.max(endsAt, voice.endsAt);
+    if (!e.together) cursor = voice.endsAt;
+  }
+  const wait = Math.max(0, (endsAt - player.currentTime) * 1000) + 250;
+  await new Promise((r) => setTimeout(r, wait));
+  if (!free.qso) return;
+  free.busy = false;
+  free.voices = [];
+  renderFreeRxState(free.qso.done ? '交信終了' : 'あなたの番です');
+  $('#btn-free-send')?.removeAttribute('disabled');
+  if (free.qso.done) renderFreeSummary();
+}
+
+function renderFreeRxState(text) {
+  const el = $('#free-rx-state');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('is-playing', text === '受信中…');
+}
+
+function freeRxTextHtml() {
+  if (!free.lastRx.length) return '<span class="hint">まだ相手の送信はありません。</span>';
+  return free.lastRx.map((e) => `<div>${annotateHtml(e.text, escapeHtml)}</div>`).join('');
+}
+
+function renderFreeTurn() {
+  const q = free.qso;
+  if (!q) return;
+  const info = q.phaseInfo;
+  const exp = q.expected();
+  const box = $('#qso-turn');
+  box.innerHTML = `
+    <div class="turn-head">
+      <h3>${escapeHtml(info.title)}</h3>
+      <span class="hint">${q.mode === 'cq' ? '自分から CQ' : '相手の CQ に応答'}・相手 ${q.dxWpm} WPM${
+        q.callers.length > 1 ? `・パイルアップ ${q.callers.length} 局` : ''}</span>
+    </div>
+    <p class="hint" style="margin:.2rem 0">${escapeHtml(info.purpose || '')}</p>
+
+    <div class="free-rx" id="free-rx">
+      <div class="free-rx-head">
+        <strong>相手の送信</strong>
+        <span class="free-rx-state" id="free-rx-state">${free.busy ? '受信中…' : 'あなたの番です'}</span>
+        <button type="button" class="btn btn-ghost" id="btn-free-relisten">もう一度聞く</button>
+        <button type="button" class="btn btn-ghost" id="btn-free-reveal">${free.revealed ? '内容を隠す' : '内容を見る'}</button>
+      </div>
+      <div class="free-rx-text" id="free-rx-text" ${free.revealed ? '' : 'hidden'}>${freeRxTextHtml()}</div>
+    </div>
+
+    <div class="free-expected" id="free-expected">
+      <div class="turn-head">
+        <strong>模範解答: ${escapeHtml(exp.label)}</strong>
+        <span>
+          <button type="button" class="btn btn-ghost" id="btn-free-example">お手本を聞く</button>
+          <button type="button" class="btn btn-ghost" id="btn-free-expected-toggle">隠す</button>
+        </span>
+      </div>
+      <div id="free-expected-body">
+        <div class="annotated">${annotateHtml(exp.text, escapeHtml)}</div>
+        <p class="hint">${escapeHtml(exp.why)} そのとおりでなくて構いません。相手はこちらの内容に合わせて返します。</p>
+      </div>
+    </div>
+
+    <h4>あなたの符号</h4>
+    <div class="live-keyed" id="qso-keyed"><span class="empty hint">パドルで打ち始めてください。</span></div>
+    <div class="turn-actions">
+      <button type="button" class="btn btn-primary" id="btn-free-send" ${free.busy ? 'disabled' : ''}>送信する</button>
+      <button type="button" class="btn btn-ghost" id="btn-free-clear" title="打った符号を消して打ち直す（Esc）">打ち直す</button>
+      <button type="button" class="btn" id="btn-free-advise">相談する</button>
+      <button type="button" class="btn btn-ghost" id="btn-free-end">交信をやめる</button>
+    </div>
+    <div class="free-feedback" id="free-feedback"></div>
+    <div class="free-advice" id="free-advice" hidden></div>`;
+
+  $('#btn-free-relisten').addEventListener('click', () => {
+    if (free.busy || !free.lastRx.length) return;
+    playFreeRx(free.lastRx.map((e) => ({ ...e })));
+  });
+  $('#btn-free-reveal').addEventListener('click', () => {
+    free.revealed = !free.revealed;
+    $('#free-rx-text').hidden = !free.revealed;
+    $('#btn-free-reveal').textContent = free.revealed ? '内容を隠す' : '内容を見る';
+    // ログの伏せ字も合わせる
+    $$('#qso-log .log-entry.rx').forEach((el, i) => {
+      const t = q.transcript.filter((x) => x.dir === 'rx')[i];
+      if (!t) return;
+      el.classList.toggle('is-hidden', !free.revealed);
+      $('.body', el).textContent = free.revealed ? t.text : '（受信）';
+    });
+  });
+  $('#btn-free-example').addEventListener('click', () => {
+    if (!exp.text) return;
+    playText(exp.text.replaceAll('？？？', q.dxCall || 'DX'), null, {
+      freq: settings.keyerFreq, charWpm: settings.keyerWpm, effWpm: settings.keyerWpm,
+      highlightSelector: '#free-expected .annotated',
+    });
+  });
+  $('#btn-free-expected-toggle').addEventListener('click', () => {
+    const body = $('#free-expected-body');
+    body.hidden = !body.hidden;
+    $('#btn-free-expected-toggle').textContent = body.hidden ? '見る' : '隠す';
+  });
+  $('#btn-free-send').addEventListener('click', () => sendFree(keyer.flush()));
+  $('#btn-free-clear').addEventListener('click', redoKeying);
+  $('#btn-free-advise').addEventListener('click', () => showFreeAdvice());
+  $('#btn-free-end').addEventListener('click', () => { player.stop(); endQso(); });
+  openPaddleSheet();
+  queueMicrotask(syncRedoLabel);
+}
+
+/**
+ * 打った内容を相手に送る。相手の返事を組み立てて鳴らし、こちらの送信の
+ * 評価（何が伝わって何が抜けたか）を出す。
+ */
+async function sendFree(text) {
+  const q = free.qso;
+  if (!q || free.busy) return;
+  const sent = String(text || '').trim();
+  if (!sent) {
+    $('#free-feedback').innerHTML = '<p class="hint">まだ何も打っていません。</p>';
+    return;
+  }
+  player.stop();
+  const exp = q.expected();
+  free.lastSent = sent;
+  free.sends += 1;
+  appendLog({ side: 'me', text: sent }, { reveal: true });
+  const { feedback, dx } = q.receive(sent);
+  if (!feedback.missing.length) free.complete += 1;
+  stats = recordKeyPerChar(stats, compareSending(exp.text.replaceAll('？？？', q.dxCall || ''), sent).marks);
+  saveStats(stats);
+  keyer.reset();
+
+  // 相手の返事に流動性を持たせる（Claude を使うとき）。要点は検査して守る
+  if (free.claude) {
+    for (const e of dx) {
+      if (!['ex1', 'ex2', 'close', 'ack'].includes(e.kind)) continue;
+      const r = await Promise.race([
+        free.claude.dxReply({ baseText: e.text, transcript: q.transcript, dx: e.station, me: q.me, phase: q.phase }),
+        new Promise((res) => setTimeout(() => res({ text: e.text, source: 'rule', error: 'timeout' }), 8000)),
+      ]);
+      e.text = r.text;
+      e.source = r.source;
+      if (r.source === 'claude') {
+        const t = q.transcript.findLast((x) => x.dir === 'rx' && x.station === e.station.callsign);
+        if (t) t.text = r.text;
+      }
+    }
+  }
+
+  renderFreeTurn();
+  renderFreeFeedback(feedback, exp, sent, dx);
+  if (dx.length) await playFreeRx(dx);
+  else if (q.done) renderFreeSummary();
+}
+
+function renderFreeFeedback(fb, exp, sent, dx) {
+  const box = $('#free-feedback');
+  if (!box) return;
+  const tags = [
+    ...fb.got.map((g) => `<span class="tag got">✓ ${escapeHtml(g)}</span>`),
+    ...fb.missing.map((m) => `<span class="tag missing">抜け: ${escapeHtml(m)}</span>`),
+  ].join('');
+  const claudeUsed = dx.some((e) => e.source === 'claude');
+  box.innerHTML = `
+    <p><strong>相手が受け取った内容</strong>${claudeUsed ? '<span class="src-badge claude">返事は Claude</span>' : ''}</p>
+    <div>${tags || '<span class="hint">要点は伝わりませんでした。</span>'}</div>
+    ${fb.notes.length ? `<ul class="hint">${fb.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}
+    <details class="more"><summary>模範解答との差分を見る</summary>
+      <p class="hint">そのとおりでなくても構いません。符号の打ち間違いを見るための参考です。</p>
+      ${sendingDiffHtml(exp.text.replaceAll('？？？', free.qso?.dxCall || '？？？'), sent)}
+    </details>`;
+}
+
+/** 相談。規則の答えをまず出し、Claude を使うなら自由文でも聞ける。 */
+async function showFreeAdvice(question = '') {
+  const q = free.qso;
+  const box = $('#free-advice');
+  if (!q || !box) return;
+  const lines = q.advise(question);
+  box.hidden = false;
+  box.innerHTML = `
+    <p><strong>相談</strong>${free.claude ? '' : '<span class="src-badge">規則で答えています</span>'}</p>
+    ${lines.map((l) => `<p>${escapeHtml(l)}</p>`).join('')}
+    ${free.claude ? `
+      <textarea id="free-question" placeholder="例: 名前が聞き取れなかった。どう返す？">${escapeHtml(question)}</textarea>
+      <div class="turn-actions">
+        <button type="button" class="btn btn-primary" id="btn-free-ask">Claude に聞く</button>
+        <button type="button" class="btn btn-ghost" id="btn-free-advice-close">閉じる</button>
+      </div>
+      <div class="answer" id="free-answer"></div>` : `
+      <div class="turn-actions">
+        <button type="button" class="btn btn-ghost" id="btn-free-advice-close">閉じる</button>
+      </div>`}`;
+  $('#btn-free-advice-close').addEventListener('click', () => { box.hidden = true; });
+  const ask = $('#btn-free-ask');
+  if (ask) {
+    ask.addEventListener('click', async () => {
+      const qtext = $('#free-question').value.trim();
+      ask.disabled = true;
+      $('#free-answer').textContent = '考えています…';
+      const r = await free.claude.advise({
+        question: qtext, situation: q.advise(), expected: q.expected().text, transcript: q.transcript,
+      });
+      ask.disabled = false;
+      $('#free-answer').innerHTML = `${escapeHtml(r.text)}${r.source === 'claude'
+        ? '<span class="src-badge claude">Claude</span>'
+        : `<span class="src-badge">規則の答え${r.error ? `（${escapeHtml(r.error)}）` : ''}</span>`}`;
+    });
+  }
+}
+
+function renderFreeSummary() {
+  const q = free.qso;
+  if (!q) return;
+  const box = $('#qso-turn');
+  stats = recordQso(stats, {
+    correct: free.complete, total: free.sends, station: q.dxCall || '?', wpm: settings.keyerWpm,
+  });
+  saveStats(stats);
+  renderStats();
+  box.innerHTML = `
+    <div class="qso-summary">
+      <h3>交信終了 — ${escapeHtml(q.dxCall || '？？？')}</h3>
+      <div class="score">${free.sends ? Math.round((free.complete / free.sends) * 100) : 0}%</div>
+      <p class="hint">${free.sends} 回の送信のうち、要点がそろっていたのは ${free.complete} 回</p>
+      <p class="hint">相手: ${escapeHtml(q.dx?.name || '')} / ${escapeHtml(q.dx?.qth || '')} / もらった RST ${escapeHtml(q.dx?.rstGiven || '')}
+        ${q.heard.rst ? `・送った RST ${escapeHtml(q.heard.rst)}` : ''}</p>
+    </div>
+    <div class="turn-actions" style="justify-content:center">
+      <button type="button" class="btn" id="btn-free-log">ログ帳へ登録</button>
+      <button type="button" class="btn btn-primary" id="btn-free-again">もう一局</button>
+    </div>`;
+  // ログはすべて見せる（交信は終わった）
+  free.revealed = true;
+  $$('#qso-log .log-entry.rx').forEach((el, i) => {
+    const t = q.transcript.filter((x) => x.dir === 'rx')[i];
+    if (!t) return;
+    el.classList.remove('is-hidden');
+    $('.body', el).textContent = t.text;
+  });
+  $('#btn-free-log').addEventListener('click', () => {
+    addLogEntry({ ...q.toLogFields(), freq: '' });
+    $('#btn-free-log').disabled = true;
+    $('#btn-free-log').textContent = '登録しました';
+  });
+  $('#btn-free-again').addEventListener('click', startFreeQso);
 }
 
 // ───────── 実技（パドルで打つ） ─────────
@@ -3300,6 +3683,36 @@ function initSettings() {
 
   $('#btn-latency').addEventListener('click', measureAudioLatency);
 
+  // 模擬交信で Claude を使う（任意）。キーは設定とは別に、この端末にだけ保存する
+  const cEnabled = $('#set-claude-enabled');
+  const cKey = $('#set-claude-key');
+  const cModel = $('#set-claude-model');
+  cModel.innerHTML = Object.entries(CLAUDE_MODELS)
+    .map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  cModel.value = CLAUDE_MODELS[settings.claudeModel] ? settings.claudeModel : DEFAULT_CLAUDE_MODEL;
+  cEnabled.checked = !!settings.claudeEnabled;
+  cKey.value = claudeApiKey();
+  cEnabled.addEventListener('change', () => { settings.claudeEnabled = cEnabled.checked; persist(); syncClaudeNote(); });
+  cModel.addEventListener('change', () => { settings.claudeModel = cModel.value; persist(); syncClaudeNote(); });
+  cKey.addEventListener('change', () => {
+    try {
+      if (cKey.value.trim()) localStorage.setItem(CLAUDE_KEY_STORAGE, cKey.value.trim());
+      else localStorage.removeItem(CLAUDE_KEY_STORAGE);
+    } catch { /* 保存できない環境 */ }
+    syncClaudeNote();
+  });
+  $('#btn-claude-test').addEventListener('click', async () => {
+    const out = $('#claude-test-out');
+    const key = cKey.value.trim();
+    if (!key) { out.textContent = 'API キーを入れてください。'; return; }
+    out.textContent = '確かめています…';
+    const c = new ClaudeAssist({ apiKey: key, model: cModel.value });
+    const r = await c.advise({ question: '一言で、CW の 73 の意味は？', situation: ['接続確認'], expected: '', transcript: [] });
+    out.textContent = r.source === 'claude'
+      ? `つながりました: ${r.text.slice(0, 80)}`
+      : `つながりませんでした: ${r.error || '不明'}`;
+  });
+
   const showText = $('#set-showtext');
   showText.checked = settings.showText;
   showText.addEventListener('change', () => {
@@ -4297,6 +4710,9 @@ window.__cw = {
   KEY_PHRASE_TOPICS, ALL_KEY_PHRASES, ABBREVIATIONS,  // 定型文・語彙を検証できるように
   SYMBOL_ORDER,                              // 記号・プロサインの並びを検証できるように
   THEMES, applyTheme,                        // 見た目の切り替えを検証できるように
+  MockQso, parseSend, ClaudeAssist, keepsEssentials,  // 模擬交信（自由に打つ）を検証できるように
+  sendFree, startFreeQso,
+  get freeState() { return free; },
   measureAudioLatency,                       // 音の遅れの実測を検証できるように
   termCode, termTitle, taskTermsHtml,        // 説明に添える符号を検証できるように
   get hintLines() { return hintBoard.lines.map((l) => ({ ...l })); },
