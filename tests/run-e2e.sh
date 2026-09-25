@@ -41,6 +41,14 @@ else
   suites=(tests/e2e/*.mjs)
 fi
 
+# 既に誰かが同じポートで配信していると、こちらのサーバーは黙って起動に失敗し、
+# 検証は「その誰か」が配信している別のファイルに対して走ってしまう
+# （公開版の検証のつもりで手元の作業中のファイルを見ていた、が実際に起きた）。
+# 使われていたら止める
+if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
+  echo "ポート $PORT は使用中です。別のサーバーを検証してしまうので中止します。" >&2
+  exit 2
+fi
 python3 -m http.server "$PORT" --directory "$ROOT" >/dev/null 2>&1 &
 SERVER=$!
 trap 'kill $SERVER 2>/dev/null' EXIT

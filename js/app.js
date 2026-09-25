@@ -1037,13 +1037,16 @@ function stopFree({ keepStage = false } = {}) {
  * 相手の送信を鳴らす。together の局は少しずらして重ねる（パイルアップ）。
  * 鳴り終わるまで「送信する」は押せない。
  */
-async function playFreeRx(entries) {
+async function playFreeRx(entries, { log = true } = {}) {
   if (!free.qso) return;
   free.busy = true;
   free.lastRx = entries;
-  for (const e of entries) {
-    const el = appendLog({ side: 'dx', text: e.text }, { reveal: free.revealed });
-    if (!free.revealed) $('.body', el).textContent = '（受信）';
+  // 聞き直しは同じ送信をもう一度鳴らすだけなので、ログには足さない
+  if (log) {
+    for (const e of entries) {
+      const el = appendLog({ side: 'dx', text: e.text }, { reveal: free.revealed });
+      if (!free.revealed) $('.body', el).textContent = '（受信）';
+    }
   }
   // 「相手の送信」の欄も今回の内容に差し替える（伏せたままなら見えない）
   const rxText = $('#free-rx-text');
@@ -1144,7 +1147,7 @@ function renderFreeTurn() {
 
   $('#btn-free-relisten').addEventListener('click', () => {
     if (free.busy || !free.lastRx.length) return;
-    playFreeRx(free.lastRx.map((e) => ({ ...e })));
+    playFreeRx(free.lastRx.map((e) => ({ ...e })), { log: false });
   });
   $('#btn-free-reveal').addEventListener('click', () => {
     free.revealed = !free.revealed;
@@ -1199,8 +1202,8 @@ async function sendFree(text) {
   appendLog({ side: 'me', text: sent }, { reveal: true });
   const { feedback, dx } = q.receive(sent);
   if (!feedback.missing.length) free.complete += 1;
-  stats = recordKeyPerChar(stats, compareSending(exp.text.replaceAll('？？？', q.dxCall || ''), sent).marks);
-  saveStats(stats);
+  // 模範解答どおりに打たなくてよいので、模範解答との違いを苦手文字には数えない。
+  // 成績は交信の終わりに、要点がそろった送信の割合として記録する
   keyer.reset();
 
   // 相手の返事に流動性を持たせる（Claude を使うとき）。要点は検査して守る
