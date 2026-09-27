@@ -101,16 +101,16 @@ if (await page.locator('.choice').count()) {
     (await page.textContent('#qso-keyed')).includes('パドルで打ち始めて'));
 }
 
-// パドルウィジェットのクリックでも打てること
-const left = page.locator('#pw-left');
-if (await left.count()) {
-  const b = await left.boundingBox();
+// 打鍵枠が出ている間は画面全体が打面（パソコン）。パドル欄は隠れ、本文のどこでも打てる
+if (await page.locator('#qso-keyed').count()) {
+  ok('打鍵枠が出ている間はパドル欄が隠れる', !(await page.locator('#paddle-widget').isVisible()));
+  const b = await page.locator('#qso-keyed').boundingBox();
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
   await page.mouse.down(); await page.waitForTimeout(30); await page.mouse.up();
   await page.waitForTimeout(700);
   const w = (await page.textContent('#qso-keyed')).trim();
-  console.log('ウィジェット左をクリック:', JSON.stringify(w));
-  ok('ウィジェットからも打てる', w.length > 0 && !w.includes('打ち始めて'), w);
+  console.log('本文の上で左クリック:', JSON.stringify(w));
+  ok('画面全体で打てる', w.length > 0 && !w.includes('打ち始めて'), w);
 }
 await page.screenshot({ path: `${DIR}/k3-widget.png`, fullPage: true });
 

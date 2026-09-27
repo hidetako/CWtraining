@@ -1684,6 +1684,13 @@ input[type=datetime-local] {
   * { transition: none !important; }
 }
 
+/* 交信シミュレータで打つ番（広い画面・マウス）は画面全体が打面なので、
+   パドル欄は出さず本文を全幅にする。狭い画面の引き出しは指の打面なので残す */
+@media (min-width: 761px) and (pointer: fine) {
+  body.is-paddle-global .paddle-rail { display: none; }
+  body.is-paddle-global .app-body { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* ───────── ヘッダー下から常置するパドル欄 ───────── */
 .paddle-rail {
   min-height: 0;

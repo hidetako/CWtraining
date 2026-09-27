@@ -145,6 +145,12 @@ function initPaddleWidget() {
 
   initPaddleSheet();
   syncPaddleWidget();
+
+  // 交信タブで打つ番が来たら（打鍵欄 #qso-keyed が出たら）画面全体を打面にし、
+  // 終わったら戻す。ターンの描き替えはどれも #qso-turn の中身を入れ替えるので、
+  // そこを見ていれば、描く側のどこにも手を入れずに追える
+  new MutationObserver(() => syncPaddleScope())
+    .observe($('#qso-turn'), { childList: true, subtree: true });
 }
 
 // ───────── スマホ用の引き出し ─────────
@@ -305,7 +311,7 @@ function initTabs() {
       // パドル入力は開いているタブでだけ有効にする
       // 交信サポートでも Z / X で打てるようにする（候補を見ながら
       // 自分の電鍵で送るため）。打面のマウス・タッチは常時有効
-      setPaddleActive(tab.dataset.panel === 'keyer' || tab.dataset.panel === 'support');
+      syncPaddleScope();
       // 打つためのタブに来たら、狭い画面では引き出しを開けておく
       if (tab.dataset.panel === 'keyer') openPaddleSheet();
       else setPaddleSheet(false);
@@ -868,9 +874,9 @@ function answerChoice(index, turn, box) {
     <div class="try-keying">
       <h4>パドルで打ってみる<span class="optional">任意</span></h4>
       <p class="hint">
-        上の内容を自分で打てるか試せます。画面右のパドル欄の左右をクリック
-        （パドルを接続していればそのまま打鍵）、またはキーボードの
-        <kbd>Z</kbd>（短点側）/ <kbd>X</kbd>（長点側）で打てます。
+        上の内容を自分で打てるか試せます。この枠が出ている間は画面全体が打面です
+        （左ボタン＝短点側、右ボタン＝長点側。パドルを接続していればそのまま打鍵）。
+        キーボードの <kbd>Z</kbd>（短点側）/ <kbd>X</kbd>（長点側）でも打てます。
         打たずに次へ進んでもかまいません。
       </p>
       <div class="live-keyed" id="qso-keyed"><span class="empty hint">パドルで打ち始めてください。</span></div>
@@ -1360,8 +1366,9 @@ function renderLiveTurn(turn, box) {
     ${info.tip ? `<div class="guide-tip"><strong>ここでのコツ</strong><br>${escapeHtml(info.tip)}</div>` : ''}
     <p class="hint">
       下の内容を、パドルで実際に打って送信してください。
-      画面右のパドル欄の左右をクリック（パドルを接続していればそのまま打鍵）、
-      またはキーボードの <kbd>Z</kbd>（短点側）/ <kbd>X</kbd>（長点側）でも打てます。
+      打つ番のあいだは画面全体が打面です（左ボタン＝短点側、右ボタン＝長点側。
+      パドルを接続していればそのまま打鍵）。
+      キーボードの <kbd>Z</kbd>（短点側）/ <kbd>X</kbd>（長点側）でも打てます。
       <code>=</code> は BT（－…－）、<code>&lt;SK&gt;</code> はプロサインとして続けて打ちます。
     </p>
     <h4>打つ内容</h4>
@@ -2876,6 +2883,7 @@ async function finishContest(score) {
 
 const paddle = {
   detach: null, task: null, elements: '',
+  scope: '',   // 画面全体でパドルを受け付けている場面（paddleScope() の値）
   // 自動採点は 1 回の打鍵につき 1 度だけ。打ち直すまで次は走らせない
   autoGraded: false,
   // 100点＋（間隔まで手本どおり）が出るまでの時間を計る。
@@ -3273,7 +3281,7 @@ function renderKeyedText() {
  * 練習にならないので、切り替えではなく常にこうする。ボタンや入力欄の
  * 上は attachPaddleInput 側で除いてある（押せなくなっては困るため）。
  */
-function setPaddleActive(active) {
+function setPaddleActive(active, { keyboard = true } = {}) {
   if (paddle.detach) { paddle.detach(); paddle.detach = null; }
   if (!active) { keyer.stop(); return; }
 
@@ -3284,12 +3292,46 @@ function setPaddleActive(active) {
   };
 
   // 打面は右のパドル欄が受け持つので、ここで足すのは
-  // キーボード（Z/X）と、全画面モードのときだけマウスも
+  // キーボード（Z/X）と、全画面モードのときだけマウスも。
+  // 交信タブは自前の Z/X を持っているので、そこではキーボードを付けない（二重発火）
   paddle.detach = attachPaddleInput(keyer, document.body, {
     global: true,
     mouse: true,
+    keyboard,
     onState: lamps,
   });
+}
+
+/**
+ * いま、画面全体でパドルを受け付ける場面か。
+ *
+ *   'keyer' / 'support'  そのタブを開いている間（Z/X も込み）
+ *   'qso'                交信シミュレータ（実技・自由に打つ・ガイドの打鍵枠）で
+ *                        打つ番のあいだ。打つ内容を見ながら、その場で打てるように
+ *   ''                   それ以外。打面はパドル欄だけ
+ */
+function paddleScope() {
+  const panel = $('.tab.is-active')?.dataset.panel;
+  if (panel === 'keyer' || panel === 'support') return panel;
+  if (panel === 'qso' && $('#qso-keyed')) return 'qso';
+  return '';
+}
+
+/**
+ * 画面全体のパドル入力を、いまの場面に合わせて付け外しする。
+ * タブを切り替えたときと、交信タブの中身が変わったときに呼ぶ。
+ * 場面が変わっていなければ何もしない（付け直すと打った符号が消える）。
+ *
+ * 全画面で打てるときは、パドル欄そのものは要らない。広い画面では隠して
+ * 本文を全幅にする（CSS 側。狭い画面の引き出しは指の打面なので残す）
+ */
+function syncPaddleScope() {
+  const scope = paddleScope();
+  if (scope !== paddle.scope) {
+    paddle.scope = scope;
+    setPaddleActive(!!scope, { keyboard: scope !== 'qso' });
+  }
+  document.body.classList.toggle('is-paddle-global', scope === 'qso');
 }
 
 /**

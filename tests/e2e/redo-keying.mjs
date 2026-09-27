@@ -15,9 +15,14 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 await page.goto(`${BASE}/index.html`);
 await page.waitForTimeout(600);
 
-/** パドル欄の打面を n 回叩く。毎回打面へ戻す（ボタンを押すと位置がずれるため）。 */
+/**
+ * 打面を n 回叩く。毎回打面へ戻す（ボタンを押すと位置がずれるため）。
+ * 打つ番（パソコンでは画面全体が打面で、パドル欄は隠れる）は本文の打鍵欄の上で、
+ * それ以外はパドル欄の打面で。
+ */
 const key = async (n = 3) => {
-  const b = await page.locator('#pw-left').boundingBox();
+  const target = (await page.locator('#paddle-widget').isVisible()) ? '#pw-left' : '#qso-keyed';
+  const b = await page.locator(target).boundingBox();
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
   for (let i = 0; i < n; i++) {
     await page.mouse.down(); await page.waitForTimeout(40);
@@ -57,38 +62,33 @@ ok('打鍵ターンでは「打ち直す」', (await page.textContent('#pw-clear
 ok('Esc の案内がある', (await page.getAttribute('#pw-clear', 'title') ?? '').includes('Esc'),
   await page.getAttribute('#pw-clear', 'title'));
 
-// ── パドル欄のボタンで打ち直せる ──────────────────
+// ── 打つ番は画面全体が打面。パドル欄は隠れ、本文の「打ち直す」で打ち直す ──
+ok('打つ番はパドル欄が隠れる', !(await page.locator('#paddle-widget').isVisible()));
 await key();
 const first = await keyed();
 console.log('打鍵:', JSON.stringify(first));
 ok('打鍵が入る', first.trim().length > 0, first);
 
-// 本文側のボタンより近いこと
-const dist = await page.evaluate(() => {
-  const c = (s) => { const r = document.querySelector(s).getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; };
-  const d = (a, b) => Math.round(Math.hypot(a.x - b.x, a.y - b.y));
-  const pad = c('#pw-pad');
-  return { rail: d(pad, c('#pw-clear')), panel: d(pad, c('#btn-live-clear')) };
-});
-console.log('打面からの距離:', JSON.stringify(dist));
-ok('パドル欄のほうが近い', dist.rail < dist.panel, JSON.stringify(dist));
+/** いま使う「打ち直す」。打つ番は本文のボタン、パドル欄が見えていればそちら。 */
+const redoBtn = async () => ((await page.locator('#paddle-widget').isVisible()) ? '#pw-clear' : '#btn-live-clear');
 
-await page.click('#pw-clear');
+await page.click(await redoBtn());
 await page.waitForTimeout(300);
-ok('パドル欄のボタンで消える', (await keyed()) === '', JSON.stringify(await keyed()));
+ok('「打ち直す」で消える', (await keyed()) === '', JSON.stringify(await keyed()));
 await page.screenshot({ path: `${DIR}/r1-redo.png` });
 
 // ── Esc で打ち直せる（交信は続く）────────────────
 // ボタンを押した直後は焦点がボタンに残る。マウスやパドルで打ち直しても
 // 焦点は動かないので、その状態でも Esc が効かなければ意味がない
+const redoId = (await redoBtn()).slice(1);
 ok('ボタンに焦点が残っている',
-  await page.evaluate(() => document.activeElement?.id) === 'pw-clear',
+  await page.evaluate(() => document.activeElement?.id) === redoId,
   await page.evaluate(() => document.activeElement?.id));
 await key(2);
 const second = await keyed();
 ok('打ち直したあとも打てる', second.trim().length > 0, second);
 ok('打鍵しても焦点はボタンのまま',
-  await page.evaluate(() => document.activeElement?.id) === 'pw-clear',
+  await page.evaluate(() => document.activeElement?.id) === redoId,
   await page.evaluate(() => document.activeElement?.id));
 await page.keyboard.press('Escape');   // blur せずに押す
 await page.waitForTimeout(300);
@@ -98,7 +98,7 @@ ok('Esc では交信が終わらない', await page.evaluate(() => !!window.__cw
 // Space はボタンの上では譲る（押す操作と衝突するため）
 await page.evaluate(() => { window.__cw.player.stop(); });
 const paused = () => page.evaluate(() => window.__cw.player.paused);
-await page.focus('#pw-clear');
+await page.focus(await redoBtn());
 await page.keyboard.press('Space');
 await page.waitForTimeout(250);
 ok('Space はボタンの上では一時停止に使わない', (await paused()) === false, String(await paused()));
@@ -120,14 +120,14 @@ ok('採点結果が出る', await page.locator('#qso-live-result .big').count() 
 const scores = () => page.evaluate(() => window.__cw.qsoScores);
 ok('採点で点が積まれる', (await scores()).length === 1, JSON.stringify(await scores()));
 
-await page.click('#pw-clear');
+await page.click(await redoBtn());
 await page.waitForTimeout(300);
 ok('打ち直しで採点結果も消える', (await page.textContent('#qso-live-result')).trim() === '');
 ok('打ち直しで点も取り消される', (await scores()).length === 0, JSON.stringify(await scores()));
 ok('採点前の状態に戻る', await page.evaluate(() => window.__cw.qsoTurn !== null));
 
 // 続けて押しても、既に取り消した点より先までは消さない
-await page.click('#pw-clear');
+await page.click(await redoBtn());
 await page.waitForTimeout(200);
 ok('二重の打ち直しで点が減らない', (await scores()).length === 0, JSON.stringify(await scores()));
 
@@ -139,7 +139,7 @@ await page.waitForTimeout(400);
 const carried = (await scores()).length;
 await page.click('#btn-live-next');
 await page.waitForTimeout(1000);
-await page.click('#pw-clear');
+await page.click(await redoBtn());
 await page.waitForTimeout(300);
 ok('ターンをまたぐと点が消えない', carried === 1 && (await scores()).length === 1,
   `${carried} → ${JSON.stringify(await scores())}`);

@@ -59,15 +59,117 @@ export const FREE_REACTIONS = {
   qrs: 'ゆっくり頼まれる',
 };
 
+// ───────── 切れ目の直し ─────────
+//
+// パドルで打つと、文字の間が開きすぎて 1 語が割れたり（CQC Q CQ、JK0 ASS）、
+// 詰まって 2 語がつながったり（NAMETARO、JK0ASSK）する。人が聞けば読めるので、
+// 相手局も読めたことにする。交信で使う語と、この交信で分かっている語
+// （コール・名前・QTH・設備）を語彙にし、空白を無視した並びを語彙の語に
+// 区切り直す。語彙で説明できない部分は、打ったとおりの切れ目を残す。
+
+/** 交信で使う語。 */
+const CW_WORDS = new Set([
+  'CQ', 'DE', 'DX', 'UR', 'RST', 'NAME', 'QTH', 'HR', 'IS', 'ES', 'TNX', 'TKS', 'TU',
+  '73', '88', 'K', 'KN', 'BK', 'SK', 'AR', 'AGN', 'AGN?', 'PSE', 'RPT', 'R', 'FB', 'VFB',
+  'GUD', 'GD', 'CPI', 'CPY', 'RIG', 'ANT', 'PWR', 'WX', 'TEMP', 'HW', 'HW?',
+  'QRM', 'QRN', 'QSB', 'QRS', 'QRZ', 'QRZ?', 'QRL', 'QRL?', 'QSO', 'QRU', 'QSL', 'QRX',
+  'OP', 'OM', 'YL', 'GM', 'GA', 'GE', 'GN', 'GB', 'CUAGN', 'CU', 'CUL', 'BCNU', 'NW', 'SA',
+  'FER', 'FOR', 'NICE', 'MNI', 'VY', 'DR', 'SRI', 'NR', 'RST?', 'NAME?', 'QTH?', 'CALL?',
+  'NR?', 'CALL', '?', '=', '<SK>', '<AR>', '<KN>', 'U', 'HPE', 'HI', 'OK', 'GL', 'ABT',
+  'RPRT', 'UP', 'GND', 'MTRS', 'W', 'WATTS', 'TEST', 'BTU', 'TO', 'AM',
+  ...SOLID_COPY.flatMap((s) => s.split(' ')),
+  ...GLAD_PHRASES.flatMap((s) => s.split(' ')),
+]);
+
+/** 1 語を記号の列にする。<SK> のようなプロサインは 1 つの記号として扱う。 */
+function symbolsOf(word) {
+  return word.match(/<[A-Z]+>|./g) || [];
+}
+
+/**
+ * 語の列を、語彙に沿って区切り直す。
+ *
+ * 空白を取り去った記号の列を、左から語に切っていく動的計画法。
+ * 語彙の語は安く、コールサインらしい語・レポートらしい語はやや高く、
+ * 語彙で説明できない部分は「打ったとおりの 1 語」としてだけ残せる（高い。
+ * 長いほど高い）。打ったとおりの切れ目と違う切り方には少しだけ料金を乗せ、
+ * 同点なら打ったとおりを取る。
+ *
+ * @param {string[]} words   打ったとおりの語
+ * @param {Set<string>} vocab 語彙（CW_WORDS ＋ この交信で分かっている語）
+ * @param {string[]} calls   知っているコール。打ち損じたコールを拾うのに使う
+ * @returns {string[]} 区切り直した語
+ */
+export function resegment(words, vocab, calls = []) {
+  const syms = [];
+  const bounds = new Set([0]);         // 打ったとおりの語の切れ目（記号の位置）
+  for (const w of words) {
+    syms.push(...symbolsOf(w));
+    bounds.add(syms.length);
+  }
+  const n = syms.length;
+  if (!n) return [];
+
+  let maxLen = 12;
+  for (const v of vocab) maxLen = Math.max(maxLen, symbolsOf(v).length);
+
+  const best = new Array(n + 1).fill(null);
+  best[0] = { cost: 0, prev: -1 };
+  for (let i = 1; i <= n; i++) {
+    for (let j = Math.max(0, i - maxLen); j < i; j++) {
+      if (!best[j]) continue;
+      const tok = syms.slice(j, i).join('');
+      let cost;
+      let crosses = 0;
+      for (let k = j + 1; k < i; k++) if (bounds.has(k)) crosses += 1;
+      if (vocab.has(tok)) cost = 1;
+      else if (RST_RE.test(tok)) cost = 1.3;
+      // 知っているコールに近い（打ち損じた）語は、割れていてもコールとして拾う。
+      // 打ったとおりの語をつなげる形だけ（語の途中では切らない。DE JA1ABC が
+      // まるごと 1 コールに見えないよう、語彙 2 語より高く）
+      else if (bounds.has(j) && bounds.has(i) && calls.some((c) => editDistance(tok, c) <= 2)) cost = 2.3;
+      // コールサインらしい語。語彙 2 語（UR 599 など）と取り違えないよう、それより高く。
+      // 打ったとおりの 1 語（下）よりは安く、知らないコールもコールとして残す。
+      // ただし切れ目をまたいでは作らない（R 5NN K が R5NNK になる）
+      else if (CALLSIGN_RE.test(tok) && !crosses) cost = 2.6;
+      else {
+        // 語彙で読めない部分は、打ったとおりの 1 語のときだけ残せる
+        if (crosses || !bounds.has(j) || !bounds.has(i)) continue;
+        cost = 2 + 0.5 * (i - j);
+      }
+      // 打ったとおりの切れ目と違う分だけ、少し足す
+      if (!bounds.has(i)) cost += 0.05;
+      cost += 0.05 * crosses;
+      const total = best[j].cost + cost;
+      if (!best[i] || total < best[i].cost) best[i] = { cost: total, prev: j };
+    }
+  }
+
+  const out = [];
+  for (let i = n; i > 0; i = best[i].prev) out.unshift(syms.slice(best[i].prev, i).join(''));
+  return out;
+}
+
 /**
  * こちらの送信を読み解く。相手局が「何を受け取ったか」を決める材料。
  * 空白なし・小文字・全角で打たれていても読めるよう、まず正規化する。
+ * 語の切れ目が崩れていても（CQC Q CQ、NAMETARO）、判読できれば読む。
+ *
+ * @param {object} opts
+ *   myCall   自局のコール
+ *   dxCalls  相手になりうる局のコール
+ *   vocab    この交信で分かっている語（名前・QTH・設備など）。切れ目の直しに使う
  */
-export function parseSend(text, { myCall = '', dxCalls = [] } = {}) {
+export function parseSend(text, { myCall = '', dxCalls = [], vocab = [] } = {}) {
   const raw = normalizeTyped(text).toUpperCase().replace(/\s+/g, ' ').trim();
   // <BT> は = と同じ。読みやすさのため = にそろえる
-  const t = raw.replaceAll('<BT>', '=');
-  const words = t.split(' ').filter(Boolean);
+  const typed = raw.replaceAll('<BT>', '=');
+  const known = new Set(CW_WORDS);
+  for (const v of [myCall, ...dxCalls, ...vocab]) {
+    for (const w of String(v || '').toUpperCase().split(/\s+/)) if (w) known.add(w);
+  }
+  const words = resegment(typed.split(' ').filter(Boolean), known, [myCall, ...dxCalls].filter(Boolean));
+  const t = words.join(' ');
   const has = (re) => re.test(` ${t} `);
 
   // 相手のコール。呼んでいる相手を、知っている局の中から探す（部分一致も）
@@ -110,6 +212,8 @@ export function parseSend(text, { myCall = '', dxCalls = [] } = {}) {
 
   return {
     text: t,
+    typed,                          // 打ったとおり（切れ目を直す前）
+    resegmented: t !== typed,       // 切れ目を直して読んだか
     words,
     cq: has(/ CQ /),
     calledCall, calledMatch,
@@ -322,11 +426,15 @@ export class MockQso extends EventTarget {
   receive(text) {
     if (this.done) return { feedback: { notes: ['交信は終わっています。'] }, dx: [] };
     const known = this.dx ? [this.dx.callsign] : this.callers.map((c) => c.callsign);
-    const p = parseSend(text, { myCall: this.me.callsign, dxCalls: known });
+    // 切れ目の直しに使う、この交信で分かっている語。自局の情報と、相手（候補）の情報
+    const stations = [this.me, ...(this.dx ? [this.dx] : this.callers)];
+    const vocab = stations.flatMap((s) => [s.name, s.qth, s.rig, s.pwr, s.ant, s.wx, s.temp]);
+    const p = parseSend(text, { myCall: this.me.callsign, dxCalls: known, vocab });
     this.transcript.push({ dir: 'tx', text: p.text });
     this.pendingDx = [];
     this.turns += 1;
     const fb = { phase: this.phase, got: [], missing: [], notes: [] };
+    if (p.resegmented) fb.notes.push(`語の切れ目がずれていましたが、そのまま読みました: 「${p.typed}」→「${p.text}」`);
 
     // BK で締めれば相手も BK 調に、K で締め直せば通常の型に戻る。
     // 相手がまだ決まっていない（呼んできた局を取る）送信でも受け付ける。

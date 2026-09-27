@@ -131,6 +131,31 @@ const engine = await page.evaluate(() => {
   r = new MockQso({ me, mode: 'cq' });
   out.pseAgn = { agn: window.__cw.parseSend('SRI QRM PSE AGN K').agn, bare: window.__cw.parseSend('GUD CPI AGN K').agn, q: window.__cw.parseSend('NAME AGN?').agn };
 
+  // 語の切れ目が崩れていても（開きすぎ・詰まりすぎ）、判読できればそのまま読む
+  const ps = (t, o = {}) => window.__cw.parseSend(t, { myCall: 'JA1ABC', dxCalls: ['JK0ASS'], vocab: ['TARO', 'TOKYO'], ...o });
+  out.reseg = {
+    split: ps('CQC Q CQ DE JA1 ABC JA1ABC K'),
+    jammed: ps('CQCQCQ DE JA1ABC K'),
+    callSplit: ps('JK0 ASS DE JA1ABC K'),
+    callTypoSplit: ps('JK0 ASD DE JA1ABC K'),
+    jammedAll: ps('JK0ASSDE JA1ABC URRST 599599 NAMETARO QTHTOKYO HW? K'),
+    tailK: ps('JA1ABCK'),
+    keepRst: ps('R 5NN K'),
+    keepDe: ps('UR 599 DE JA1ABC K'),
+    unknownKept: ps('NAME KENJI QTH SAPPORO K'),
+    intact: ps('R R FB TARO GUD CPI AGN = TNX FER QSO ES 73 = JK0ASS DE JA1ABC K'),
+  };
+  // 相手局もそのまま読んで応じる
+  q = new MockQso({ me: { ...me, name: 'TARO', qth: 'TOKYO' }, mode: 'cq', pileup: 'none', reaction: 'normal' });
+  q.start();
+  r = q.receive('CQC Q CQ DE JA1 ABC JA1ABC K');
+  const cs = q.callers[0].callsign;
+  out.resegFlow = { afterCq: q.phase, note: r.feedback.notes.find((n) => /切れ目/.test(n)) || '' };
+  r = q.receive(`${cs.slice(0, 3)} ${cs.slice(3)} DE JA1ABC URRST 599 599 NAMETARO QTHTOKYO HW? K`);
+  out.resegFlow.afterEx1 = q.phase;
+  out.resegFlow.got = r.feedback.got;
+  out.resegFlow.missing = r.feedback.missing;
+
   // BK: こちらが BK で締めれば相手も BK 調。3 往復に 1 回は識別。K で戻る。締めは <SK>
   q = new MockQso({ me, mode: 'cq', pileup: 'none', reaction: 'nameQuery' });
   q.start(); q.receive('CQ CQ DE JA1ABC JA1ABC K');
@@ -182,6 +207,20 @@ ok('応答側で RST を落とせば 73 があっても聞き返される', engi
 ok('中身の無い 73 <SK> は締めとして受ける', engine.bare73.kind === 'close', JSON.stringify(engine.bare73));
 ok('GUD CPI AGN の AGN では繰り返さず、締めに入る', engine.gudCpiAgn.phase === 'close' && engine.gudCpiAgn.kind === 'close', JSON.stringify(engine.gudCpiAgn));
 ok('PSE AGN と AGN? は頼み、AGN 単独は頼みではない', engine.pseAgn.agn && engine.pseAgn.q && !engine.pseAgn.bare, JSON.stringify(engine.pseAgn));
+const rs = engine.reseg;
+console.log('切れ目:', Object.fromEntries(Object.entries(rs).map(([k, v]) => [k, v.text])));
+ok('開きすぎ（CQC Q CQ / JA1 ABC）をそのまま読む', rs.split.text === 'CQ CQ CQ DE JA1ABC JA1ABC K' && rs.split.resegmented && rs.split.saidMyCall, rs.split.text);
+ok('詰まりすぎ（CQCQCQ）をそのまま読む', rs.jammed.text === 'CQ CQ CQ DE JA1ABC K' && rs.jammed.cq, rs.jammed.text);
+ok('割れたコール（JK0 ASS）を相手のコールとして読む', rs.callSplit.calledCall === 'JK0ASS' && rs.callSplit.calledMatch === 'exact', rs.callSplit.text);
+ok('割れて打ち損じたコール（JK0 ASD）も惜しいコールとして拾う', rs.callTypoSplit.text.startsWith('JK0ASD DE') && rs.callTypoSplit.calledMatch === 'partial', rs.callTypoSplit.text);
+ok('全部詰まっていても要点を読む', rs.jammedAll.calledCall === 'JK0ASS' && rs.jammedAll.rst === '599' && rs.jammedAll.name === 'TARO' && rs.jammedAll.qth === 'TOKYO' && rs.jammedAll.endsK, rs.jammedAll.text);
+ok('コールに K が付いても締めと読む', rs.tailK.text === 'JA1ABC K' && rs.tailK.endsK, rs.tailK.text);
+ok('R 5NN K をコールと取り違えない', rs.keepRst.text === 'R 5NN K' && !rs.keepRst.resegmented, rs.keepRst.text);
+ok('UR 599 DE JA1ABC K は手を付けない', !rs.keepDe.resegmented && rs.keepDe.rst === '599', rs.keepDe.text);
+ok('知らない語は打ったとおり残す', !rs.unknownKept.resegmented && rs.unknownKept.name === 'KENJI' && rs.unknownKept.qth === 'SAPPORO', rs.unknownKept.text);
+ok('正しく打った文は変えない', !rs.intact.resegmented, rs.intact.text);
+ok('相手局も切れ目のずれた CQ に応じ、ずれを知らせる', engine.resegFlow.afterCq === 'pickup' && /そのまま読みました/.test(engine.resegFlow.note), JSON.stringify(engine.resegFlow));
+ok('割れたコールと詰まった交換でも要点がそろう', engine.resegFlow.afterEx1 === 'ex2' && engine.resegFlow.missing.length === 0 && engine.resegFlow.got.length >= 4, JSON.stringify(engine.resegFlow));
 console.log('BK:', JSON.stringify(engine.bk).slice(0, 400));
 ok('BK で締めると相手は前置きなしで BK 締め', engine.bk.firstNoPrefix && engine.bk.firstEndsBk && engine.bk.firstKind === 'nameQuery', engine.bk.first);
 ok('模範解答も BK 調になる', engine.bk.expEndsBk && engine.bk.expNoPrefix, engine.bk.exp);
