@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS = {
   callsign: 'JA1ABC',
   name: 'TARO',
   qth: 'TOKYO',
+  jcc: '',              // 自局の JCC / JCG 番号（任意。移動運用先で現在地から決められる）
   rig: 'IC-7300',
   pwr: '50W',
   ant: 'DP',

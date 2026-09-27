@@ -831,11 +831,22 @@
       <label class="field"><span>コールサイン</span><input type="text" id="set-callsign" autocapitalize="characters"></label>
       <label class="field"><span>名前 (NAME)</span><input type="text" id="set-name" autocapitalize="characters"></label>
       <label class="field"><span>QTH</span><input type="text" id="set-qth" autocapitalize="characters"></label>
+      <label class="field"><span>JCC / JCG（任意）</span><input type="text" id="set-jcc" inputmode="numeric"></label>
       <label class="field"><span>リグ (RIG)</span><input type="text" id="set-rig" autocapitalize="characters"></label>
       <label class="field"><span>出力 (PWR)</span><input type="text" id="set-pwr" autocapitalize="characters"></label>
       <label class="field"><span>アンテナ (ANT)</span><input type="text" id="set-ant" autocapitalize="characters"></label>
       <label class="field"><span>天気 (WX)</span><input type="text" id="set-wx" autocapitalize="characters"></label>
     </div>
+    <!-- 自局の所在。移動運用のときは現在地から、ふだんは名前や番号の検索から決められる -->
+    <p class="hint" style="margin-top:.8rem">所在は、現在地からも決められます（移動運用のときに）。
+      選ぶと QTH にローマ字（例: SAPPORO）、JCC / JCG に番号が入ります。名前や番号で探すこともできます。</p>
+    <div class="field-row">
+      <input type="search" id="set-qth-query" placeholder="0101 / 札幌 / Sapporo" style="flex:1;min-width:180px">
+      <button type="button" class="btn" id="btn-set-qth-here">現在地から設定</button>
+    </div>
+    <p class="hint" id="set-qth-here-note" hidden></p>
+    <div id="set-qth-hits" class="jcc-results"></div>
+    <p class="hint jcc-picked" id="set-qth-picked" hidden></p>
   </div>
 
   <div class="card">

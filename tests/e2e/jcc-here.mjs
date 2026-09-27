@@ -73,8 +73,48 @@ for (const [label, opts] of [
   }));
   ok(`${label}: 選び直すと置き換わる`, second.jcc !== first.jcc && second.selected === second.jcc && second.count === 1, JSON.stringify(second));
 
+  // ═══════════════ 設定: 自局の所在を現在地から決める ═══════════════
+  await page.click('.tab[data-panel="settings"]');
+  await page.waitForTimeout(300);
+  await tap('#btn-set-qth-here');
+  await page.waitForTimeout(1200);
+  const mineHits = await page.locator('#set-qth-hits .jcc-hit').count();
+  ok(`${label}: 設定でも現在地から候補が出る`, mineHits >= 3, String(mineHits));
+  await tap('#set-qth-hits .jcc-hit');
+  const mine = await page.evaluate(() => ({
+    qth: window.__cw.settings.qth, jcc: window.__cw.settings.jcc,
+    qthField: document.querySelector('#set-qth').value, jccField: document.querySelector('#set-jcc').value,
+    profile: document.querySelector('#qso-myprofile').textContent,
+    saved: JSON.parse(localStorage.getItem('cwtraining.settings.v1') || '{}'),
+    picked: document.querySelector('#set-qth-picked').hidden ? '' : document.querySelector('#set-qth-picked').textContent,
+    selected: document.querySelector('#set-qth-hits .jcc-hit.is-selected')?.dataset.code,
+  }));
+  console.log(`${label} 自局の所在:`, JSON.stringify({ ...mine, saved: undefined }));
+  ok(`${label}: 東京の区を選ぶと自局 QTH は TOKYO`, mine.qth === 'TOKYO' && mine.qthField === 'TOKYO', mine.qth);
+  ok(`${label}: 自局の JCC に区の番号が入る`, /^1001\d\d$/.test(mine.jcc) && mine.jccField === mine.jcc, mine.jcc);
+  ok(`${label}: 自局情報の行に JCC が添えられる`, mine.profile.includes(`TOKYO / JCC ${mine.jcc}`), mine.profile);
+  ok(`${label}: 設定として保存される`, mine.saved.qth === 'TOKYO' && mine.saved.jcc === mine.jcc, JSON.stringify({ qth: mine.saved.qth, jcc: mine.saved.jcc }));
+  ok(`${label}: 何にしたかがその場に出る`, /TOKYO/.test(mine.picked) && mine.picked.includes(mine.jcc) && mine.selected === mine.jcc, mine.picked);
+
+  // 名前・番号の検索からも決められる（帰宅したら自宅の市に戻す、など）
+  await page.fill('#set-qth-query', '010101');
+  await page.waitForTimeout(300);
+  await tap('#set-qth-hits .jcc-hit');
+  const home = await page.evaluate(() => ({ qth: window.__cw.settings.qth, jcc: window.__cw.settings.jcc }));
+  ok(`${label}: 検索から札幌市中央区を選ぶと QTH は SAPPORO（区は市の名）`, home.qth === 'SAPPORO' && home.jcc === '010101', JSON.stringify(home));
+  await page.screenshot({ path: `${DIR}/jcc-mine-${label}.png` });
+
   await ctx.close();
 }
+
+// CW で送る QTH の作り方
+const cwPage = await browser.newPage();
+await cwPage.goto(`${BASE}/index.html`);
+await cwPage.waitForTimeout(400);
+const cw = await cwPage.evaluate(() => ['0101', '010101', '100102', '1001', '01001', '430103', '2701', '01', '9999'].map((c) => window.__cw.jccCwQth(c)));
+console.log('CW の QTH:', JSON.stringify(cw));
+ok('市・区・郡のローマ字が大文字で出る', JSON.stringify(cw) === JSON.stringify(['SAPPORO', 'SAPPORO', 'TOKYO', 'TOKYO', 'AKAN', 'KUMAMOTO', 'KOBE', '', '']), JSON.stringify(cw));
+await cwPage.close();
 
 await browser.close();
 console.log('\n失敗:', fails.length ? fails.join(' / ') : 'なし');
