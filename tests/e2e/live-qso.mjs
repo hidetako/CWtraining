@@ -64,9 +64,10 @@ console.log('実技 第1ターン:', (await page.textContent('.phase-banner')).r
 console.log('打つ内容表示:', await page.locator('#panel-qso .annotated').count() >= 1);
 console.log('打鍵欄:', await page.locator('#qso-keyed').count() === 1);
 
-// ウィジェットで数要素打つ（QSOタブで！）
-const pw2 = await page.locator('#pw-pad').boundingBox();
-await page.mouse.move(pw2.x + pw2.width*0.25, pw2.y + pw2.height/2);
+// 打つ番は画面全体が打面（パソコン）。パドル欄は隠れるので、本文の打鍵欄の上で打つ
+console.log('打つ番はパドル欄が隠れる:', !(await page.locator('#paddle-widget').isVisible()));
+const kb = await page.locator('#qso-keyed').boundingBox();
+await page.mouse.move(kb.x + kb.width/2, kb.y + kb.height/2);
 await page.mouse.down({button:'left'}); await page.waitForTimeout(200); await page.mouse.up({button:'left'});
 await page.waitForTimeout(600);
 const keyed = await page.textContent('#qso-keyed');
