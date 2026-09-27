@@ -4612,10 +4612,38 @@ function renderJccHits(hits, box) {
         <span>${escapeHtml(jccQth(w.code) || w.name)}</span>
         <span class="kind">区</span>
       </button>`).join('')}`).join('');
-  $$('.jcc-hit', box).forEach((btn) => btn.addEventListener('click', () => {
-    $('#log-jcc').value = btn.dataset.code;
-    $('#log-qth').value = jccQth(btn.dataset.code);
-  }));
+  $$('.jcc-hit', box).forEach((btn) => btn.addEventListener('click', () => pickJcc(btn, box)));
+}
+
+/**
+ * 検索結果を選んだ。登録フォームの JCC 欄と QTH 欄に入れる。
+ *
+ * 入れただけでは、狭い画面では登録フォームが上に隠れていて何も起きなかった
+ * ように見える。選んだ項目に印を付け、入れた内容をその場に書き、フォームの
+ * 欄が画面外なら見える所まで寄せて、欄そのものも一瞬光らせる
+ */
+function pickJcc(btn, box) {
+  const code = btn.dataset.code;
+  const qth = jccQth(code) || btn.querySelector('span:nth-child(2)')?.textContent || '';
+  const jccField = $('#log-jcc');
+  const qthField = $('#log-qth');
+  jccField.value = code;
+  qthField.value = qth;
+  $$('.jcc-hit', box).forEach((b) => b.classList.toggle('is-selected', b === btn));
+
+  const note = $('#jcc-picked');
+  note.hidden = false;
+  note.innerHTML = `登録フォームに入れました: JCC / JCG <strong>${escapeHtml(code)}</strong>、QTH <strong>${escapeHtml(qth)}</strong>`;
+
+  for (const el of [jccField, qthField]) {
+    el.classList.remove('is-flash');
+    void el.offsetWidth;   // クラスを付け直してアニメーションをやり直す
+    el.classList.add('is-flash');
+  }
+  const r = jccField.getBoundingClientRect();
+  if (r.top < 0 || r.bottom > window.innerHeight) {
+    jccField.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
 }
 
 /** 現在地（ブラウザの位置情報）に近い市郡を出す。 */

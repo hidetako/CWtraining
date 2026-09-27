@@ -1571,6 +1571,15 @@ input[type=datetime-local] {
   font-family: inherit; text-align: left;
 }
 .jcc-results .jcc-hit:hover { border-color: var(--accent-dim); }
+/* 選んだ項目。選んだことがその場で分かるように */
+.jcc-results .jcc-hit.is-selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.jcc-picked { margin: .5rem 0 0; color: var(--text); }
+/* 検索結果を選んで入った欄を一瞬光らせる。フォームが視界の端にあっても目に入るように */
+.field input.is-flash { animation: field-flash 1.2s ease-out; }
+@keyframes field-flash {
+  0% { box-shadow: 0 0 0 3px var(--accent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
 .jcc-results .jcc-hit .code { font-family: var(--mono); color: var(--accent); min-width: 4.5em; }
 .jcc-results .jcc-hit .kind { font-size: .7rem; color: var(--text-dim); margin-left: auto; }
 .jcc-results .jcc-hit .gone { color: var(--ng); font-size: .7rem; }
