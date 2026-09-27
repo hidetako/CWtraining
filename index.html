@@ -465,11 +465,12 @@
     </div>
   </div>
 
-  <div class="card">
-    <h3>課題</h3>
+  <!-- 課題と解読結果は 1 枚に。手本と打った符号を上下で見比べるものなので、
+       カードを分けて見出しと余白を挟むと、間延びして目が往復する -->
+  <div class="card keyer-work">
     <div class="field-row">
       <label class="field">
-        <span>種類</span>
+        <span>課題</span>
         <select id="keyer-task-type">
           <option value="free">自由練習（手本なし）</option>
           <option value="callsign">コールサイン</option>
@@ -489,10 +490,7 @@
     </div>
     <div class="tx-preview" id="keyer-task-text">自由練習モードです。好きな符号を打ってください。</div>
     <div class="task-terms" id="keyer-task-terms"></div>
-  </div>
-
-  <div class="card">
-    <h3>解読結果</h3>
+    <div class="keyer-sub">解読結果</div>
     <div class="keyed-text" id="keyer-decoded"><span class="empty">まだ何も打っていません。</span></div>
     <div class="turn-actions">
       <button type="button" class="btn btn-primary" id="btn-keyer-grade">採点する</button>
