@@ -71,6 +71,27 @@ export function jccQth(code) {
 }
 
 /**
+ * 番号を、CW で送る QTH（ローマ字・大文字）にする。自局の所在を現在地から
+ * 決めるときに使う。
+ *
+ *   0101   → SAPPORO
+ *   010101 → SAPPORO   （区は市の名で送るのが普通。区のローマ字は「Chuo」だけ）
+ *   100102 → TOKYO     （東京 23 区の区も TOKYO）
+ *   01001  → AKAN      （郡）
+ *
+ * ローマ字を持たない項目（都道府県）は空を返す。
+ */
+export function jccCwQth(code) {
+  const by = jccByCodeMap();
+  let entry = by.get(String(code || ''));
+  if (!entry) return '';
+  if (entry.kind === '区') entry = by.get(entry.code.slice(0, 4)) || entry;
+  let roman = entry.roman || '';
+  if (/^tokyo/i.test(roman)) roman = 'Tokyo';
+  return roman.toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/**
  * 番号または名前で引く。番号は前方一致、名前・ローマ字は部分一致。
  * 「さっぽろ」のような読みは持っていないので、漢字かローマ字で。
  *

@@ -9,7 +9,7 @@ import {
 import { annotateHtml, createTracker, explainText, lookupTerm, termCode, termTitle } from './explain.js';
 import {
   loadLogbook, saveLogbook, newEntry, bandFromFreq, BAND_LABELS,
-  jccSearch, jccQth, nearestJcc, searchLog, history as logHistory, logStats,
+  jccSearch, jccQth, jccCwQth, nearestJcc, searchLog, history as logHistory, logStats,
   toAdif, fromAdif, toCsv, fromCsv,
 } from './logbook.js';
 import { CWDecoder, CWDecoderBank } from './decoder.js';
@@ -630,8 +630,9 @@ function renderPatternSheet() {
 }
 
 function updateMyProfileLine() {
+  const jcc = settings.jcc ? ` / ${settings.jcc.length === 5 ? 'JCG' : 'JCC'} ${settings.jcc}` : '';
   $('#qso-myprofile').textContent =
-    `${settings.callsign} / ${settings.name} / ${settings.qth}`;
+    `${settings.callsign} / ${settings.name} / ${settings.qth}${jcc}`;
 }
 
 async function startQso() {
@@ -3748,17 +3749,52 @@ async function measureAudioLatency(outEl) {
 }
 
 function initSettings() {
-  const textFields = ['callsign', 'name', 'qth', 'rig', 'pwr', 'ant', 'wx'];
+  const textFields = ['callsign', 'name', 'qth', 'jcc', 'rig', 'pwr', 'ant', 'wx'];
   textFields.forEach((key) => {
     const el = $(`#set-${key}`);
-    el.value = settings[key];
+    el.value = settings[key] ?? '';
     el.addEventListener('input', () => {
-      settings[key] = el.value.toUpperCase();
+      settings[key] = el.value.toUpperCase().trim();
       persist();
       updateMyProfileLine();
       // 早見表の例文にも自局のコールサインを反映する
       if (key === 'callsign') renderPatternSheet();
     });
+  });
+
+  // 自局の所在。移動運用を踏まえて、現在地（または名前・番号の検索）から決められる。
+  // 選ぶと QTH には CW で送るローマ字、JCC / JCG には番号が入る
+  const qthBox = $('#set-qth-hits');
+  const pickMyQth = (btn) => {
+    const code = btn.dataset.code;
+    const cw = jccCwQth(code);
+    if (cw) { settings.qth = cw; $('#set-qth').value = cw; }
+    settings.jcc = code;
+    $('#set-jcc').value = code;
+    persist();
+    updateMyProfileLine();
+    $$('.jcc-hit', qthBox).forEach((b) => b.classList.toggle('is-selected', b === btn));
+    const note = $('#set-qth-picked');
+    note.hidden = false;
+    note.innerHTML = cw
+      ? `自局の所在を QTH <strong>${escapeHtml(cw)}</strong>、JCC / JCG <strong>${escapeHtml(code)}</strong>（${escapeHtml(jccQth(code))}）にしました。`
+      : `JCC / JCG を <strong>${escapeHtml(code)}</strong>（${escapeHtml(jccQth(code))}）にしました。ローマ字が無いので、QTH は手で入れてください。`;
+    for (const el of [$('#set-qth'), $('#set-jcc')]) {
+      el.classList.remove('is-flash');
+      void el.offsetWidth;
+      el.classList.add('is-flash');
+    }
+  };
+  $('#btn-set-qth-here').addEventListener('click', () => {
+    locateNearestJcc($('#set-qth-here-note'), (hits) => renderJccHits(hits, qthBox, pickMyQth));
+  });
+  $('#set-qth-query').addEventListener('input', () => {
+    const q = $('#set-qth-query').value;
+    $('#set-qth-here-note').hidden = true;
+    if (!q.trim()) { qthBox.innerHTML = ''; return; }
+    const hits = jccSearch(q, 20);
+    if (!hits.length) { qthBox.innerHTML = '<p class="hint">見つかりません。漢字かローマ字、または番号で。</p>'; return; }
+    renderJccHits(hits, qthBox, pickMyQth);
   });
 
   const ranges = [
@@ -4598,7 +4634,7 @@ function startLogEdit(id) {
  * QTH は空でなくても入れ直す。選び直したのに前の地名が残っていては、
  * 直したつもりで直っていないログができてしまう。
  */
-function renderJccHits(hits, box) {
+function renderJccHits(hits, box, onPick = (btn) => pickJcc(btn, box)) {
   box.innerHTML = hits.map((h) => `
     <button type="button" class="jcc-hit" data-code="${h.code}">
       <span class="code">${h.code}</span>
@@ -4612,7 +4648,7 @@ function renderJccHits(hits, box) {
         <span>${escapeHtml(jccQth(w.code) || w.name)}</span>
         <span class="kind">区</span>
       </button>`).join('')}`).join('');
-  $$('.jcc-hit', box).forEach((btn) => btn.addEventListener('click', () => pickJcc(btn, box)));
+  $$('.jcc-hit', box).forEach((btn) => btn.addEventListener('click', () => onPick(btn)));
 }
 
 /**
@@ -4646,9 +4682,11 @@ function pickJcc(btn, box) {
   }
 }
 
-/** 現在地（ブラウザの位置情報）に近い市郡を出す。 */
-function findJccHere() {
-  const note = $('#jcc-here-note');
+/**
+ * 現在地（ブラウザの位置情報）に近い市郡を引いて onHits に渡す。経過は note に書く。
+ * ログ帳の JCC 検索と、設定の自局の所在の両方から使う。
+ */
+function locateNearestJcc(note, onHits) {
   note.hidden = false;
   if (!navigator.geolocation) {
     note.textContent = 'このブラウザでは位置情報が使えません。';
@@ -4658,16 +4696,20 @@ function findJccHere() {
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       const { latitude, longitude } = pos.coords;
-      const hits = nearestJcc(latitude, longitude);
       note.textContent = '現在地に近い順です。収録している座標は各市郡の代表点なので、'
         + '境界の近くでは隣が先に出ることがあります。正しいものを選んでください。';
-      renderJccHits(hits, $('#jcc-results'));
+      onHits(nearestJcc(latitude, longitude));
     },
     (err) => {
       note.textContent = `位置を取れませんでした: ${err.message}。番号か名前で検索してください。`;
     },
     { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
   );
+}
+
+/** ログ帳: 現在地に近い市郡を出す。選ぶと登録フォームに入る。 */
+function findJccHere() {
+  locateNearestJcc($('#jcc-here-note'), (hits) => renderJccHits(hits, $('#jcc-results')));
 }
 
 function renderJccResults() {
@@ -4848,7 +4890,7 @@ window.__cw = {
   get paddleState() { return paddle; },
   redoKeying,                                // 打ち直しの入口を検証できるように
   DRILL_TYPES, makeProblem, termListHtml,    // ドリルの種類と解説を検証できるように
-  jccSearch, jccQth, nearestJcc, toAdif, fromAdif, toCsv, fromCsv, bandFromFreq, logStats,  // ログ帳の検証用
+  jccSearch, jccQth, jccCwQth, nearestJcc, toAdif, fromAdif, toCsv, fromCsv, bandFromFreq, logStats,  // ログ帳の検証用
   recordKeyPerChar,                          // 苦手文字の数え方を検証できるように
   addLogEntry,
   get logEntries() { return logbook.entries; },

@@ -236,6 +236,8 @@ await page.locator('.style-option[data-style="free"]').click();
 await page.selectOption('#qso-mode', 'cq');
 await page.selectOption('#free-pileup', 'none');
 await page.selectOption('#free-reaction', 'normal');
+// 相手の返事は実時間で鳴る。22 WPM でも長い返事（設備まで入った第 2 交換）は
+// 80 秒近くかかるので、待ち時間は余裕を持たせてある（90 秒では時々足りなかった）
 await page.locator('#free-dxwpm').evaluate((el) => { el.value = '22'; el.dispatchEvent(new Event('input', { bubbles: true })); });
 ok('自由に打つでは速度とパイルアップの設定が出る', await page.locator('#free-setup-row').isVisible() && await page.locator('#qso-length').isHidden());
 ok('Claude は既定で使わない', (await page.textContent('#free-claude-note')).includes('使わない'));
@@ -257,7 +259,7 @@ ok('送ると相手が呼んでくる（受信中）', s.phase === 'pickup' && s
 ok('受信中は送信ボタンが押せない', await page.locator('#btn-free-send').isDisabled());
 ok('受信内容は既定で伏せる', await page.locator('#free-rx-text').isHidden() && (await page.textContent('#qso-log')).includes('（受信）'));
 await page.screenshot({ path: `${DIR}/free-pickup.png`, fullPage: true });
-await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 60000 });
+await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 120000 });
 ok('鳴り終わると自分の番になる', (await state()).state === 'あなたの番です');
 await page.click('#btn-free-reveal');
 const revealed = await page.textContent('#free-rx-text');
@@ -268,7 +270,7 @@ const rowsBefore = await page.locator('#qso-log .log-entry').count();
 await page.click('#btn-free-relisten');
 await page.waitForTimeout(300);
 ok('聞き直しでログが増えない', (await page.locator('#qso-log .log-entry').count()) === rowsBefore);
-await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 60000 });
+await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 120000 });
 
 // 打ち終わりの自動送信: K で締めて手を止めれば、押さなくても相手が返事をする。
 // キーヤーの解読結果を直接置いて、打ち終わった状態を作る
@@ -291,7 +293,7 @@ ok('締めを受けたことを知らせる', await page.locator('#free-send-not
 await page.waitForTimeout(2000);
 phaseNow = await page.evaluate(() => window.__cw.freeState.qso.phase);
 ok('K で締めて手を止めると自動で送信される', phaseNow === 'ex2' && (await page.evaluate(() => window.__cw.freeState.busy)), phaseNow);
-await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 90000 });
+await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 180000 });
 
 // Enter でも送れる
 await page.evaluate(() => {
@@ -303,11 +305,11 @@ await page.keyboard.press('Enter');
 await page.waitForTimeout(300);
 phaseNow = await page.evaluate(() => window.__cw.freeState.qso.phase);
 ok('Enter でも送信できる', phaseNow === 'close', phaseNow);
-await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 90000 });
+await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 180000 });
 await page.evaluate(() => { const k = window.__cw.keyer; k.text = 'TU 73 <SK>'; k.dispatchEvent(new CustomEvent('update')); });
 await page.waitForTimeout(2200);
 ok('<SK> で締めても自動で送信され、交信が終わる', await page.evaluate(() => window.__cw.freeState.qso?.done === true));
-await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 60000 });
+await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 120000 });
 await page.waitForTimeout(300);
 ok('自動送信で終えてもまとめが出る', /交信終了/.test(await page.textContent('#qso-turn')));
 
@@ -315,7 +317,7 @@ ok('自動送信で終えてもまとめが出る', /交信終了/.test(await pa
 await page.click('#btn-free-again');
 await page.waitForTimeout(300);
 await page.evaluate(() => { window.__cw.sendFree('CQ CQ CQ DE JA1ABC JA1ABC K'); });
-await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 60000 });
+await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 120000 });
 
 // 相談
 await page.click('#btn-free-advise');
@@ -334,14 +336,14 @@ ok('模範解答と違う送り方を苦手文字に数えない', (await page.e
 s = await state();
 ok('名前を落としても交信は続く（聞き返しか次へ）', ['ex1', 'ex2'].includes(s.phase) && s.busy, JSON.stringify(s));
 await page.screenshot({ path: `${DIR}/free-feedback.png`, fullPage: true });
-await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 90000 });
+await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 180000 });
 
 // 残りは模範解答どおりに打って終わらせる
 for (let i = 0; i < 4; i++) {
   const done = await page.evaluate(() => window.__cw.freeState.qso?.done);
   if (done) break;
   await page.evaluate(() => window.__cw.sendFree(window.__cw.freeState.qso.expected().text));
-  await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 90000 });
+  await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 180000 });
   await page.waitForTimeout(200);
 }
 const summary = (await page.textContent('#qso-turn')).replace(/\s+/g, ' ');
