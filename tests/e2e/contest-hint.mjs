@@ -193,7 +193,10 @@ ok('QRM を有効にした', await page.isChecked('#cond-qrm'));
 await page.click('#btn-contest-start');
 await page.waitForTimeout(300);
 await install();
-await page.waitForTimeout(7000);
+// 混信局は間を置いてランダムに送る。7 秒待つだけでは、たまたま 1 回も送らないことが
+// あった（公開版の検証で 1 回）。最初の送信まで最長 25 秒待ってから見る
+await page.waitForFunction(() => (window.__sent || []).some((s) => s.qrm), null, { timeout: 25000 }).catch(() => {});
+await page.waitForTimeout(500);
 const qrmSent = await page.evaluate(() => window.__sent.filter((s) => s.qrm).map((s) => s.text));
 const qrmCalls = await page.evaluate(() => window.__cw.contest.qrmStations.map((s) => s.callsign));
 b = await board();
