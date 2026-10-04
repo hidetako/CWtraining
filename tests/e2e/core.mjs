@@ -108,7 +108,8 @@ await page.waitForTimeout(300);
 await page.selectOption('#keyer-task-type', 'free');
 await page.waitForTimeout(200);
 
-const pad = page.locator('#pw-pad');
+// PC のパドル送信タブは画面のどこでも打面（画面上のパドルは出ない）。解読結果の欄の上で打つ
+const pad = page.locator('#keyer-decoded');
 await pad.scrollIntoViewIfNeeded();
 await page.waitForTimeout(200);
 const b = await pad.boundingBox();

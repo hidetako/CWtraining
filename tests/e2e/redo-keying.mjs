@@ -21,7 +21,8 @@ await page.waitForTimeout(600);
  * それ以外はパドル欄の打面で。
  */
 const key = async (n = 3) => {
-  const target = (await page.locator('#paddle-widget').isVisible()) ? '#pw-left' : '#qso-keyed';
+  const target = (await page.locator('#paddle-widget').isVisible()) ? '#pw-left'
+    : (await page.locator('#qso-keyed').count()) ? '#qso-keyed' : '#keyer-decoded';
   const b = await page.locator(target).boundingBox();
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
   for (let i = 0; i < n; i++) {
@@ -158,7 +159,7 @@ await key(2);
 ok('打鍵が入る（パドル送信）', (await keyed()).trim().length > 0);
 await page.click('#btn-keyer-grade');
 await page.waitForTimeout(300);
-await page.click('#pw-clear');
+await page.click('#btn-keyer-clear');   // PC ではパドル欄が隠れるので、タブ側の「打ち直す」
 await page.waitForTimeout(300);
 ok('打鍵と採点結果が消える', (await keyed()) === ''
   && (await page.textContent('#keyer-result')).trim() === '');

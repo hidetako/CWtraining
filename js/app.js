@@ -1827,8 +1827,7 @@ function redoKeying() {
   keyer.reset();
   paddle.elements = '';
   paddle.autoGraded = false;
-  const el = $('#keyer-elements');
-  if (el) el.textContent = '';
+  setElementFlow('');
 
   // 打鍵の採点結果を出している欄。開いていないものは触らない
   ['#keyer-result', '#qso-guide-keyed-result', '#qso-live-result']
@@ -3106,14 +3105,14 @@ function initKeyer() {
 
   keyer.addEventListener('element', (e) => {
     paddle.elements = (paddle.elements + e.detail.element).slice(-60);
-    $('#keyer-elements').textContent = paddle.elements;
+    setElementFlow(paddle.elements);
     renderKeyedText();
     tutorial.pushElement(e.detail.element);
     checkTutorial();
   });
   keyer.addEventListener('char', (e) => {
     paddle.elements = '';
-    $('#keyer-elements').textContent = '';
+    setElementFlow('');
     renderKeyedText();
     tutorial.pushChar(e.detail.char);
     checkTutorial();
@@ -3148,7 +3147,7 @@ function initTutorial() {
     tutorial.clearInput();
     keyer.reset();
     paddle.elements = '';
-    $('#keyer-elements').textContent = '';
+    setElementFlow('');
     renderTutorial();
   });
 
@@ -3332,7 +3331,22 @@ function syncPaddleScope() {
     paddle.scope = scope;
     setPaddleActive(!!scope, { keyboard: scope !== 'qso' });
   }
-  document.body.classList.toggle('is-paddle-global', scope === 'qso');
+  // パドル送信タブも同じ。PC では画面のどこでも打てるので、画面上のパドルは要らない。
+  // 空いた幅で、課題と打った符号を大きく出す（CSS 側）
+  document.body.classList.toggle('is-paddle-global', scope === 'qso' || scope === 'keyer');
+}
+
+/**
+ * 送出中の要素（・－）の流れを出す。パドル欄と、パドル送信タブの解読結果の
+ * 見出し脇の両方に。PC ではパドル欄が隠れているので、タブ側が頼り
+ */
+function setElementFlow(text) {
+  // 要素は . と - で来る。見せるときは ・ と － にして、点が小さくて見えないのを防ぐ
+  const shown = String(text).replace(/\./g, '・').replace(/-/g, '－');
+  for (const sel of ['#keyer-elements', '#keyer-flow']) {
+    const el = $(sel);
+    if (el) el.textContent = shown;
+  }
 }
 
 /**
@@ -3420,7 +3434,7 @@ function newKeyerTask() {
   keyer.reset();
   paddle.elements = '';
   paddle.autoGraded = false;
-  $('#keyer-elements').textContent = '';
+  setElementFlow('');
   $('#keyer-result').innerHTML = '';
   clearCelebration($('#keyer-result'));
   renderKeyedText();
@@ -3431,7 +3445,7 @@ function endKeyerTask() {
   keyer.reset();
   paddle.elements = '';
   paddle.autoGraded = false;
-  $('#keyer-elements').textContent = '';
+  setElementFlow('');
   $('#keyer-result').innerHTML = '';
   clearCelebration($('#keyer-result'));
   renderKeyedText();

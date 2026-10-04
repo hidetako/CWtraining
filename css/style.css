@@ -957,6 +957,40 @@ kbd {
 #panel-keyer .field-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .7rem 1rem; }
 #panel-keyer .hint { margin-top: .4rem; }
 #panel-keyer .check { margin-top: .5rem; }
+.keyer-settings-title { font-size: .85rem; margin: 0 0 .5rem; }
+.keyer-flow { font-family: var(--mono); color: var(--accent); letter-spacing: .12em; font-weight: 400; margin-left: .5rem; }
+.keyer-scope { display: none; }
+
+/* 課題の下は、チュートリアルと設定を横に並べる（広い画面） */
+.keyer-below { display: grid; grid-template-columns: minmax(0, 1fr); gap: .6rem; }
+.keyer-below .card { margin-bottom: 0; }
+@media (min-width: 1000px) {
+  /* たたんだチュートリアルは小さいので、設定のつまみに幅を多めに */
+  .keyer-below { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
+}
+
+/* ── PC: パドル送信タブは画面上のパドルなし、全幅、大きな文字 ──
+   画面のどこでも打てるので画面上のパドルは要らない（paddle-rail を隠すのは
+   上の is-paddle-global の規則）。空いた幅で、お題（課題）と打った符号を
+   見比べやすい大きさで出す。見るのはこの 2 行だけなので、はっきり大きく */
+@media (min-width: 761px) and (pointer: fine) {
+  body.is-paddle-global #panel-keyer .keyer-scope { display: block; }
+  body.is-paddle-global #panel-keyer .tx-preview {
+    font-size: 1.7rem;
+    line-height: 1.5;
+    padding: .7rem 1rem;
+  }
+  body.is-paddle-global #panel-keyer .tx-preview .term { font-size: inherit; }
+  body.is-paddle-global #panel-keyer .keyed-text {
+    font-size: 1.7rem;
+    line-height: 1.5;
+    min-height: 3.4rem;
+    padding: .7rem 1rem;
+  }
+  body.is-paddle-global #panel-keyer .keyer-sub { font-size: .8rem; }
+  body.is-paddle-global #panel-keyer .keyer-flow { font-size: 1.1rem; }
+  body.is-paddle-global #panel-keyer .task-terms { margin-top: -.2rem; }
+}
 
 .diff { font-family: var(--mono); font-size: 1.15rem; letter-spacing: .12em; word-break: break-all; }
 .diff .ok { color: var(--ok); }
