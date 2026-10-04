@@ -79,11 +79,11 @@ ok('開始ボタンと書き取り欄が同じ画面に入る',
   geom.startY > 0 && geom.sheetY < geom.vh, JSON.stringify(geom));
 ok('間隔が広すぎない（400px 未満）', geom.gap < 400, `${geom.gap.toFixed(0)}px`);
 
-// 交信ログは書き取り欄より後ろ（参照用なので邪魔しない）
-ok('交信ログは書き取り欄より下', await page.evaluate(() => {
+// 交信ログは書き取り欄の邪魔をしない（参照用）。下に回すか、PC の広い画面では横に並ぶ
+ok('交信ログは書き取り欄より下か横', await page.evaluate(() => {
   const log = document.querySelector('.qso-log-card').getBoundingClientRect();
   const sheet = document.querySelector('.logsheet').getBoundingClientRect();
-  return log.y > sheet.y;
+  return log.y > sheet.y || log.left >= sheet.right;
 }));
 
 // 表示しない設定では、空の表示欄で押し下げられない

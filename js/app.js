@@ -149,8 +149,9 @@ function initPaddleWidget() {
   // 交信タブで打つ番が来たら（打鍵欄 #qso-keyed が出たら）画面全体を打面にし、
   // 終わったら戻す。ターンの描き替えはどれも #qso-turn の中身を入れ替えるので、
   // そこを見ていれば、描く側のどこにも手を入れずに追える
+  // 交信の始まり・終わり（#qso-stage の hidden）も同じ観察で拾う
   new MutationObserver(() => syncPaddleScope())
-    .observe($('#qso-turn'), { childList: true, subtree: true });
+    .observe($('#qso-stage'), { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
 }
 
 // ───────── スマホ用の引き出し ─────────
@@ -3334,6 +3335,15 @@ function syncPaddleScope() {
   // パドル送信タブも同じ。PC では画面のどこでも打てるので、画面上のパドルは要らない。
   // 空いた幅で、課題と打った符号を大きく出す（CSS 側）
   document.body.classList.toggle('is-paddle-global', scope === 'qso' || scope === 'keyer');
+
+  // パドル欄を隠す場面（PC の広い画面でだけ効く。CSS 側）。
+  // パドル送信タブと、交信シミュレーターの交信中（相手の番も含む）。交信中は
+  // 打つ番と相手の番が交互に来るので、番ごとに欄が出たり消えたりして
+  // 本文の幅が変わらないよう、交信のあいだは隠したままにする。
+  // 始める前は出す（試し打ちできる）
+  const panel = $('.tab.is-active')?.dataset.panel;
+  const qsoRunning = panel === 'qso' && !$('#qso-stage').hidden;
+  document.body.classList.toggle('is-rail-hidden', scope === 'keyer' || qsoRunning);
 }
 
 /**

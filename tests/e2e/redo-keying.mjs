@@ -140,7 +140,9 @@ await page.waitForTimeout(400);
 const carried = (await scores()).length;
 await page.click('#btn-live-next');
 await page.waitForTimeout(1000);
-await page.click(await redoBtn());
+// 相手の番には本文の「打ち直す」が無く、PC では交信中パドル欄も隠れている。
+// 見たいのはボタンの場所ではなく打ち直しの振る舞いなので、隠れた欄のボタンを直接押す
+await page.evaluate(() => document.querySelector('#pw-clear').click());
 await page.waitForTimeout(300);
 ok('ターンをまたぐと点が消えない', carried === 1 && (await scores()).length === 1,
   `${carried} → ${JSON.stringify(await scores())}`);

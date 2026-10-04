@@ -60,6 +60,20 @@ l = await layout();
 console.log('打つ番のレイアウト:', JSON.stringify(l), '始める前の本文幅:', mainBefore);
 ok('打つ番はパドル欄が隠れる', !l.railShown && l.global, JSON.stringify(l));
 ok('本文が全幅になる', l.mainWidth > mainBefore + 200 && l.mainWidth >= l.winWidth - 2, `${mainBefore} → ${l.mainWidth} / ${l.winWidth}`);
+
+// 空いた幅で、今のターンと交信ログを横に並べ、打つ内容と打った符号を大きく出す
+const stage = await page.evaluate(() => {
+  const r = (s) => document.querySelector(s).getBoundingClientRect();
+  const fs = (s) => parseFloat(getComputedStyle(document.querySelector(s)).fontSize);
+  return {
+    turnRight: Math.round(r('#qso-turn').right), logLeft: Math.round(r('.qso-log-card').left),
+    logTop: Math.round(r('.qso-log-card').top), turnTop: Math.round(r('#qso-turn').top),
+    task: fs('#qso-turn .annotated'), keyed: fs('#qso-keyed'), body: fs('body'),
+  };
+});
+console.log('交信中の配置:', JSON.stringify(stage));
+ok('交信ログが今のターンの横に並ぶ', stage.logLeft >= stage.turnRight && Math.abs(stage.logTop - stage.turnTop) < 4, JSON.stringify(stage));
+ok('打つ内容と打った符号は本文より大きい（1.4 倍以上）', stage.task >= stage.body * 1.4 && stage.keyed >= stage.body * 1.6, JSON.stringify(stage));
 await page.screenshot({ path: `${DIR}/fs1-turn.png` });
 
 // 本文のどこでも打てる
@@ -97,7 +111,9 @@ await page.click('#btn-live-grade'); await page.waitForTimeout(300);
 await page.click('#btn-live-next'); await page.waitForTimeout(600);
 if (await page.locator('#qso-keyed').count() === 0) {
   l = await layout();
-  ok('相手の番はパドル欄が戻る', l.railShown && !l.global, JSON.stringify(l));
+  // 交信中は相手の番でもパドル欄は出さない（番ごとに本文の幅が変わらないように）。
+  // 打鍵だけ受け付けない
+  ok('相手の番もパドル欄は隠れたまま（交信中）', !l.railShown && !l.global, JSON.stringify(l));
   await page.evaluate(() => window.__cw.keyer.reset());
   await clickAt('.panel.is-active .panel-head');
   await page.waitForTimeout(500);

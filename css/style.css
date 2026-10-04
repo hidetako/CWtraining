@@ -1741,11 +1741,39 @@ input[type=datetime-local] {
   * { transition: none !important; }
 }
 
-/* 交信シミュレータで打つ番（広い画面・マウス）は画面全体が打面なので、
-   パドル欄は出さず本文を全幅にする。狭い画面の引き出しは指の打面なので残す */
+/* PC（広い画面・マウス）では、パドル送信タブと交信シミュレーターの交信中は
+   画面のどこでも打てるので、パドル欄は出さず本文を全幅にする
+   （is-rail-hidden は app.js の syncPaddleScope が付ける）。
+   狭い画面の引き出しは指の打面なので残す */
 @media (min-width: 761px) and (pointer: fine) {
-  body.is-paddle-global .paddle-rail { display: none; }
-  body.is-paddle-global .app-body { grid-template-columns: minmax(0, 1fr); }
+  body.is-rail-hidden .paddle-rail { display: none; }
+  body.is-rail-hidden .app-body { grid-template-columns: minmax(0, 1fr); }
+  /* 空いた幅を本文に使う（ふだんは 1160px まで） */
+  body.is-rail-hidden main { max-width: 1480px; }
+
+  /* ── 交信シミュレーター（交信中）── 空いた幅で、今のターンと交信ログを横に並べ、
+     打つ内容（お題）と打った符号を大きく出す。見比べるのはこの 2 行 */
+  body.is-rail-hidden #panel-qso .qso-stage {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: .8rem;
+    align-items: start;
+  }
+  body.is-rail-hidden #panel-qso .qso-log-card { position: sticky; top: 0; }
+  body.is-rail-hidden #panel-qso .qso-log { max-height: calc(100vh - 220px); }
+  body.is-rail-hidden #panel-qso .qso-turn-card .annotated {
+    font-size: 1.5rem;
+    line-height: 1.8;
+    padding: .7rem 1rem;
+  }
+  body.is-rail-hidden #panel-qso .qso-turn-card .annotated .term { font-size: inherit; }
+  body.is-rail-hidden #panel-qso .live-keyed {
+    font-size: 1.7rem;
+    line-height: 1.5;
+    min-height: 3.4rem;
+    padding: .7rem 1rem;
+  }
+  body.is-rail-hidden #panel-qso .qso-turn-card .hint { font-size: .74rem; }
+  body.is-rail-hidden #panel-qso .qso-turn-card h4 { margin: .7rem 0 .3rem; }
 }
 
 /* ───────── ヘッダー下から常置するパドル欄 ───────── */
