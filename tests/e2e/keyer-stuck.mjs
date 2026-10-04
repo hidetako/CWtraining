@@ -30,7 +30,8 @@ const reset = async () => {
   await page.waitForTimeout(150);
 };
 
-const pad = await page.locator('#pw-pad').boundingBox();
+// PC のパドル送信タブは画面のどこでも打面（画面上のパドルは出ない）。解読結果の欄の上で打つ
+const pad = await page.locator('#keyer-decoded').boundingBox();
 
 // ── A) マウスを押したままウィンドウが焦点を失う ──────
 // 別のアプリへ切り替えた、ブラウザの外でボタンを離した、通知に焦点を

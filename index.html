@@ -441,30 +441,6 @@
     </p>
   </div>
 
-  <!-- 初めからたたんでおく。使い方を知っている人に毎回 1 画面ぶん
-       押しのけられては、課題まで届くのにスクロールが要る -->
-  <div class="card tutorial-card is-collapsed" id="tutorial">
-    <div class="tutorial-head">
-      <h3>チュートリアル</h3>
-      <div class="tutorial-head-right">
-        <span class="tutorial-count" id="tutorial-count"></span>
-        <button type="button" class="btn btn-ghost" id="btn-tutorial-toggle">開く</button>
-      </div>
-    </div>
-    <div class="tutorial-dots" id="tutorial-dots"></div>
-    <div id="tutorial-body">
-      <h4 id="tutorial-title"></h4>
-      <div class="tutorial-text" id="tutorial-text"></div>
-      <div class="tutorial-goal" id="tutorial-goal"></div>
-      <div class="turn-actions">
-        <button type="button" class="btn" id="btn-tutorial-prev">戻る</button>
-        <button type="button" class="btn btn-primary" id="btn-tutorial-next">次へ</button>
-        <button type="button" class="btn btn-ghost" id="btn-tutorial-retry">この課題をやり直す</button>
-        <button type="button" class="btn btn-ghost" id="btn-tutorial-sample">今の設定で試聴</button>
-      </div>
-    </div>
-  </div>
-
   <!-- 課題と解読結果は 1 枚に。手本と打った符号を上下で見比べるものなので、
        カードを分けて見出しと余白を挟むと、間延びして目が往復する -->
   <div class="card keyer-work">
@@ -490,7 +466,7 @@
     </div>
     <div class="tx-preview" id="keyer-task-text">自由練習モードです。好きな符号を打ってください。</div>
     <div class="task-terms" id="keyer-task-terms"></div>
-    <div class="keyer-sub">解読結果</div>
+    <div class="keyer-sub">解読結果 <span class="keyer-flow" id="keyer-flow" aria-label="送出中の要素"></span></div>
     <div class="keyed-text" id="keyer-decoded"><span class="empty">まだ何も打っていません。</span></div>
     <div class="turn-actions">
       <button type="button" class="btn btn-primary" id="btn-keyer-grade">採点する</button>
@@ -500,11 +476,40 @@
       <button type="button" class="btn" id="btn-keyer-next"
               title="採点せずに次の課題へ進む">次に進む</button>
     </div>
+    <!-- PC（画面上のパドルを出さないとき）だけ出す案内。CSS 側で切り替える -->
+    <p class="hint keyer-scope">画面のどこでも打てます（ボタン・入力欄・タブの上を除く）。
+      左ボタン＝短点、右ボタン＝長点。キーボードの <kbd>Z</kbd> / <kbd>X</kbd> でも。</p>
     <div id="keyer-result"></div>
     <!-- 100点＋の記録。打ち直しても消さないので、採点結果とは別の器に置く -->
     <div id="keyer-plus"></div>
   </div>
+  <!-- 課題の下に、チュートリアルと設定を並べる。広い画面では横 2 列。
+       チュートリアルは初めからたたんでおく（使い方を知っている人の邪魔をしない） -->
+  <div class="keyer-below">
+  <div class="card tutorial-card is-collapsed" id="tutorial">
+    <div class="tutorial-head">
+      <h3>チュートリアル</h3>
+      <div class="tutorial-head-right">
+        <span class="tutorial-count" id="tutorial-count"></span>
+        <button type="button" class="btn btn-ghost" id="btn-tutorial-toggle">開く</button>
+      </div>
+    </div>
+    <div class="tutorial-dots" id="tutorial-dots"></div>
+    <div id="tutorial-body">
+      <h4 id="tutorial-title"></h4>
+      <div class="tutorial-text" id="tutorial-text"></div>
+      <div class="tutorial-goal" id="tutorial-goal"></div>
+      <div class="turn-actions">
+        <button type="button" class="btn" id="btn-tutorial-prev">戻る</button>
+        <button type="button" class="btn btn-primary" id="btn-tutorial-next">次へ</button>
+        <button type="button" class="btn btn-ghost" id="btn-tutorial-retry">この課題をやり直す</button>
+        <button type="button" class="btn btn-ghost" id="btn-tutorial-sample">今の設定で試聴</button>
+      </div>
+    </div>
+  </div>
+
   <div class="card">
+    <h3 class="keyer-settings-title">キーヤーの設定</h3>
     <div class="field-grid">
       <label class="field">
         <span>キーヤーモード</span>
@@ -540,6 +545,7 @@
       <span>親指側を長点にする（標準は親指＝短点）</span>
     </label>
   </div>
+  </div><!-- /.keyer-below -->
 
 </section>
 

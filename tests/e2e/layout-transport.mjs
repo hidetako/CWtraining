@@ -66,13 +66,17 @@ await page.evaluate(() => window.__cw.keyer.reset());
 await page.click('.tab[data-panel="qso"]');
 await page.waitForTimeout(200);
 
-// どのタブに移っても残る
-for (const t of ['drill', 'contest', 'keyer', 'tools', 'glossary', 'settings']) {
+// どのタブに移っても残る。例外はパドル送信タブ: PC では画面のどこでも打てるので、
+// 画面上のパドルは出さない
+for (const t of ['drill', 'contest', 'tools', 'glossary', 'settings']) {
   await page.click(`.tab[data-panel="${t}"]`);
   await page.waitForTimeout(120);
   if (!(await page.locator('#pw-pad').isVisible())) { ok(`${t} タブでパドル欄が見える`, false); break; }
 }
-ok('全タブでパドル欄が残る', await page.locator('#pw-pad').isVisible());
+ok('パドル送信以外のタブでパドル欄が残る', await page.locator('#pw-pad').isVisible());
+await page.click('.tab[data-panel="keyer"]');
+await page.waitForTimeout(200);
+ok('パドル送信タブ（PC）では画面上のパドルを出さない', !(await page.locator('#pw-pad').isVisible()));
 
 // パドル欄から打てて、解読が出る
 await page.click('.tab[data-panel="glossary"]');
@@ -219,7 +223,7 @@ ok('終了でコンテストが止まる', await page.evaluate(() => window.__cw
 await page.click('.tab[data-panel="keyer"]');
 await page.waitForTimeout(300);
 await page.evaluate(() => { window.__cw.keyer.reset(); });
-const pad = await page.locator('#pw-left').boundingBox();
+const pad = await page.locator('#keyer-decoded').boundingBox();   // PC は画面のどこでも打面
 await page.mouse.move(pad.x + pad.width / 2, pad.y + pad.height / 2);
 await page.mouse.down(); await page.waitForTimeout(30); await page.mouse.up();
 await page.waitForTimeout(600);

@@ -16,10 +16,11 @@ await page.waitForTimeout(500);
 await page.click('.tab[data-panel="keyer"]');
 await page.waitForTimeout(300);
 await page.selectOption('#keyer-task-type','free');
-await page.locator('#pw-pad').scrollIntoViewIfNeeded();
+// PC のパドル送信タブは画面のどこでも打面。解読結果の欄の上で打つ
+await page.locator('#keyer-decoded').scrollIntoViewIfNeeded();
 await page.waitForTimeout(200);
 
-const b = await page.locator('#pw-pad').boundingBox();
+const b = await page.locator('#keyer-decoded').boundingBox();
 await page.mouse.move(b.x+b.width/2, b.y+b.height/2);
 const tap = async (btn,ms)=>{ await page.mouse.down({button:btn}); await page.waitForTimeout(ms); await page.mouse.up({button:btn}); };
 
@@ -27,8 +28,8 @@ const tap = async (btn,ms)=>{ await page.mouse.down({button:btn}); await page.wa
 async function probe(button){
   await page.evaluate(()=>window.__cw.keyer.reset());
   // 設定操作でスクロールしている場合があるので、毎回パッド中央に置き直す
-  await page.locator('#pw-pad').scrollIntoViewIfNeeded();
-  const bb = await page.locator('#pw-pad').boundingBox();
+  await page.locator('#keyer-decoded').scrollIntoViewIfNeeded();
+  const bb = await page.locator('#keyer-decoded').boundingBox();
   await page.mouse.move(bb.x+bb.width/2, bb.y+bb.height/2);
   await tap(button, 420);
   await page.waitForTimeout(700);

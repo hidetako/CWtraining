@@ -100,8 +100,9 @@ ok('打鍵が無ければ Esc で練習を終われる',
 await page.click('.tab[data-panel="keyer"]');
 await page.waitForTimeout(300);
 await page.evaluate(() => window.__cw.keyer.reset());
-await page.click('#pw-wpm');
-ok('つまみに焦点がある', await focusName() === 'INPUT#pw-wpm', await focusName());
+// PC のパドル送信タブではパドル欄が隠れるので、タブ側の速度つまみで
+await page.click('#keyer-wpm');
+ok('つまみに焦点がある', await focusName() === 'INPUT#keyer-wpm', await focusName());
 await page.keyboard.down('KeyZ');
 await page.waitForTimeout(80);
 await page.keyboard.up('KeyZ');

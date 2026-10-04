@@ -35,7 +35,7 @@ const watchSchedule = () => page.evaluate(() => {
 });
 
 const pad = async (holdMs, stallMs = 0) => {
-  const box = await page.locator('#pw-left').boundingBox();
+  const box = await page.locator('#keyer-decoded').boundingBox();   // PC は画面のどこでも打面（左ボタン＝短点）
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   if (stallMs) {

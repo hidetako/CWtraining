@@ -27,7 +27,7 @@ await page.waitForTimeout(400);
  * 左ボタン = 短点、右ボタン = 長点）。
  */
 const press = async (button = 'left', holdMs = 30) => {
-  const box = await page.locator('#pw-pad').boundingBox();
+  const box = await page.locator('#keyer-decoded').boundingBox();   // PC は画面のどこでも打面
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down({ button });
   await page.waitForTimeout(holdMs);

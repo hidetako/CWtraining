@@ -4,7 +4,7 @@
 // ・本文のどこでも左クリックで打てる。ボタンの上は普通に押せる（打鍵にならない）
 // ・キーボード（Z/X）が二重に効かない（交信タブは自前の Z/X を持つ）
 // ・相手の番・終了・別のタブではパドル欄が戻る
-// ・パドル送信タブは従来どおり（画面全体で打て、パドル欄は残る）
+// ・パドル送信タブも同じ（画面全体で打て、PC では画面上のパドルを出さない）
 const { chromium } = await import(process.env.PW ?? 'playwright');
 
 const BASE = process.env.BASE ?? 'http://localhost:8123';
@@ -139,7 +139,7 @@ ok('別のタブでは本文のクリックが打鍵にならない', (await key
 await page.click('.tab[data-panel="keyer"]');
 await page.waitForTimeout(300);
 l = await layout();
-ok('パドル送信タブではパドル欄が残る', l.railShown && !l.global, JSON.stringify(l));
+ok('パドル送信タブ（PC）も画面上のパドルを出さない', !l.railShown && l.global, JSON.stringify(l));
 await page.evaluate(() => window.__cw.keyer.reset());
 await clickAt('.panel.is-active .panel-head');
 await page.waitForTimeout(700);
