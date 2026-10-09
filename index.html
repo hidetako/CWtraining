@@ -561,9 +561,13 @@
   <div class="card">
     <h3>受信（デコーダー）</h3>
     <p class="hint" style="margin-top:0">無線機の受信音をこの端末のマイクに聞かせるか、
-      オーディオケーブル／インターフェースでライン入力へつなぎます。</p>
+      オーディオケーブル／インターフェースでライン入力へつなぎます。
+      この PC で鳴っている音（YouTube の動画など）を解読するなら「画面の音を拾う」で、
+      そのタブを選んで「タブの音声を共有」にチェックを入れます（Chrome / Edge）。</p>
     <div class="field-row">
       <button type="button" class="btn btn-primary" id="btn-sup-mic">マイクを開く</button>
+      <button type="button" class="btn" id="btn-sup-screen"
+        title="画面共有の仕組みで、選んだタブや画面の音をデコーダーに入れます（Chrome / Edge）">画面の音を拾う</button>
       <label class="field" style="min-width:220px"><span>トーン周波数 <output id="sup-pitch-out">700 Hz</output></span>
         <input type="range" id="sup-pitch" min="300" max="1200" step="10" value="700">
       </label>
@@ -573,6 +577,7 @@
       <span class="field"><span>信号</span><span class="sup-meter"><span id="sup-level-bar"></span></span></span>
       <output id="sup-wpm"></output>
     </div>
+    <p class="hint" id="sup-source-note" hidden></p>
     <p class="hint" id="sup-scan-note" hidden></p>
     <div class="sup-lanes" id="sup-lanes" hidden></div>
     <div class="sup-decoded" id="sup-decoded"><span class="empty">マイクを開くと、解読した文字がここに流れます。</span></div>

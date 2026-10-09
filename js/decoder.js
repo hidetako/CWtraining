@@ -139,13 +139,20 @@ export class CWDecoder extends EventTarget {
   /** マイク（ライン入力）を開いてつなぐ。 */
   async attachMic(deviceId) {
     // 音声向けの加工はモールスには邪魔でしかない。全部切る
-    this.mic = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         deviceId: deviceId ? { exact: deviceId } : undefined,
         echoCancellation: false, noiseSuppression: false, autoGainControl: false,
       },
     });
-    this._micSource = this.ctx.createMediaStreamSource(this.mic);
+    this.attachStream(stream);
+  }
+
+  /** 音の流れ（MediaStream）をつなぐ。画面共有で取ったタブの音もここを通す。 */
+  attachStream(stream) {
+    this.detachMic();
+    this.mic = stream;
+    this._micSource = this.ctx.createMediaStreamSource(stream);
     this._micSource.connect(this.input);
   }
 
@@ -305,13 +312,23 @@ export class CWDecoderBank extends EventTarget {
 
   /** マイク（ライン入力）を開いてつなぐ。 */
   async attachMic(deviceId) {
-    this.mic = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         deviceId: deviceId ? { exact: deviceId } : undefined,
         echoCancellation: false, noiseSuppression: false, autoGainControl: false,
       },
     });
-    this._micSource = this.ctx.createMediaStreamSource(this.mic);
+    this.attachStream(stream);
+  }
+
+  /**
+   * 音の流れ（MediaStream）をつなぐ。マイクのほか、画面共有で取った
+   * タブの音（getDisplayMedia）もここを通す。前につないでいたものは外す
+   */
+  attachStream(stream) {
+    this.detachMic();
+    this.mic = stream;
+    this._micSource = this.ctx.createMediaStreamSource(stream);
     this._micSource.connect(this.input);
   }
 
