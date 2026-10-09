@@ -4103,6 +4103,7 @@ function renderStats() {
 
 const support = {
   bank: null,           // CWDecoderBank。マイクを初めて開いたときに作る
+  source: '',           // デコーダーに入れている音: 'mic' | 'screen' | ''（なし）
   lanes: [],            // 聞き分けている局。[{ id, pitch, text, words, fed, wpm, el... }]
   selected: null,       // 受信欄と「相手の情報」に流している局の id
   scanning: false,
@@ -4319,26 +4320,85 @@ async function scanSupportStations() {
   }
 }
 
-async function openSupportMic() {
-  const btn = $('#btn-sup-mic');
-  if (support.micOpen) {
-    support.bank.detachMic();
-    support.micOpen = false;
-    btn.textContent = 'マイクを開く';
-    $('#btn-sup-autopitch').disabled = true;
-    $('#btn-sup-scan').disabled = true;
-    return;
+/**
+ * デコーダーに入れる音の口。'mic'（マイク／ライン入力）か 'screen'
+ * （画面共有で取ったタブや画面の音）。同時には 1 つだけ
+ */
+function setSupportSource(kind) {
+  support.micOpen = !!kind;
+  support.source = kind || '';
+  $('#btn-sup-mic').textContent = kind === 'mic' ? 'マイクを閉じる' : 'マイクを開く';
+  $('#btn-sup-screen').textContent = kind === 'screen' ? '画面の音を止める' : '画面の音を拾う';
+  $('#btn-sup-autopitch').disabled = !kind;
+  $('#btn-sup-scan').disabled = !kind;
+  const note = $('#sup-source-note');
+  note.hidden = kind !== 'screen';
+  if (kind === 'screen') {
+    note.textContent = '画面の音を解読しています。共有を止めると（ブラウザの「共有を停止」でも）ここも止まります。';
   }
+}
+
+function closeSupportSource() {
+  support.bank?.detachMic();
+  setSupportSource('');
+}
+
+async function openSupportMic() {
+  if (support.source === 'mic') { closeSupportSource(); return; }
   const bank = await ensureSupportBank();
   try {
     await bank.attachMic();
-    support.micOpen = true;
-    btn.textContent = 'マイクを閉じる';
-    $('#btn-sup-autopitch').disabled = false;
-    $('#btn-sup-scan').disabled = false;
+    setSupportSource('mic');
   } catch (err) {
+    closeSupportSource();
     $('#sup-decoded').innerHTML = `<span class="empty">マイクを開けませんでした: ${escapeHtml(err.message)}。ブラウザの許可を確認してください。</span>`;
   }
+}
+
+/**
+ * 画面の音を拾う。同じ PC で鳴っている音（YouTube の動画など）を解読する
+ * ための口。画面共有の仕組み（getDisplayMedia）で、選んだタブや画面の音を
+ * もらう。ブラウザは映像なしの共有を許さないので映像も頼み、もらったら
+ * すぐ止める。Chrome / Edge では「タブの音声を共有」にチェックが要る
+ */
+async function openSupportScreen() {
+  if (support.source === 'screen') { closeSupportSource(); return; }
+  const out = $('#sup-decoded');
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    out.innerHTML = '<span class="empty">このブラウザは画面の音を取れません。Chrome か Edge で開いてください。</span>';
+    return;
+  }
+  const bank = await ensureSupportBank();
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      // Chrome: 共有の画面でタブを先に出し、音声は既定でチェックを入れる
+      preferCurrentTab: false,
+      systemAudio: 'include',
+      selfBrowserSurface: 'exclude',
+    });
+  } catch (err) {
+    if (err?.name !== 'NotAllowedError') {
+      out.innerHTML = `<span class="empty">画面の音を取れませんでした: ${escapeHtml(err.message)}</span>`;
+    }
+    return;
+  }
+  // 映像は要らない。すぐ止める（止めないとカメラのような録画中の印が出続ける）
+  stream.getVideoTracks().forEach((t) => t.stop());
+  const audio = stream.getAudioTracks()[0];
+  if (!audio) {
+    stream.getTracks().forEach((t) => t.stop());
+    out.innerHTML = '<span class="empty">音声が共有されていません。共有の画面で「タブの音声を共有」（画面全体なら「システムの音声を共有」）にチェックを入れて、もう一度。</span>';
+    return;
+  }
+  bank.attachStream(new MediaStream([audio]));
+  setSupportSource('screen');
+  // 前の失敗の文句（音声なし、など）が残っていれば、聞いている旨に差し替える
+  if (out.querySelector('.empty')) out.innerHTML = '<span class="empty">画面の音を聞いています。解読した文字がここに流れます。</span>';
+  // ブラウザ側の「共有を停止」や、タブを閉じたとき
+  audio.addEventListener('ended', () => { if (support.source === 'screen') closeSupportSource(); });
 }
 
 /** 返答を送る。音を鳴らし、つながっていればシリアルの電鍵も叩く。 */
@@ -4447,6 +4507,7 @@ function renderSupport() {
 
 function initSupport() {
   $('#btn-sup-mic').addEventListener('click', openSupportMic);
+  $('#btn-sup-screen').addEventListener('click', openSupportScreen);
   // つまみ・自動合わせは、選んでいる局の音程を動かす
   $('#sup-pitch').addEventListener('input', () => {
     const hz = Number($('#sup-pitch').value);
@@ -4922,6 +4983,7 @@ window.__cw = {
   supportChar, supportWordBreak,             // デコーダー → 画面の配線を検証できるように
   ensureSupportBank, scanSupportStations, selectSupportLane,  // 局の聞き分けを検証できるように
   get supportSession() { return supportSession(); },
+  get supportSource() { return support.source; },   // 画面の音・マイクの口を検証できるように
   get supportState() { return support; },
   MORSE_TABLE, codeUnits,                    // 鳴らせない文字が混ざっていないかを検証できるように
   hintMask, HINT_LEVELS, HINT_MASK,          // 受信ヘルプの伏せ方を検証できるように
