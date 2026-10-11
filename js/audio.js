@@ -109,10 +109,15 @@ export class CWPlayer {
     this.txBus.gain.value = 1;
     this.txBus.connect(this.master);
 
-    // 空電（QRN）: ホワイトノイズも受信フィルタを通す
+    // 空電（QRN）: ホワイトノイズも受信フィルタを通す。
+    // 鳴らしっぱなしの空電は、模擬の受信機が要らない場面（交信サポートで
+    // 実際の無線機の音を解読しているとき、ログ帳）では止める（ambient）
+    this.ambient = ctx.createGain();
+    this.ambient.gain.value = this._ambientOn === false ? 0 : 1;
+    this.ambient.connect(this.rxBus);
     this.noiseGain = ctx.createGain();
     this.noiseGain.gain.value = 0;
-    this.noiseGain.connect(this.rxBus);
+    this.noiseGain.connect(this.ambient);
 
     this.noiseSource = ctx.createBufferSource();
     this.noiseSource.buffer = this._makeNoiseBuffer();
@@ -140,6 +145,16 @@ export class CWPlayer {
   setSettings(patch) {
     Object.assign(this.settings, patch);
     if (this.ctx) this._applySettings();
+  }
+
+  /**
+   * 空電（QRN）の鳴らしっぱなしを出すか。模擬の受信機が要らない画面では止める。
+   * 設定の QRN の値は変えない（戻れば元どおり鳴る）
+   */
+  setAmbient(on) {
+    this._ambientOn = !!on;
+    if (!this.ambient) return;   // まだ音を作っていなければ、作るときに反映する
+    this.ambient.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.05);
   }
 
   _applySettings() {

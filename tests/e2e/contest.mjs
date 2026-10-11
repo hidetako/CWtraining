@@ -123,6 +123,22 @@ await page.waitForTimeout(1800);
 console.log('single mode callers:', await page.evaluate(()=>window.__cw.contest.stations.length));
 await page.evaluate(()=>window.__cw.contest.stopSession());
 
+// 運用が終われば、空電は設定の値に戻ること。
+// QRN ありの運用のあと、設定が 0 でもどのタブでも空電が鳴り続けていた
+await page.selectOption('#contest-mode','pileup');
+await page.waitForTimeout(200);
+await page.evaluate(() => { const c = document.querySelector('#cond-qrn'); if (!c.checked) c.click(); });
+await page.waitForTimeout(200);
+await page.click('#btn-contest-start');
+await page.waitForTimeout(800);
+const qrnDuring = await page.evaluate(() => window.__cw.player.settings.qrn);
+await page.evaluate(()=>window.__cw.contest.stopSession());
+await page.waitForTimeout(400);
+const qrnAfter = await page.evaluate(() => ({ player: window.__cw.player.settings.qrn, setting: window.__cw.settings.qrn / 100 }));
+console.log('空電 運用中:', qrnDuring, '/ 運用後:', JSON.stringify(qrnAfter));
+if (!(qrnDuring > 0 && qrnAfter.player === qrnAfter.setting)) errors.push(`運用後に空電が設定の値に戻らない: ${qrnDuring} → ${JSON.stringify(qrnAfter)}`);
+await page.evaluate(() => { const c = document.querySelector('#cond-qrn'); if (c.checked) c.click(); });
+
 console.log('\nERRORS:', errors.length?errors.join('\n'):'(none)');
 await browser.close();
 

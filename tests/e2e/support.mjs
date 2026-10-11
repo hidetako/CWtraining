@@ -216,6 +216,32 @@ ok('短点はおよそ 60ms', Math.abs(ditMs - 60) < 25, `${Math.round(ditMs)}ms
 ok('長点はおよそ 180ms', Math.abs(dahMs - 180) < 35, `${Math.round(dahMs)}ms`);
 ok('Web Serial の対応可否を答えられる', typeof (await page.evaluate(() => window.__cw.SerialKeyer.supported)) === 'boolean');
 
+// ── 模擬の空電（QRN）は、実際の無線機の音を解読するこの画面では鳴らさない ──
+// 設定で QRN を入れていると、鳴りっぱなしの空電がこの画面でも流れ続けていた
+const ambient = async (panel) => {
+  await page.click(`.tab[data-panel="${panel}"]`);
+  await page.waitForTimeout(400);
+  return page.evaluate(async () => {
+    const p = window.__cw.player;
+    await p.resume();
+    const an = p.ctx.createAnalyser(); an.fftSize = 2048; p.master.connect(an);
+    await new Promise((r) => setTimeout(r, 400));
+    const buf = new Float32Array(an.fftSize); an.getFloatTimeDomainData(buf);
+    let s = 0; for (const v of buf) s += v * v;
+    p.master.disconnect(an);
+    return { gate: Math.round(p.ambient.gain.value * 100) / 100, rms: Math.sqrt(s / buf.length) };
+  });
+};
+await page.evaluate(() => { const el = document.querySelector('#set-qrn'); el.value = '40'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+const onSupport = await ambient('support');
+const onGlossary = await ambient('glossary');
+const onLogbook = await ambient('logbook');
+console.log('空電:', JSON.stringify({ onSupport, onGlossary, onLogbook }));
+ok('交信サポートでは模擬の空電が止まる', onSupport.gate === 0 && onSupport.rms < 0.0005, JSON.stringify(onSupport));
+ok('他のタブでは設定どおり鳴る', onGlossary.gate === 1 && onGlossary.rms > 0.002, JSON.stringify(onGlossary));
+ok('ログ帳でも止まる', onLogbook.gate === 0 && onLogbook.rms < 0.0005, JSON.stringify(onLogbook));
+await page.evaluate(() => { const el = document.querySelector('#set-qrn'); el.value = '0'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+
 console.log('\n失敗:', fails.length ? fails.join(' / ') : 'なし');
 console.log('ERRORS:', errors.length ? errors.join('\n') : '(none)');
 await browser.close();
