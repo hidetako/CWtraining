@@ -123,8 +123,8 @@ export function spacingDiff(target, sent) {
 }
 
 /** 送信速度の下限・上限（WPM）。画面のつまみと保存値の両方をこれで抑える。 */
-export const KEYER_WPM_MIN = 5;
-export const KEYER_WPM_MAX = 28;
+export const KEYER_WPM_MIN = 18;
+export const KEYER_WPM_MAX = 35;
 export const clampKeyerWpm = (wpm) =>
   Math.max(KEYER_WPM_MIN, Math.min(KEYER_WPM_MAX, Number(wpm) || KEYER_WPM_MIN));
 

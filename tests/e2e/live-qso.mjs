@@ -43,7 +43,7 @@ console.log('ボタン後のモード:', await page.evaluate(()=>window.__cw.set
 console.log('警告解除後のゴール:', (await page.textContent('#tutorial-goal')).replace(/\s+/g,' ').trim().slice(0,70));
 
 // ── 3. 速度ステップ: スライダー変更だけでは進まず、打って進む
-await page.locator('#keyer-wpm').evaluate(el=>{ el.value='15'; el.dispatchEvent(new Event('input',{bubbles:true})); });
+await page.locator('#keyer-wpm').evaluate(el=>{ el.value='24'; el.dispatchEvent(new Event('input',{bubbles:true})); });
 await page.waitForTimeout(1700);
 console.log('スライダーのみ → まだ速度ステップ:', (await page.textContent('#tutorial-title')).includes('速度'));
 const pad = await page.locator('#keyer-decoded');   // PC のパドル送信タブは画面のどこでも打面

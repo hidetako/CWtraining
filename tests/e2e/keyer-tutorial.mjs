@@ -85,7 +85,7 @@ console.log('step8 (auto):', await step());
 console.log('  sample btn visible:', await page.locator('#btn-tutorial-sample').isVisible());
 
 // step8: change speed
-await page.locator('#keyer-wpm').fill('16');
+await page.locator('#keyer-wpm').fill('22');
 await page.locator('#keyer-wpm').dispatchEvent('input');
 await hold('left', 400);   // 速度ステップは変更後に打つ必要がある
 await page.waitForTimeout(2200);
