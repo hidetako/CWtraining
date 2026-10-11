@@ -313,6 +313,9 @@ function initTabs() {
       // 交信サポートでも Z / X で打てるようにする（候補を見ながら
       // 自分の電鍵で送るため）。打面のマウス・タッチは常時有効
       syncPaddleScope();
+      // 模擬の空電（QRN）は、実際の無線機の音を解読する交信サポートと
+      // ログ帳では鳴らさない（設定で QRN を入れていると、鳴りっぱなしになっていた）
+      player.setAmbient(!['support', 'logbook'].includes(tab.dataset.panel));
       // 打つためのタブに来たら、狭い画面では引き出しを開けておく
       if (tab.dataset.panel === 'keyer') openPaddleSheet();
       else setPaddleSheet(false);
@@ -2798,6 +2801,9 @@ function renderContestLog() {
 async function finishContest(score) {
   $('#btn-contest-start').disabled = false;
   $('#btn-contest-stop').disabled = true;
+  // 運用中は運用モードの条件で空電を鳴らしていた。終わったら設定の値に戻す
+  // （戻さないと、QRN ありの運用のあと、どのタブでも空電が鳴り続ける）
+  applyAudioSettings();
 
   const mode = contest.opts?.mode || 'pileup';
   const wpx = mode === 'wpx';
