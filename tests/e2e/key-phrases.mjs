@@ -157,6 +157,23 @@ const shown = await page.evaluate(() => ({
 }));
 console.log('表示:', JSON.stringify(shown));
 ok('本文が画面に出る', shown.text.length > 0 && shown.text === shown.task, shown.text);
+
+// 文全体の意味。語ごとの意味とは別に、課題の行の空きに小さく出る（下に行を足さない）
+const gloss = await page.evaluate(() => {
+  const el = document.querySelector('#keyer-task-gloss');
+  const r = el.getBoundingClientRect();
+  const task = document.querySelector('#keyer-task-text').getBoundingClientRect();
+  const fs = (e) => parseFloat(getComputedStyle(e).fontSize);
+  return {
+    text: window.__cw.keyerTaskGloss, shown: !el.hidden && el.textContent.trim(),
+    above: r.bottom <= task.top + 1, small: fs(el) < fs(document.body),
+    missing: window.__cw.ALL_KEY_PHRASES.filter((p) => !window.__cw.KEY_PHRASE_MEANINGS[p]),
+  };
+});
+console.log('全体の意味:', JSON.stringify(gloss));
+ok('文全体の意味が出る', gloss.text.length > 0 && gloss.shown === gloss.text && !gloss.text.includes('{'), gloss.text);
+ok('意味は課題の行に小さく出て、課題の上にある', gloss.above && gloss.small, JSON.stringify(gloss));
+ok('すべての定型文に全体の意味がある', gloss.missing.length === 0, gloss.missing.join(' / '));
 ok('新しい語にも意味と符号が付く',
   shown.terms.length > 0 && shown.terms.every((t) => /[・－]/.test(t.morse)),
   JSON.stringify(shown.terms));

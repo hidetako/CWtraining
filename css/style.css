@@ -958,6 +958,20 @@ kbd {
 #panel-keyer .hint { margin-top: .4rem; }
 #panel-keyer .check { margin-top: .5rem; }
 .keyer-settings-title { font-size: .85rem; margin: 0 0 .5rem; }
+/* 課題の文全体の意味。課題の行の右側の空きに小さく出す。長ければその中で折り返す */
+.task-gloss {
+  margin-left: auto;
+  align-self: flex-end;
+  max-width: 46%;
+  font-size: .76rem;
+  line-height: 1.45;
+  color: var(--text-dim);
+  text-align: right;
+}
+.task-gloss::before { content: '意味: '; color: var(--text-dim); opacity: .8; }
+@media (max-width: 760px) {
+  .task-gloss { max-width: 100%; margin-left: 0; text-align: left; }
+}
 .keyer-flow { font-family: var(--mono); color: var(--accent); letter-spacing: .12em; font-weight: 400; margin-left: .5rem; }
 .keyer-scope { display: none; }
 

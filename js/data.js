@@ -541,6 +541,144 @@ export const KEY_PHRASE_TOPICS = {
 export const ALL_KEY_PHRASES =
   Object.values(KEY_PHRASE_TOPICS).flatMap((t) => t.phrases);
 
+/**
+ * 定型文の全体の意味（日本語）。語ごとの意味は略語の辞書から引けるが、
+ * 文としてどういう意味になるのかは並べただけでは分からないので、
+ * 文ごとに持つ。差し込み記号（{ME} など）は本文と同じ値で埋める。
+ */
+export const KEY_PHRASE_MEANINGS = {
+  // 呼び出し・応答
+  'CQ CQ CQ DE {ME} {ME} K': '各局、こちらは {ME}。どうぞ',
+  'CQ CQ DE {ME} {ME} PSE K': '各局、こちらは {ME}。どうぞお願いします',
+  '{DX} DE {ME} {ME} K': '{DX}、こちらは {ME}。どうぞ',
+  '{DX} DE {ME} GE OM TNX FER CALL': '{DX}、こちらは {ME}。こんばんは、お呼びいただきありがとう',
+  'QRZ? DE {ME} K': '誰か呼びましたか？ こちらは {ME}。どうぞ',
+  'QRL? DE {ME}': 'この周波数は使用中ですか？ こちらは {ME}',
+  '{DX} DE {ME} = R R GE OM': '{DX}、こちらは {ME}。了解、こんばんは',
+
+  // あいさつ・気持ちを伝える
+  '{DX} DE {ME} = GE DR OM = GLD TO WRK U': '{DX}、こちらは {ME}。こんばんは、交信できてうれしいです',
+  'AM VY PSED TO SU = TNX FER CALL': 'お会いできてとてもうれしいです。お呼びいただきありがとう',
+  'MNI TNX FER NICE QSO DR OM': '楽しい交信をどうもありがとう',
+  'BTW = UR SIG UFB HR TODAY': 'ところで、今日はあなたの信号がこちらでとても良好です',
+  'SA = WL NW QRU = 73 <SK>': 'では、もう用件はありません。さようなら、終わります',
+  'I WUD LIKE TO WRK U AGN SN': 'またすぐに交信したいです',
+  'VFB OM = TNX FER FB QSO': 'とても良いです。良い交信をありがとう',
+  'SRI ABT POOR CONDX TONITE': '今夜はコンディションが悪くてすみません',
+  'MOM PSE = QRX 1 MIN': '少々お待ちください。1 分待ってください',
+  'C BK = THATS RIGHT OM': 'はい、そのとおりです',
+  'PSE CFM MI CALL = {ME} {ME}': '私のコールサインを確認してください。{ME} です',
+  'BTU {DX} DE {ME} KN': 'あなたに戻します。{DX}、こちらは {ME}。指定局どうぞ',
+  'NW QRU SA 73 ES BCNU': 'もう用件はありません。では、さようなら、またお会いしましょう',
+  'WL = ITS TIME TO QRT = 73': 'では、そろそろ終わる時間です。さようなら',
+  '{DX} DE {ME} 73 <SK> DE {ME} CL': '{DX}、こちらは {ME}。さようなら、終わります。{ME} 閉局します',
+
+  // 基本の交換
+  'UR RST 599 599 = NAME {NAME} {NAME}': 'あなたのレポートは 599。名前は {NAME} です',
+  'QTH {QTH} {QTH} = HW?': '所在地は {QTH}。いかがですか？',
+  'R R FB OM ALL SOLID': '了解、良好です。すべて確実に取れました',
+  'UR RST 579 579 = OP {NAME} {NAME}': 'あなたのレポートは 579。オペレーターは {NAME} です',
+  'RIG HR {RIG} ES PWR {PWR}': 'こちらの無線機は {RIG}、出力は {PWR} です',
+  'ANT HR {ANT} = HW CPY?': 'こちらのアンテナは {ANT}。取れていますか？',
+  'TNX FER RPRT = UR RST 589 HR': 'レポートありがとう。あなたの信号はこちらで 589 です',
+  'RIG HR IS {RIG} = AM RNG {PWR} BAREFOOT': 'こちらの無線機は {RIG}。リニアなしの {PWR} で運用しています',
+  'AM RNG 5W INTO GP ANT': 'GP アンテナに 5 W で運用しています',
+  'ANT {ANT} = 10 MTRS UP GND': 'アンテナは {ANT}、地上高 10 m です',
+  'ANT 3 ELE YAGI = 15 MTRS UP GND': 'アンテナは 3 エレメントの八木、地上高 15 m です',
+  'MY ANT DIPOLE ES 12M H': '私のアンテナはダイポールで、高さ 12 m です',
+  'R R SOLID CPI NW = TNX OM': '了解、今度は確実に取れました。ありがとう',
+  'UR SIG LOUD ES CLR HR': 'あなたの信号はこちらで大きくはっきり聞こえます',
+
+  // 天気
+  'WX HR FINE ES TEMP 25C': 'こちらの天気は晴れ、気温は 25 ℃です',
+  'WX CLOUDY ES TEMP 18C = HW?': '天気は曇り、気温は 18 ℃。いかがですか？',
+  'HR WX RAIN NW ES WINDY': 'こちらは今、雨で風が強いです',
+  'WX SNOW HR = VY CLD TEMP -3C': 'こちらの天気は雪。とても寒く、気温は −3 ℃です',
+  'WX FB HR SUNNY ES WARM': 'こちらは良い天気、晴れて暖かいです',
+  'HR WX HOT ES HUMID TEMP 33C': 'こちらの天気は暑くて湿っぽく、気温は 33 ℃です',
+  'WX HR CLDY = TEMP 12C ES QRN': 'こちらの天気は曇り。気温は 12 ℃で、空電があります',
+  'RAIN STOPPED NW ES SUN OUT HI': '雨は今やんで、日が差してきました（笑）',
+  'WX HR FOGGY = VY DAMP TODAY': 'こちらの天気は霧。今日はとても湿っぽいです',
+  'TNX FER WX INFO = HR SAME WX': '天気の情報をありがとう。こちらも同じ天気です',
+  'WX HR OVERCAST ES DULL TODAY': 'こちらの天気は今日はどんより曇っています',
+  'WX MOSTLY SUNNY = TEMP ABT 22 C': '天気はほぼ晴れ。気温はおよそ 22 ℃です',
+  'HR WX LIGHT RAIN ES CHILLY': 'こちらの天気は小雨で肌寒いです',
+  'WX CLEAR NW = TEMP MINUS 5 DEGREE CELSIUS': '天気は今、快晴。気温は −5 ℃です',
+  'VY MUGGY HR = TEMP ABT 31 C': 'こちらはとても蒸し暑く、気温はおよそ 31 ℃です',
+  'WX BLIZZARD HR = VY CLD': 'こちらの天気は吹雪。とても寒いです',
+  'HR WX HAZY ES CALM': 'こちらの天気はかすんでいて、風は穏やかです',
+  'WX BREEZY = TEMP ABT 18 C': '天気はそよ風があり、気温はおよそ 18 ℃です',
+
+  // 時刻
+  'QTR HR 1430 JST': 'こちらの時刻は 14 時 30 分（日本時間）です',
+  'QTR? = HR 0930 UTC': '時刻は？ こちらは 9 時 30 分（協定世界時）です',
+  'HR TIME 2100 JST = GE OM': 'こちらの時刻は 21 時（日本時間）。こんばんは',
+  'NW 0600 JST ES SUN UP HR': '今は朝 6 時（日本時間）で、こちらは日が昇りました',
+  'TIME HR 1200 JST = LUNCH TIME HI': 'こちらの時刻は 12 時（日本時間）。お昼の時間です（笑）',
+  'QTR 1800 JST = GE ES TNX QSO': '時刻は 18 時（日本時間）。こんばんは、交信ありがとう',
+  'SRI MUST QRT = 2300 JST HR': 'すみません、終わらなければなりません。こちらは 23 時（日本時間）です',
+  'UR QTR PSE? = MY QTR 0745': 'そちらの時刻を教えてください。私の時刻は 7 時 45 分です',
+
+  // 場所・地理
+  'QTH HR {QTH} {QTH}': 'こちらの所在地は {QTH} です',
+  'MY QTH {QTH} = ABT 50 KM N OF TOKYO': '私の所在地は {QTH}。東京の北およそ 50 km です',
+  'QTH {QTH} = JCC 1001': '所在地は {QTH}。JCC（市のナンバー）は 1001 です',
+  'HR QTH NR THE SEA = VY QUIET': 'こちらの所在地は海の近く。とても静かです',
+  'QTH {QTH} = 100 M ASL': '所在地は {QTH}、標高 100 m です',
+  'UR QTH PSE AGN? = QRM HR': 'そちらの所在地をもう一度お願いします。こちらは混信があります',
+  'QTH {QTH} ES OP {NAME} = HW?': '所在地は {QTH}、オペレーターは {NAME}。いかがですか？',
+  'FB QTH = NR WKD UR AREA B4': '良い所ですね。そちらの地域とは以前に交信したことがありません',
+
+  // 電波の状況
+  'UR SIGS 579 HR = SOME QRN': 'あなたの信号はこちらで 579。少し空電があります',
+  'CONDX FB TODAY ES BAND OPEN': '今日はコンディションが良く、バンドが開けています',
+  'UR SIG STRONG ES SOLID CPY': 'あなたの信号は強く、確実に取れています',
+  'CONDX POOR HR = BAND NOISY': 'こちらはコンディションが悪く、バンドがノイズっぽいです',
+  'UR RST 449 = QRN HVY HR': 'あなたのレポートは 449。こちらは空電がひどいです',
+  'SRI QRM DE OTHER STN PSE AGN': 'すみません、他局からの混信があります。もう一度お願いします',
+  'BAND CLOSING NW = SIGS DOWN': 'バンドが閉じかけていて、信号が弱くなっています',
+  'FB SIGS HR = 599 PLUS 20 DB': 'こちらでは良好な信号、599 プラス 20 dB です',
+  'CONDX UP ES DWN = HW UR SIDE?': 'コンディションが上がったり下がったりしています。そちらはどうですか？',
+  'UR SIG CUTTING THRU QRM FB': 'あなたの信号は混信の中でもよく抜けて聞こえます',
+  'GUD CPI AGN = ALL SOLID HR': 'また良く取れました。こちらはすべて確実です',
+  'UR RST 559 WID QSB HR': 'あなたのレポートは 559、こちらはフェージングがあります',
+  'HVY QRN HR = CPI ABT 80 PERCENT': 'こちらは空電がひどく、8 割ほど取れています',
+
+  // フェージング
+  'QSB HR PSE AGN': 'こちらはフェージングがあります。もう一度お願いします',
+  'UR SIG QSB DEEP = PSE RPT NAME': 'あなたの信号はフェージングが深いです。名前を繰り返してください',
+  'SRI QSB = UR CALL AGN PSE': 'すみません、フェージングです。コールサインをもう一度お願いします',
+  'QSB NW BUT CPY OK': '今フェージングがありますが、取れています',
+  'DEEP QSB HR = PSE QRS': 'こちらは深いフェージングです。ゆっくり送ってください',
+  'SIG FADING = PSE RPT UR QTH': '信号が弱くなっています。所在地を繰り返してください',
+  'QSB ES QRN = CPY ABT 70 PCT': 'フェージングと空電で、7 割ほど取れています',
+  'QSB GONE NW = UR 599 AGN': 'フェージングは今おさまり、あなたの信号はまた 599 です',
+
+  // 締めくくり
+  'TNX FER NICE QSO ES 73': '楽しい交信をありがとう。さようなら',
+  '{DX} DE {ME} TU 73 <SK>': '{DX}、こちらは {ME}。ありがとう、さようなら、終わります',
+  'TNX QSO = HPE CUAGN ES 73': '交信ありがとう。またお会いできることを願っています。さようなら',
+  'GB OM ES GL = 73 73 <SK>': 'ごきげんよう、幸運を。さようなら、終わります',
+  'QSL VIA BURO = TU 73': 'QSL カードはビューロー経由で。ありがとう、さようなら',
+  'MNI TNX FB QSO = 73 ES GB': '良い交信をどうもありがとう。さようなら、ごきげんよう',
+  'NW QRU = TNX FER QSO ES 73 BCNU': 'もう用件はありません。交信ありがとう、さようなら、またお会いしましょう',
+  'I WL CU VY SN = 73 ES GL': 'またすぐにお会いしましょう。さようなら、幸運を',
+  'MY QSL SURE VIA BURO = TU 73': '私の QSL カードは必ずビューロー経由で送ります。ありがとう、さようなら',
+  '73 <SK> DE {ME} CL': 'さようなら、終わります。{ME} 閉局します',
+
+  // 聞き返し・トラブル
+  'PSE AGN AGN': 'もう一度、もう一度お願いします',
+  'SRI QRM PSE QRS': 'すみません、混信があります。ゆっくり送ってください',
+  'UR CALL AGN PSE = QRN HR': 'コールサインをもう一度お願いします。こちらは空電があります',
+  'PSE QRS = I AM BEGINNER HI': 'ゆっくり送ってください。私は初心者です（笑）',
+  'SRI OM PSE RPT ALL AFTER RST': 'すみません、RST の後をすべて繰り返してください',
+  'QRX PSE = QRL HR = 5 MIN': 'お待ちください。こちらは取り込み中です。5 分ほど',
+  'PSE RPT UR NAME AGN BK': '名前をもう一度繰り返してください。どうぞ',
+  'MOM PSE = AS AS': '少々お待ちください。待機してください',
+  'PSE CFM MI CALL SIGN = {ME}': '私のコールサインを確認してください。{ME} です',
+  'NIL HR = NO MORE INFO OM': 'こちらはこれ以上ありません。他に情報はありません',
+};
+
 export function pick(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
