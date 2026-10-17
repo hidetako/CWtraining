@@ -40,7 +40,7 @@ import {
 import { Tutorial, TUTORIAL_STEPS } from './tutorial.js';
 import {
   loadSettings, saveSettings, loadStats, saveStats, resetStats,
-  recordDrill, recordQso, recordKeying, recordKeyPerChar, recordContest, weakChars,
+  recordDrill, recordQso, recordKeying, recordKeyPerChar, recordContest, weakChars, confusionPairs,
   paddleAssignment,
 } from './stats.js';
 
@@ -1700,7 +1700,7 @@ async function playText(text, selector, override = {}) {
 /**
  * 採点結果を「1 文字 = 1 列」に組み直す。
  *
- * 最長共通部分列は書き間違いを「取り漏らし」と「余分」の 2 件に分けて返すので、
+ * 採点は書き間違いを「取り漏らし」と「余分」の 2 件（隣り合わせ）に分けて返すので、
  * そのまま並べると同じ 1 文字が 2 列に散ってしまい、上下で見比べられない。
  * 一致に挟まれたひと続きの誤りの中で、取り漏らしと余分を順に組にして
  * 1 列にまとめる（数え方は countSubstitutions と同じ）。
@@ -1912,6 +1912,8 @@ function termListHtml(text, { heading = 'この送信に出てきた用語', ski
 
 const drill = {
   problem: null, session: null, awaitingNext: false, countdown: null, gradedAt: 0,
+  // 「間違えた文字を復習する」で決めた出題文字。種類を変えるか「出題する」で解く
+  review: null,   // { alphabet: string[], label: string } | null
 };
 
 /** 出題までの間（秒）。構える時間を作るためのもの。 */
@@ -1923,7 +1925,11 @@ const DRILL_COUNTDOWN = 3;
  */
 const NEXT_GUARD_MS = 700;
 
-/** 苦手文字を重み付きの出題アルファベットに変換する。正答率が低いほど多く混ぜる。 */
+/**
+ * 苦手文字を重み付きの出題アルファベットに変換する。正答率が低いほど多く混ぜる。
+ * 取り違えやすい組（S を H と書く、など）は両方を入れる。片方だけ聞いても
+ * 区別は付かず、2 つが混ざって出てきて初めて聞き分ける練習になる
+ */
 function weakAlphabet() {
   const weak = weakChars(stats, { minSent: 5, limit: 10 });
   const alphabet = [];
@@ -1931,7 +1937,53 @@ function weakAlphabet() {
     const copies = 1 + Math.round((1 - w.accuracy) * 3);
     for (let i = 0; i < copies; i++) alphabet.push(w.char);
   }
+  for (const p of confusionPairs(stats)) {
+    for (const ch of [p.expected, p.actual]) {
+      if (/^[A-Z0-9]$/.test(ch) || /^<[A-Z]+>$/.test(ch) || /^[.,?/=+]$/.test(ch)) alphabet.push(ch);
+    }
+  }
   return alphabet;
+}
+
+/**
+ * 取り違えた文字とその相手を、混ぜて出題する字母にする。
+ * 「S を H と書いた」なら S と H の両方を入れ、取り漏らしはその文字だけ。
+ * 2 文字に満たないときは、記録にある苦手文字で補う
+ */
+function reviewAlphabet(result) {
+  const set = new Set();
+  for (const p of result.substitutions || []) { set.add(p.expected); set.add(p.actual); }
+  for (const m of result.marks || []) if (m.type === 'missing') set.add(m.expected);
+  // 復習は文字の聞き分けが目的なので、1 文字の符号だけ（語や数字列ではなく）
+  const chars = [...set].filter((c) => /^[A-Z0-9]$/.test(c) || /^<[A-Z]+>$/.test(c) || /^[.,?/=+]$/.test(c));
+  if (chars.length < 2) for (const w of weakChars(stats)) { if (chars.length >= 4) break; if (!chars.includes(w.char)) chars.push(w.char); }
+  return chars;
+}
+
+/** 採点結果から「間違えた文字」の一行を作る。無ければ空 */
+function mistakesHtml(result) {
+  const subs = (result.substitutions || []).map((p) => `<code>${escapeHtml(p.expected)}</code>→<code>${escapeHtml(p.actual)}</code>`);
+  const paired = new Set((result.substitutions || []).map((p) => p.expected));
+  const missed = (result.marks || []).filter((m) => m.type === 'missing' && !paired.has(m.expected)).map((m) => `<code>${escapeHtml(m.expected)}</code>（取り漏らし）`);
+  const items = [...subs, ...missed];
+  if (!items.length) return '';
+  return `<p class="hint drill-mistakes">間違えた文字: ${items.join('　')}</p>`;
+}
+
+/**
+ * 間違えた文字だけを、相手の文字と混ぜて出題し直す（連続出題）。
+ * 種類は「苦手集中」にし、字母だけ今の間違いに差し替える
+ */
+function startReview(alphabet) {
+  if (alphabet.length < 2) return;
+  drill.review = { alphabet, label: alphabet.join(' ') };
+  settings.drillType = 'weak';
+  persist();
+  $('#drill-type').value = 'weak';
+  updateDrillControls();
+  const count = Math.max(5, settings.drillCount ?? 1);
+  drill.session = { size: count, done: 0, correct: 0, total: 0, perChar: {} };
+  newProblem();
 }
 
 function initDrill() {
@@ -1946,6 +1998,7 @@ function initDrill() {
   $('#drill-level').value = settings.kochLevel;
 
   typeSel.addEventListener('change', () => {
+    drill.review = null;   // 復習の字母は、種類を変えたら解く
     settings.drillType = typeSel.value; persist(); updateDrillControls();
   });
   // 記号ボタンは、答案欄のカーソル位置に差し込む。押しても欄の焦点は保つ
@@ -1978,6 +2031,7 @@ function initDrill() {
   });
 
   $('#btn-drill-new').addEventListener('click', () => {
+    if (drill.review) { drill.review = null; updateDrillControls(); }   // 復習は「間違えた文字を復習する」からだけ
     const count = settings.drillCount ?? 1;
     drill.session = count > 1
       ? { size: count, done: 0, correct: 0, total: 0, perChar: {} }
@@ -2027,10 +2081,15 @@ function isCharDrill(type) {
 }
 
 function describeWeakDrill() {
+  if (drill.review) return `復習: ${drill.review.label}（直前に間違えた文字と、取り違えた相手を混ぜて出します。種類を変えるか「出題する」で通常の苦手集中に戻ります）`;
   const weak = weakChars(stats, { minSent: 5, limit: 10 });
+  const pairs = confusionPairs(stats, { limit: 5 });
+  const pairText = pairs.length
+    ? `　取り違え: ${pairs.map((p) => `${p.expected}→${p.actual} ×${p.count}`).join('、')}（両方を混ぜて出します）`
+    : '';
   return weak.length >= 2
-    ? `対象: ${weak.map((w) => w.char).join(' ')}（正答率の低い順）`
-    : 'まだ十分な記録がありません。ドリルを数回解くと苦手文字が集まります（それまではコッホ法の文字で代替）。';
+    ? `対象: ${weak.map((w) => w.char).join(' ')}（正答率の低い順）${pairText}`
+    : `まだ十分な記録がありません。ドリルを数回解くと苦手文字が集まります（それまではコッホ法の文字で代替）。${pairText}`;
 }
 
 /**
@@ -2192,7 +2251,7 @@ async function newProblem() {
     level: effectiveDrillLevel(),
     groupSize: settings.groupSize,
     groupCount: settings.groupCount,
-    alphabet: settings.drillType === 'weak' ? weakAlphabet() : undefined,
+    alphabet: settings.drillType === 'weak' ? (drill.review?.alphabet ?? weakAlphabet()) : undefined,
   });
 
   $('#drill-result').hidden = true;
@@ -2273,6 +2332,7 @@ function gradeCurrentProblem() {
   const wholeIsOneTerm = !!terms && !/\s/.test(drill.problem.answer.trim());
 
   const sessionDone = session && session.done >= session.size;
+  const reviewChars = perfect ? [] : reviewAlphabet(result);
   const progress = session
     ? `<span class="hint">${session.done} / ${session.size} 問</span>`
     : '';
@@ -2299,12 +2359,16 @@ function gradeCurrentProblem() {
     ${wholeIsOneTerm ? ''
       : `<p class="hint">モールス: <code>${escapeHtml(toMorseString(drill.problem.answer))}</code></p>`}
     ${terms}
+    ${mistakesHtml(result)}
     ${sessionDone ? sessionSummaryHtml(session) : ''}
     <div class="drill-actions" style="margin-top:.9rem">
       ${levelUp ? '<button type="button" class="btn" id="btn-levelup">レベルを 1 上げる</button>' : ''}
       <button type="button" class="btn btn-primary" id="btn-drill-next">
         ${sessionDone ? 'もう一度セッション' : '次の問題（Enter）'}</button>
+      ${reviewChars.length >= 2 ? `<button type="button" class="btn btn-ghost" id="btn-drill-review"
+        title="間違えた文字と、取り違えた相手の文字を混ぜて 5 問出します">間違えた文字を復習する（${escapeHtml(reviewChars.join(' '))}）</button>` : ''}
     </div>`;
+  $('#btn-drill-review')?.addEventListener('click', () => startReview(reviewChars));
 
   if (sessionDone) {
     // まとめを見せたのでセッションを閉じる。次はボタンから新規に始める
@@ -4118,6 +4182,14 @@ function renderStats() {
     'まだ十分なデータがありません。聞き取りドリルを 5 回ほど試してください。');
   $('#weak-chars-keying').innerHTML = weakListHtml(weakChars(stats, { source: 'keying' }),
     'まだ十分なデータがありません。パドル送信で採点すると集まります。');
+  const pairs = confusionPairs(stats);
+  $('#confusion-list').innerHTML = pairs.length
+    ? pairs.map((p) => `
+        <span class="weak-char" title="正解は ${escapeHtml(p.expected)}、書いたのは ${escapeHtml(p.actual)}">
+          <span class="ch">${escapeHtml(p.expected)}</span>→<span class="ch">${escapeHtml(p.actual)}</span>
+          <span class="hint" style="display:inline">×${p.count}</span>
+        </span>`).join('')
+    : '<p class="empty">まだ取り違えの記録がありません。聞き取りドリルで間違えると、何を何と聞いたかがここに集まります。</p>';
 
   $('#history-list').innerHTML = stats.history.length
     ? stats.history.slice(0, 20).map((h) => {
@@ -5042,6 +5114,8 @@ window.__cw = {
   get qsoOptions() { return qso.currentOptions ?? null; },
   get qsoScores() { return qso.liveScores ? [...qso.liveScores] : null; },
   get drillProblem() { return drill.problem; },
+  get drillReview() { return drill.review; },      // 復習の字母を検証できるように
+  confusionPairs,                                 // 取り違えの集計を検証できるように
   get keyerTask() { return paddle.task; },
   get keyerTaskGloss() { return paddle.gloss; },   // 課題の文全体の意味を検証できるように
   KEY_PHRASE_MEANINGS,                      // 定型文と全体の意味の対応を検証できるように

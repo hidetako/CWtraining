@@ -93,6 +93,7 @@ export const DEFAULT_SETTINGS = {
 
 export const DEFAULT_STATS = {
   perChar: {},       // { 'A': { sent, correct } }
+  confusions: {},    // 聞き取りの取り違え { 'S>H': 回数 }（正解 > 書いた文字）
   drills: { attempts: 0, chars: 0, correct: 0 },
   qso: { completed: 0, fields: 0, correct: 0 },
   keying: { attempts: 0, chars: 0, correct: 0 },
@@ -192,6 +193,13 @@ export function recordDrill(stats, { type, result, level }) {
     stats.perChar[ch].sent += counts.sent;
     stats.perChar[ch].correct += counts.correct;
   }
+  // 何を何と取り違えたか。正答率だけでは「S が苦手」までしか分からず、
+  // 「S を H と聞いている」が分かって初めて、2 つを並べて聞き比べる復習になる
+  if (!stats.confusions) stats.confusions = {};
+  for (const p of result.substitutions || []) {
+    const key = `${p.expected}>${p.actual}`;
+    stats.confusions[key] = (stats.confusions[key] || 0) + 1;
+  }
 
   pushHistory(stats, {
     kind: 'drill',
@@ -290,6 +298,21 @@ export function recordKeyPerChar(stats, marks) {
  * 苦手な文字を正答率の低い順に返す。
  * source: 'drill' = 聞き取り（既定）、'keying' = パドル入力。
  */
+/**
+ * 聞き取りで取り違えやすい組を、回数の多い順に返す。
+ * @returns {Array<{ expected, actual, count }>}
+ */
+export function confusionPairs(stats, { limit = 8, minCount = 2 } = {}) {
+  return Object.entries(stats.confusions || {})
+    .map(([key, count]) => {
+      const [expected, actual] = key.split('>');
+      return { expected, actual, count };
+    })
+    .filter((p) => p.count >= minCount)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
 export function weakChars(stats, { minSent = 5, limit = 10, source = 'drill' } = {}) {
   const table = source === 'keying' ? (stats.keyPerChar || {}) : stats.perChar;
   return Object.entries(table)

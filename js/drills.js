@@ -1,6 +1,6 @@
 // 聞き取りドリルの問題生成と採点
 
-import { codeUnits, countSubstitutions, normalizeTyped } from './morse.js';
+import { codeUnits, countSubstitutions, normalizeTyped, substitutionPairs } from './morse.js';
 import {
   ABBREVIATIONS, WX_WORDS, WX_PHRASES, WEATHER, ALL_KEY_PHRASES, ANTENNAS,
   FREQUENCY_ORDER, GLAD_PHRASES, GREETINGS, KOCH_ORDER,
@@ -278,7 +278,7 @@ function groupsFromAlphabet(alphabet, opts) {
  *
  * 位置をそのまま突き合わせると、1 文字打ち漏らしただけで以降が全部ずれ、
  * ほとんど取れていても 0% 近くになってしまう。実際には「1 文字落とした」
- * だけなので、最長共通部分列で対応を取ってから過不足を数える。
+ * だけなので、編集距離で対応を取ってから過不足を数える。
  *
  * @returns {{ total, correct, accuracy, marks, perChar }}
  *   marks は [{ type: 'ok'|'missing'|'extra', expected, actual, ok }] の配列（表示用）
@@ -322,11 +322,20 @@ export function gradeProblem(problem, input) {
     accuracy: denominator ? correct / denominator : 0,
     marks,
     perChar,
+    // 取り違えた組（正解 → 書いた文字）。復習の対象を決めるのに使う
+    substitutions: substitutionPairs(marks),
   };
 }
 
 /**
- * 最長共通部分列で 2 つの文字列を並べ、一致・打ち漏らし・余分に分ける。
+ * 編集距離（一致 0、取り違え 1、打ち漏らし 1、余分 1）で 2 つの文字列を並べ、
+ * 一致・打ち漏らし・余分に分ける。取り違えは「打ち漏らし＋余分」の隣り合う
+ * 2 件として返す（countSubstitutions / substitutionPairs がこの並びを組にする）。
+ *
+ * 最長共通部分列だけで並べると、SHSH を HHSH と書いたときに先頭の S の
+ * 相手が「余分の H」ではなく 2 文字目の H になってしまい、S→H の取り違えが
+ * 「S の漏れ」と「H の余分」に分かれて別の列に出る。取り違えを 1 列に
+ * そろえるため、1 文字の置き換えを漏れ＋余分より安く扱う。
  * @returns {Array<{ type: 'ok'|'missing'|'extra', expected: string, actual: string, ok: boolean }>}
  */
 function align(expected, actual) {
@@ -360,14 +369,16 @@ function align(expected, actual) {
     return s === name ? name.length : 0;
   };
 
-  // dp[i][j] = a[i..] と b[j..] の最長共通部分列の長さ
+  // dp[i][j] = a[i..] と b[j..] を並べる最小コスト
   const dp = Array.from({ length: a.length + 1 }, () => new Uint32Array(b.length + 1));
+  for (let i = 0; i <= a.length; i++) dp[i][b.length] = a.length - i;
+  for (let j = 0; j <= b.length; j++) dp[a.length][j] = b.length - j;
   for (let i = a.length - 1; i >= 0; i--) {
     for (let j = b.length - 1; j >= 0; j--) {
-      let best = Math.max(dp[i + 1][j], dp[i][j + 1]);
-      if (a[i].key === b[j].key) best = Math.max(best, dp[i + 1][j + 1] + 1);
+      let best = Math.min(dp[i + 1][j] + 1, dp[i][j + 1] + 1, dp[i + 1][j + 1] + 1);
+      if (a[i].key === b[j].key) best = Math.min(best, dp[i + 1][j + 1]);
       const n = spelled(i, j);
-      if (n) best = Math.max(best, dp[i + 1][j + n] + 1);
+      if (n) best = Math.min(best, dp[i + 1][j + n]);
       dp[i][j] = best;
     }
   }
@@ -376,22 +387,30 @@ function align(expected, actual) {
   let i = 0;
   let j = 0;
 
+  // 同じコストなら 一致 > 漏れ > 余分 > 取り違え の順に取る。AB を BA と
+  // 書いたような入れ替わりは取り違え 2 件ではなく「A の漏れ、B、A の余分」
+  // になり、はっきり安くなるときだけ取り違えとして組になる
   while (i < a.length && j < b.length) {
     const n = spelled(i, j);
-    if (a[i].key === b[j].key && dp[i][j] === dp[i + 1][j + 1] + 1) {
+    if (a[i].key === b[j].key && dp[i][j] === dp[i + 1][j + 1]) {
       // 表記が違っても符号が同じなら正解。表示は出題側の表記に揃える
       marks.push({ type: 'ok', expected: a[i].text, actual: a[i].text, ok: true, gap: a[i].gap });
       i += 1; j += 1;
-    } else if (n && dp[i][j] === dp[i + 1][j + n] + 1) {
+    } else if (n && dp[i][j] === dp[i + 1][j + n]) {
       // プロサインを綴りで書いた。綴りの文字をまとめて 1 個の正解にする
       marks.push({ type: 'ok', expected: a[i].text, actual: a[i].text, ok: true, gap: a[i].gap });
       i += 1; j += n;
-    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+    } else if (dp[i][j] === dp[i + 1][j] + 1) {
       marks.push({ type: 'missing', expected: a[i].text, actual: '', ok: false, gap: a[i].gap });
       i += 1;
-    } else {
+    } else if (dp[i][j] === dp[i][j + 1] + 1) {
       marks.push({ type: 'extra', expected: '', actual: b[j].text, ok: false });
       j += 1;
+    } else {
+      // 取り違え: 漏れと余分を隣り合わせて 1 列に出す
+      marks.push({ type: 'missing', expected: a[i].text, actual: '', ok: false, gap: a[i].gap });
+      marks.push({ type: 'extra', expected: '', actual: b[j].text, ok: false });
+      i += 1; j += 1;
     }
   }
   while (i < a.length) {
