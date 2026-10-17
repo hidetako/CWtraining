@@ -4,7 +4,7 @@ import { CWPlayer } from './audio.js';
 import { MORSE_TABLE, codeUnits, computeTiming, toMorseString, estimateDuration, tokenize } from './morse.js';
 import {
   ABBREVIATIONS, WX_WORDS, WX_PHRASES, FREQUENCY_ORDER, KOCH_ORDER, SYMBOL_ORDER,
-  KEY_PHRASE_TOPICS, ALL_KEY_PHRASES,
+  KEY_PHRASE_TOPICS, ALL_KEY_PHRASES, KEY_PHRASE_MEANINGS, RIGS, ANTENNAS, POWERS,
 } from './data.js';
 import { annotateHtml, createTracker, explainText, lookupTerm, termCode, termTitle } from './explain.js';
 import {
@@ -3409,6 +3409,27 @@ function taskTermsHtml(text) {
       `<span class="morse">${escapeHtml(termCode(t.term))}</span></span>`).join('');
 }
 
+/**
+ * 定型文以外の課題の、全体としての意味。語ごとの意味は下に並ぶが、
+ * ひと言で何を送っているのかをここで示す。無ければ空
+ */
+function taskGloss(type, problem) {
+  const text = problem.answer;
+  if (type === 'abbrev' || type === 'word') {
+    return problem.hint || lookupTerm(text)?.ja || '';
+  }
+  if (type === 'wx') return problem.hint ? `天気: ${problem.hint}` : '';
+  if (type === 'gear') {
+    if (RIGS.includes(text)) return `無線機の機種名（RIG ${text}）`;
+    if (POWERS.includes(text)) return `出力（PWR ${text}）`;
+    if (ANTENNAS.includes(text)) {
+      const ja = lookupTerm(text)?.ja;
+      return ja ? `アンテナ: ${ja}` : `アンテナの種類（ANT ${text}）`;
+    }
+  }
+  return '';   // コールサインは見れば分かる
+}
+
 function newKeyerTask() {
   const type = settings.keyerTaskType;
   const preview = $('#keyer-task-text');
@@ -3416,16 +3437,20 @@ function newKeyerTask() {
 
   if (type === 'free') {
     paddle.task = null;
+    paddle.gloss = '';
     preview.textContent = '自由練習モードです。好きな符号を打ってください。';
     terms.innerHTML = '';
+    $('#keyer-task-gloss').hidden = true;
     $('#btn-keyer-listen').disabled = true;
     // 自由練習には「次の課題」が無いので、進むボタンは押せなくする
     $('#btn-keyer-next').disabled = true;
   } else {
+    let gloss = '';
     if (type === 'phrase') {
       const pool = keyPhrasePool();
       const dx = makeProblem('callsign', {}).answer;
-      paddle.task = pool[Math.floor(Math.random() * pool.length)]
+      const template = pool[Math.floor(Math.random() * pool.length)];
+      const fill = (t) => t
         .replaceAll('{ME}', settings.callsign)
         .replaceAll('{DX}', dx)
         .replaceAll('{NAME}', settings.name)
@@ -3433,12 +3458,20 @@ function newKeyerTask() {
         .replaceAll('{RIG}', settings.rig)
         .replaceAll('{PWR}', settings.pwr)
         .replaceAll('{ANT}', settings.ant);
+      paddle.task = fill(template);
+      gloss = fill(KEY_PHRASE_MEANINGS[template] || '');
     } else {
-      paddle.task = makeProblem(type, {}).answer;
+      const problem = makeProblem(type, {});
+      paddle.task = problem.answer;
+      gloss = taskGloss(type, problem);
     }
-    // 語ごとに色分けし、下に意味を並べる
+    // 語ごとに色分けし、下に意味を並べる。文全体の意味は課題の行の空きに小さく
     preview.innerHTML = annotateHtml(paddle.task, escapeHtml);
     terms.innerHTML = taskTermsHtml(paddle.task);
+    paddle.gloss = gloss;
+    const glossEl = $('#keyer-task-gloss');
+    glossEl.textContent = gloss;
+    glossEl.hidden = !gloss;
     // 課題が変われば記録の意味も変わるので、数え直す
     paddle.runs = [];
     renderKeyerPlus();
@@ -5010,4 +5043,6 @@ window.__cw = {
   get qsoScores() { return qso.liveScores ? [...qso.liveScores] : null; },
   get drillProblem() { return drill.problem; },
   get keyerTask() { return paddle.task; },
+  get keyerTaskGloss() { return paddle.gloss; },   // 課題の文全体の意味を検証できるように
+  KEY_PHRASE_MEANINGS,                      // 定型文と全体の意味の対応を検証できるように
 };
