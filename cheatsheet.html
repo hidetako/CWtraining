@@ -14,8 +14,8 @@
   @media print { .noprint { display: none; } }
   .noprint { display: none; text-align: center; font-size: 9pt; color: #444; margin: 4mm auto 0; width: 210mm; }
   header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1.6px solid #111; padding-bottom: 1mm; margin-bottom: 2mm; }
-  h1 { font-size: 12.5pt; margin: 0; letter-spacing: .02em; }
-  .me { font-family: ui-monospace, "Consolas", "Menlo", monospace; font-size: 9.5pt; font-weight: 700; }
+  h1 { font-size: 12.5pt; margin: 0; letter-spacing: .02em; white-space: nowrap; }
+  .me { font-family: ui-monospace, "Consolas", "Menlo", monospace; font-size: 8.6pt; font-weight: 700; text-align: right; }
   .me small { font-family: inherit; font-weight: 400; font-size: 7.4pt; color: #333; }
   .grid { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 2.2mm; align-items: start; }
   section { border: 1px solid #999; border-radius: 1.2mm; padding: 1.4mm 1.8mm 1.6mm; break-inside: avoid; margin-bottom: 2.2mm; }
@@ -44,7 +44,7 @@
 <div class="sheet">
 <header>
   <h1>CW 交信 カンニングペーパー</h1>
-  <div class="me">QTH UEDA <small>（長野県上田市）</small>&nbsp; JCC 0903 <small>（09 = 長野県）</small></div>
+  <div class="me">JK0ASS <small>HIDE</small>&nbsp; QTH UEDA <small>（長野県上田市）</small>&nbsp; JCC 0903&nbsp; RIG FTDX10 <small>50W</small></div>
 </header>
 
 <div class="grid">
@@ -57,18 +57,18 @@
   <div class="step"><span class="who dx">相手</span>呼んでくる
     <span class="cw">自局 DE 相手局 相手局 K</span></div>
   <div class="step"><span class="who">自分</span>第 1 交換（レポート・名前・QTH）
-    <span class="cw">相手局 DE 自局 = GE OM TNX FER CALL = UR RST 599 599 = NAME TARO TARO = QTH UEDA UEDA = JCC 0903 = HW? 相手局 DE 自局 K</span>
+    <span class="cw">相手局 DE 自局 = GE OM TNX FER CALL = UR RST 599 599 = NAME HIDE HIDE = QTH UEDA UEDA = JCC 0903 = HW? 相手局 DE 自局 K</span>
     <span class="note">大事な語は 2 回。GM 朝 / GA 昼 / GE 夜。= は BT（区切り）。HW? で相手に渡す。</span></div>
   <div class="step"><span class="who dx">相手</span>第 1 交換（相手のレポート・名前・QTH）
     <span class="cw">自局 DE 相手局 = R R FB = UR RST 599 = NAME BOB = QTH BERLIN = RIG IC-7300 PWR 100W = ANT DP = HW? 自局 DE 相手局 K</span></div>
   <div class="step"><span class="who">自分</span>第 2 交換（設備・天気）→ 締めの合図
-    <span class="cw">相手局 DE 自局 = R R FB BOB ALL SOLID = MY RIG IC-7300 PWR 50W = ANT DP = WX FINE ES TEMP 25C = TNX FER NICE QSO ES 73 = 相手局 DE 自局 K</span>
+    <span class="cw">相手局 DE 自局 = R R FB BOB ALL SOLID = MY RIG FTDX10 PWR 50W = ANT DP = WX FINE ES TEMP 25C = TNX FER NICE QSO ES 73 = 相手局 DE 自局 K</span>
     <span class="note">ALL SOLID = 全部取れた。TNX FER NICE QSO ES 73 が「そろそろ終わり」の合図。</span></div>
   <div class="step"><span class="who">両方</span>締め
     <span class="cw">相手局 DE 自局 R TU 73 ES CUAGN &lt;SK&gt; &nbsp;／&nbsp; 73 &lt;SK&gt; DE 自局 CL</span>
     <span class="note">&lt;SK&gt; は交信終了。CL は閉局（もう呼ばないで）。</span></div>
   <h3>短い BK 調（識別を省く速いやり取り）</h3>
-  <div class="step"><span class="cw">UR RST 599 599 NAME TARO QTH UEDA BK &nbsp;→&nbsp; R R TNX BOB UR 599 BK</span>
+  <div class="step"><span class="cw">UR RST 599 599 NAME HIDE QTH UEDA BK &nbsp;→&nbsp; R R TNX BOB UR 599 BK</span>
     <span class="note">BK で締めれば相手も BK で返す。数往復に 1 回はコールを入れる。</span></div>
 </section>
 

@@ -252,7 +252,9 @@ ok('CQ を出す側は自分の番から始まる', s.phase === 'myCq' && !s.bus
 ok('模範解答が出ている', /CQ CQ CQ DE/.test(await page.textContent('#free-expected')));
 ok('打つ欄がある（キーボード Z/X も効く欄）', await page.locator('#qso-keyed').count() === 1);
 
-await page.evaluate(() => { window.__cw.sendFree('CQ CQ CQ DE JA1ABC JA1ABC K'); });
+// 自局のコールは設定の初期値（見本ではなく実際の局）なので、文面はそこから組む
+const MY = await page.evaluate(() => window.__cw.settings.callsign);
+await page.evaluate((my) => { window.__cw.sendFree(`CQ CQ CQ DE ${my} ${my} K`); }, MY);
 await page.waitForTimeout(300);
 s = await state();
 ok('送ると相手が呼んでくる（受信中）', s.phase === 'pickup' && s.busy && s.state === '受信中…', JSON.stringify(s));
@@ -263,7 +265,7 @@ await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 1
 ok('鳴り終わると自分の番になる', (await state()).state === 'あなたの番です');
 await page.click('#btn-free-reveal');
 const revealed = await page.textContent('#free-rx-text');
-ok('内容を見るで相手の送信が読める', /JA1ABC DE [A-Z0-9]+/.test(revealed), revealed.slice(0, 40));
+ok('内容を見るで相手の送信が読める', new RegExp(`${MY} DE [A-Z0-9]+`).test(revealed), revealed.slice(0, 40));
 
 // 聞き直しは同じ送信を鳴らすだけで、ログには足さない
 const rowsBefore = await page.locator('#qso-log .log-entry').count();
@@ -275,11 +277,11 @@ await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 1
 // 打ち終わりの自動送信: K で締めて手を止めれば、押さなくても相手が返事をする。
 // キーヤーの解読結果を直接置いて、打ち終わった状態を作る
 const call0 = await page.evaluate(() => window.__cw.freeState.qso.callers[0].callsign);
-await page.evaluate((c) => {
+await page.evaluate(([c, my]) => {
   const k = window.__cw.keyer;
-  k.text = `${c} DE JA1ABC UR RST 599 599 NAME TARO QTH TOKYO HW?`;   // まだ締めていない
+  k.text = `${c} DE ${my} UR RST 599 599 NAME TARO QTH TOKYO HW?`;   // まだ締めていない
   k.dispatchEvent(new CustomEvent('update'));
-}, call0);
+}, [call0, MY]);
 await page.waitForTimeout(2200);
 let phaseNow = await page.evaluate(() => window.__cw.freeState.qso.phase);
 ok('締めの符号が無ければ勝手に送らない', phaseNow === 'pickup' && !(await page.evaluate(() => window.__cw.freeState.busy)), phaseNow);
@@ -316,7 +318,7 @@ ok('自動送信で終えてもまとめが出る', /交信終了/.test(await pa
 // もう一局、こんどはボタンで進める流れ（相談・伏せ字・ログ帳）
 await page.click('#btn-free-again');
 await page.waitForTimeout(300);
-await page.evaluate(() => { window.__cw.sendFree('CQ CQ CQ DE JA1ABC JA1ABC K'); });
+await page.evaluate((my) => { window.__cw.sendFree(`CQ CQ CQ DE ${my} ${my} K`); }, MY);
 await page.waitForFunction(() => !window.__cw.freeState.busy, null, { timeout: 120000 });
 
 // 相談
@@ -328,7 +330,7 @@ ok('相談すると状況と次の一手が出る', /段階/.test(advice) && /�
 // 模範解答と違う内容で送っても、流れに合わせて返す
 const call = await page.evaluate(() => window.__cw.freeState.qso.callers[0].callsign);
 const perCharBefore = await page.evaluate(() => JSON.stringify(window.__cw.stats.keyPerChar || {}));
-await page.evaluate((c) => { window.__cw.sendFree(`${c} DE JA1ABC GA OM UR RST 559 559 QTH TOKYO K`); }, call);   // 名前なし・順不同（ボタン相当）
+await page.evaluate(([c, my]) => { window.__cw.sendFree(`${c} DE ${my} GA OM UR RST 559 559 QTH TOKYO K`); }, [call, MY]);   // 名前なし・順不同（ボタン相当）
 await page.waitForTimeout(300);
 const fb = (await page.textContent('#free-feedback')).replace(/\s+/g, ' ');
 ok('相手が受け取った内容と抜けが出る', /✓ RST 559/.test(fb) && /抜け: NAME/.test(fb), fb.slice(0, 120));

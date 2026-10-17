@@ -11,11 +11,11 @@ const STATS_KEY = 'cwtraining.stats.v1';
 
 export const DEFAULT_SETTINGS = {
   // 自局プロフィール
-  callsign: 'JA1ABC',
-  name: 'TARO',
-  qth: 'TOKYO',
-  jcc: '',              // 自局の JCC / JCG 番号（任意。移動運用先で現在地から決められる）
-  rig: 'IC-7300',
+  callsign: 'JK0ASS',
+  name: 'HIDE',
+  qth: 'UEDA',
+  jcc: '0903',          // 自局の JCC / JCG 番号（任意。移動運用先で現在地から決められる）
+  rig: 'FTDX10',
   pwr: '50W',
   ant: 'DP',
   wx: 'FINE',
@@ -119,8 +119,20 @@ function write(key, value) {
   }
 }
 
+/** 以前の見本の自局プロフィール。これのまま保存されていれば、まだ自分の局に書き換えていない */
+const SAMPLE_PROFILE = { callsign: 'JA1ABC', name: 'TARO', qth: 'TOKYO', rig: 'IC-7300' };
+
 export function loadSettings() {
   const settings = read(SETTINGS_KEY, DEFAULT_SETTINGS);
+
+  // 見本のコールサイン JA1ABC のまま使っていた保存値は、項目ごとに見本の値だけを
+  // いまの初期値（自局）に置き換える。自分で書き換えた項目はそのまま残す
+  if (settings.callsign === SAMPLE_PROFILE.callsign) {
+    for (const [k, sample] of Object.entries(SAMPLE_PROFILE)) {
+      if (settings[k] === sample) settings[k] = DEFAULT_SETTINGS[k];
+    }
+    if (settings.qth === DEFAULT_SETTINGS.qth && !settings.jcc) settings.jcc = DEFAULT_SETTINGS.jcc;
+  }
 
   // 旧版の keyerSwap（左右入れ替えのチェックボックス）を利き手設定へ移行する
   if (settings.keyerSwap != null && !settings.keyerHandMigrated) {

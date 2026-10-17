@@ -140,7 +140,7 @@ const basic = await draw(12);
 ok('差し替え記号が残らない', basic.every((t) => !t.includes('{')), JSON.stringify(basic.slice(0, 2)));
 const withRig = basic.find((t) => data.phrases.basic.some((ph) => ph.includes('{RIG}') && matches(ph, t)));
 if (withRig) {
-  ok('自局のリグに差し替わる', withRig.includes('IC-7300'), withRig);
+  ok('自局のリグに差し替わる', withRig.includes('FTDX10'), withRig);
 } else {
   console.log('（今回はリグの文が出ませんでした）');
 }
