@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>CW 交信カンニングペーパー</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  @page { size: A4 portrait; margin: 7mm 8mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; color: #111; }
+  body { font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "Meiryo", system-ui, sans-serif; font-size: 7.4pt; line-height: 1.27; }
+  .sheet { width: 194mm; margin: 0 auto; padding: 2mm 0; }
+  @media screen { body { background: #e8e8e8; } .sheet { background: #fff; width: 210mm; padding: 7mm 8mm; margin: 6mm auto; box-shadow: 0 2px 10px rgba(0,0,0,.25); } .noprint { display: block; } }
+  @media print { .noprint { display: none; } }
+  .noprint { display: none; text-align: center; font-size: 9pt; color: #444; margin: 4mm auto 0; width: 210mm; }
+  header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1.6px solid #111; padding-bottom: 1mm; margin-bottom: 2mm; }
+  h1 { font-size: 12.5pt; margin: 0; letter-spacing: .02em; }
+  .me { font-family: ui-monospace, "Consolas", "Menlo", monospace; font-size: 9.5pt; font-weight: 700; }
+  .me small { font-family: inherit; font-weight: 400; font-size: 7.4pt; color: #333; }
+  .grid { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 2.2mm; align-items: start; }
+  section { border: 1px solid #999; border-radius: 1.2mm; padding: 1.4mm 1.8mm 1.6mm; break-inside: avoid; margin-bottom: 2.2mm; }
+  h2 { font-size: 8.6pt; margin: 0 0 1mm; padding-bottom: .5mm; border-bottom: 1px solid #bbb; letter-spacing: .03em; }
+  h3 { font-size: 7.6pt; margin: 1.2mm 0 .4mm; color: #222; }
+  code, .cw { font-family: ui-monospace, "Consolas", "Menlo", monospace; font-size: 7.4pt; }
+  .step { margin: 0 0 1.1mm; }
+  .step .who { display: inline-block; min-width: 7mm; font-weight: 700; font-size: 7pt; color: #fff; background: #333; border-radius: .8mm; padding: 0 .9mm; margin-right: 1mm; line-height: 1.35; }
+  .step .who.dx { background: #777; }
+  .step .cw { display: block; margin: .3mm 0 .2mm; font-weight: 700; font-size: 7.6pt; letter-spacing: .01em; word-break: break-word; }
+  .step .note { color: #333; font-size: 6.9pt; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; vertical-align: top; padding: .15mm .6mm .15mm 0; border-bottom: 1px dotted #ccc; }
+  th { font-family: ui-monospace, "Consolas", "Menlo", monospace; font-weight: 700; white-space: nowrap; width: 11mm; font-size: 7.3pt; }
+  td { font-size: 6.8pt; }
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2mm; }
+  .cols3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 2mm; }
+  ul { margin: .3mm 0 0; padding-left: 3.2mm; }
+  li { margin: 0 0 .3mm; }
+  .tip { background: #f2f2f2; border-radius: 1mm; padding: 1mm 1.4mm; margin-top: 1mm; font-size: 6.9pt; }
+  footer { margin-top: 1.5mm; font-size: 6.4pt; color: #555; text-align: right; }
+</style>
+</head>
+<body>
+<p class="noprint">印刷は Ctrl+P（Mac は ⌘P）。A4・縦・余白「なし」または「最小」で 1 枚に収まります。</p>
+<div class="sheet">
+<header>
+  <h1>CW 交信 カンニングペーパー</h1>
+  <div class="me">QTH UEDA <small>（長野県上田市）</small>&nbsp; JCC 0903 <small>（09 = 長野県）</small></div>
+</header>
+
+<div class="grid">
+<div>
+<section>
+  <h2>ラバースタンプ交信の型（MY = 自局、DX = 相手）</h2>
+  <div class="step"><span class="who">自分</span>CQ を出す
+    <span class="cw">QRL? &nbsp;→&nbsp; CQ CQ CQ DE MY MY MY PSE K</span>
+    <span class="note">QRL? は「使用中ですか」の確認。返事が無ければ CQ。コールは 3 回。</span></div>
+  <div class="step"><span class="who dx">相手</span>呼んでくる
+    <span class="cw">MY DE DX DX K</span></div>
+  <div class="step"><span class="who">自分</span>第 1 交換（レポート・名前・QTH）
+    <span class="cw">DX DE MY = GE OM TNX FER CALL = UR RST 599 599 = NAME TARO TARO = QTH UEDA UEDA = JCC 0903 = HW? DX DE MY K</span>
+    <span class="note">大事な語は 2 回。GM 朝 / GA 昼 / GE 夜。= は BT（区切り）。HW? で相手に渡す。</span></div>
+  <div class="step"><span class="who dx">相手</span>第 1 交換（相手のレポート・名前・QTH）
+    <span class="cw">MY DE DX = R R FB = UR RST 599 = NAME BOB = QTH BERLIN = RIG IC-7300 PWR 100W = ANT DP = HW? MY DE DX K</span></div>
+  <div class="step"><span class="who">自分</span>第 2 交換（設備・天気）→ 締めの合図
+    <span class="cw">DX DE MY = R R FB BOB ALL SOLID = MY RIG IC-7300 PWR 50W = ANT DP = WX FINE ES TEMP 25C = TNX FER NICE QSO ES 73 = DX DE MY K</span>
+    <span class="note">ALL SOLID = 全部取れた。TNX FER NICE QSO ES 73 が「そろそろ終わり」の合図。</span></div>
+  <div class="step"><span class="who">両方</span>締め
+    <span class="cw">DX DE MY R TU 73 ES CUAGN &lt;SK&gt; &nbsp;／&nbsp; 73 &lt;SK&gt; DE MY CL</span>
+    <span class="note">&lt;SK&gt; は交信終了。CL は閉局（もう呼ばないで）。</span></div>
+  <h3>短い BK 調（識別を省く速いやり取り）</h3>
+  <div class="step"><span class="cw">UR RST 599 599 NAME TARO QTH UEDA BK &nbsp;→&nbsp; R R TNX BOB UR 599 BK</span>
+    <span class="note">BK で締めれば相手も BK で返す。数往復に 1 回はコールを入れる。</span></div>
+</section>
+
+<section>
+  <h2>聞き返し・トラブル・気持ち</h2>
+  <ul>
+    <li><code>PSE AGN AGN</code> もう一度 ／ <code>PSE QRS</code> ゆっくり ／ <code>PSE RPT UR NAME</code> 名前をもう一度</li>
+    <li><code>SRI QRM PSE AGN</code> 混信、もう一度 ／ <code>QSB HR PSE AGN</code> フェージング</li>
+    <li><code>UR CALL AGN PSE = QRN HR</code> コールをもう一度（空電）</li>
+    <li><code>QRX PSE 1 MIN</code> 少し待って ／ <code>MOM PSE</code> ちょっと待って</li>
+    <li><code>PSE CFM MI CALL = MY</code> 自分のコールの確認を頼む</li>
+    <li><code>GLD TO WRK U</code> 交信できて嬉しい ／ <code>VY PSED TO MEET U</code> 会えて嬉しい</li>
+    <li><code>UR SIG LOUD ES CLR</code> 強くはっきり ／ <code>CONDX FB ES BAND OPEN</code> 伝搬良好</li>
+    <li><code>NW QRU SA 73 ES BCNU</code> 用件なし、さようなら、また</li>
+    <li><code>QSL VIA BURO</code> QSL はビューロー経由 ／ <code>HPE CUAGN</code> また会えますように</li>
+  </ul>
+  <div class="tip"><b>数字の短縮</b>: 599 = 5NN（N = 9、T = 0、A = 1）。<b>プロサイン</b>: &lt;AR&gt; 送信終わり ／ &lt;BT&gt;(=) 区切り ／ &lt;SK&gt; 交信終了 ／ &lt;KN&gt; 指定局のみどうぞ ／ &lt;AS&gt; 待て。</div>
+</section>
+</div>
+
+<div>
+<section>
+  <h2>頻出 Q 符号</h2>
+  <div class="cols1"><table><tr><th>QRL?</th><td>この周波数は使用中ですか</td></tr><tr><th>QRZ?</th><td>誰が呼びましたか</td></tr><tr><th>QRS</th><td>もっとゆっくり送ってください</td></tr><tr><th>QRQ</th><td>もっと速く送ってください</td></tr><tr><th>QRM</th><td>混信を受けている</td></tr><tr><th>QRN</th><td>空電に妨害されている</td></tr><tr><th>QSB</th><td>フェージングがあります</td></tr><tr><th>QSL</th><td>受信証</td></tr><tr><th>QSY</th><td>周波数を変更してください</td></tr><tr><th>QRX</th><td>少しお待ちください</td></tr><tr><th>QRT</th><td>送信を中止します</td></tr><tr><th>QRU</th><td>用件はありません</td></tr><tr><th>QRV</th><td>準備ができました</td></tr><tr><th>QRP</th><td>出力を下げてください／小電力局</td></tr><tr><th>QRO</th><td>出力を上げてください</td></tr><tr><th>QTH</th><td>所在地</td></tr><tr><th>QTR</th><td>正確な時刻</td></tr><tr><th>QRG</th><td>正確な周波数</td></tr><tr><th>QSO</th><td>交信</td></tr></table></div>
+  <div class="tip">? を付けると質問（QRL? 使用中ですか / QRZ? 誰か呼んだ？）。付けなければ陳述（QRM 混信あり）。</div>
+</section>
+<section>
+  <h2>気象用語（WX）</h2>
+  <div class="step"><span class="cw">WX HR FINE ES TEMP 25C</span><span class="cw">WX CLOUDY ES TEMP MINUS 3C</span>
+    <span class="note">晴れは日本では FINE、海外は SUNNY / CLEAR / FAIR。気温は TEMP ○C、氷点下は MINUS。</span></div>
+  <div class="cols2"><table><tr><th>FINE</th><td>晴れ</td></tr><tr><th>SUNNY</th><td>日が出ている晴れ</td></tr><tr><th>MOSTLY</th><td>ほとんど</td></tr><tr><th>PARTLY</th><td>一部</td></tr><tr><th>CLEAR</th><td>雲ひとつない快晴</td></tr><tr><th>FAIR</th><td>晴れ</td></tr><tr><th>CLOUDY</th><td>曇り</td></tr><tr><th>OVERCAST</th><td>本曇り</td></tr><tr><th>DULL</th><td>どんよりとした</td></tr><tr><th>RAIN</th><td>雨</td></tr><tr><th>LIGHT</th><td>弱い・軽い</td></tr><tr><th>HEAVY</th><td>強い・激しい</td></tr><tr><th>SHOWER</th><td>にわか雨</td></tr><tr><th>SNOW</th><td>雪</td></tr><tr><th>HAIL</th><td>ひょう</td></tr><tr><th>SLEET</th><td>みぞれ</td></tr><tr><th>HAZE</th><td>もや・かすみ</td></tr><tr><th>HAZY</th><td>かすんだ</td></tr></table><table><tr><th>FOG</th><td>霧</td></tr><tr><th>FOGGY</th><td>霧が出ている</td></tr><tr><th>MUGGY</th><td>蒸し暑い</td></tr><tr><th>STICKY</th><td>湿気が肌にまとわりつく</td></tr><tr><th>HUMID</th><td>湿度が高い</td></tr><tr><th>WINDY</th><td>風が強い</td></tr><tr><th>BREEZY</th><td>そよ風の</td></tr><tr><th>BLIZZARD</th><td>暴風雪</td></tr><tr><th>STORM</th><td>嵐</td></tr><tr><th>STORMY</th><td>荒れ模様の</td></tr><tr><th>CALM</th><td>穏やかでのどかな</td></tr><tr><th>MILD</th><td>温暖な</td></tr><tr><th>WARM</th><td>暖かい</td></tr><tr><th>HOT</th><td>暑い</td></tr><tr><th>CHILLY</th><td>寒々とした</td></tr><tr><th>COOL</th><td>涼しい</td></tr><tr><th>FRESH</th><td>すがすがしい</td></tr></table></div>
+</section>
+</div>
+
+<div>
+<section>
+  <h2>略語（よく打つ順ではなく、見つけやすい並び）</h2>
+  <div class="cols2"><table><tr><th>CQ</th><td>一般呼出し</td></tr><tr><th>DE</th><td>〜から</td></tr><tr><th>K</th><td>どうぞ</td></tr><tr><th>KN</th><td>指定局のみどうぞ</td></tr><tr><th>BK</th><td>ブレークイン</td></tr><tr><th>R</th><td>了解</td></tr><tr><th>RST</th><td>信号レポート</td></tr><tr><th>UR</th><td>あなたの</td></tr><tr><th>ES</th><td>〜と</td></tr><tr><th>FB</th><td>素晴らしい</td></tr><tr><th>FER</th><td>〜のために</td></tr><tr><th>TNX</th><td>ありがとう</td></tr><tr><th>TU</th><td>ありがとう</td></tr><tr><th>PSE</th><td>どうぞ</td></tr><tr><th>HW</th><td>いかがですか</td></tr><tr><th>GM</th><td>おはようございます</td></tr><tr><th>GA</th><td>こんにちは</td></tr><tr><th>GE</th><td>こんばんは</td></tr><tr><th>GB</th><td>さようなら</td></tr><tr><th>GL</th><td>幸運を</td></tr><tr><th>OM</th><td>男性局</td></tr><tr><th>YL</th><td>女性局</td></tr><tr><th>OP</th><td>オペレーター</td></tr><tr><th>NAME</th><td>名前</td></tr><tr><th>QTH</th><td>所在地</td></tr><tr><th>RIG</th><td>無線機</td></tr><tr><th>ANT</th><td>アンテナ</td></tr><tr><th>PWR</th><td>送信出力</td></tr><tr><th>WX</th><td>天気</td></tr><tr><th>TEMP</th><td>気温</td></tr><tr><th>AGN</th><td>もう一度</td></tr><tr><th>ABT</th><td>約・〜について</td></tr><tr><th>CFM</th><td>確認する</td></tr><tr><th>CUAGN</th><td>また会いましょう</td></tr><tr><th>HPE</th><td>望む</td></tr><tr><th>HR</th><td>ここ</td></tr><tr><th>NW</th><td>今</td></tr><tr><th>MNI</th><td>たくさんの</td></tr><tr><th>VY</th><td>とても</td></tr><tr><th>WID</th><td>〜と共に</td></tr><tr><th>WKD</th><td>交信した</td></tr><tr><th>SRI</th><td>ごめんなさい</td></tr></table><table><tr><th>NIL</th><td>何もない</td></tr><tr><th>HI</th><td>笑い</td></tr><tr><th>73</th><td>敬意を込めて</td></tr><tr><th>88</th><td>愛と口づけを</td></tr><tr><th>CONDX</th><td>伝搬状況</td></tr><tr><th>SIG</th><td>信号</td></tr><tr><th>CPY</th><td>受信する</td></tr><tr><th>CPI</th><td>受信・コピー</td></tr><tr><th>RPT</th><td>繰り返す</td></tr><tr><th>STN</th><td>局</td></tr><tr><th>HVY</th><td>強い・激しい</td></tr><tr><th>NR</th><td>〜の近く</td></tr><tr><th>BURO</th><td>QSL ビューロー</td></tr><tr><th>VIA</th><td>〜経由で</td></tr><tr><th>B4</th><td>以前に</td></tr><tr><th>DR</th><td>親愛なる</td></tr><tr><th>BTU</th><td>あなたにお返しします</td></tr><tr><th>BCNU</th><td>またお会いしましょう</td></tr><tr><th>DX</th><td>遠距離の局・海外局</td></tr><tr><th>SN</th><td>まもなく</td></tr><tr><th>WL</th><td>〜でしょう</td></tr><tr><th>C</th><td>はい・そのとおり</td></tr><tr><th>N</th><td>いいえ</td></tr><tr><th>MOM</th><td>少し待ってください</td></tr><tr><th>AS</th><td>お待ちください</td></tr><tr><th>CL</th><td>閉局します</td></tr><tr><th>UFB</th><td>この上なく素晴らしい</td></tr><tr><th>SOLID</th><td>完全に取れている</td></tr><tr><th>GUD</th><td>良い</td></tr><tr><th>CLR</th><td>明瞭な</td></tr><tr><th>DP</th><td>ダイポールアンテナ</td></tr><tr><th>GP</th><td>グランドプレーンアンテナ</td></tr><tr><th>YAGI</th><td>八木アンテナ</td></tr><tr><th>VERT</th><td>垂直系アンテナ</td></tr><tr><th>LW</th><td>ロングワイヤー</td></tr><tr><th>ELE</th><td>エレメント</td></tr><tr><th>GND</th><td>地面</td></tr><tr><th>MTRS</th><td>メートル</td></tr><tr><th>ASL</th><td>海抜</td></tr><tr><th>JCC</th><td>JARL の市郡番号</td></tr><tr><th>JST</th><td>日本標準時</td></tr><tr><th>UTC</th><td>協定世界時</td></tr></table></div>
+</section>
+<section>
+  <h2>自局メモ</h2>
+  <ul>
+    <li><code>QTH UEDA UEDA</code>（長野県上田市）</li>
+    <li><code>JCC 0903</code>（JARL 市番号。09 = 長野県、03 = 上田市）</li>
+    <li>移動なら <code>QTH ○○ = JCC/JCG ○○○○</code> に差し替える</li>
+    <li>RST は 599 を基本に、弱ければ 579 / 559 / 449</li>
+  </ul>
+</section>
+</div>
+</div>
+
+<footer>CW 交信トレーニング（https://hidetako.github.io/CWtraining/）の語彙データから作成</footer>
+</div>
+</body>
+</html>
