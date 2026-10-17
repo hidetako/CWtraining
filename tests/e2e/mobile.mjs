@@ -154,6 +154,10 @@ await page.touchscreen.tap(closeBox.x + closeBox.width / 2, closeBox.y + closeBo
 await page.waitForTimeout(450);
 const closedByTouch = await sheet();
 ok('打鍵タブでも指で閉じるボタンが効く', closedByTouch.open === false, JSON.stringify(closedByTouch));
+// タブの帯は横に流れる。打鍵タブが見えるまで流れた状態ではドリルのタブは
+// 画面の外に出ているので、人が指でなぞって出すのと同じく、見える位置まで戻してから押す
+await page.locator('.tab[data-panel="drill"]').scrollIntoViewIfNeeded();
+await page.waitForTimeout(200);
 const tabBox = await page.locator('.tab[data-panel="drill"]').boundingBox();
 await page.touchscreen.tap(tabBox.x + tabBox.width / 2, tabBox.y + tabBox.height / 2);
 await page.waitForTimeout(700);
