@@ -41,8 +41,9 @@ ok('取り漏らしだけなら組は無い', graded.miss.length === 0 && graded
 await page.click('.tab[data-panel="drill"]');
 await page.waitForTimeout(200);
 await page.selectOption('#drill-type', 'koch');
-// S と H が入る水準まで上げる（コッホ順の 10 文字: K M R S U A P T L O … S は入る。H は後ろ）
-await page.evaluate(() => { const el = document.querySelector('#drill-level'); el.value = String(el.max); el.dispatchEvent(new Event('input', { bubbles: true })); });
+// 字母を K M R S U の 5 文字に絞る。全部の文字で出題すると S も U も入らない問題が
+// 出ることがあり、同じ組が 2 回そろわず「2 回以上」の検査が運で落ちる
+await page.evaluate(() => { const el = document.querySelector('#drill-level'); el.value = '5'; el.dispatchEvent(new Event('input', { bubbles: true })); });
 await page.waitForTimeout(150);
 
 /** 1 問出して、答えの S を H に、U を V に書き換えて採点する。S も U も無ければ先頭を変える。 */
