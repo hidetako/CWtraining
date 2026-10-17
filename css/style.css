@@ -958,6 +958,8 @@ kbd {
 #panel-keyer .hint { margin-top: .4rem; }
 #panel-keyer .check { margin-top: .5rem; }
 .keyer-settings-title { font-size: .85rem; margin: 0 0 .5rem; }
+.drill-mistakes code { font-size: .95em; }
+.drill-mistakes { margin-top: .5rem; }
 /* 課題の文全体の意味。課題の行の右側の空きに小さく出す。長ければその中で折り返す */
 .task-gloss {
   margin-left: auto;

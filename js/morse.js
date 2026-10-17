@@ -245,6 +245,31 @@ export function countSubstitutions(marks) {
   return pairs;
 }
 
+/**
+ * 取り違えの組（正解の文字 → 書いた文字）を返す。
+ * countSubstitutions と同じ見方で、取り漏らしと余分が隣り合う並びを
+ * 順に組にする。S を H と書いたなら { expected: 'S', actual: 'H' }
+ * @returns {Array<{ expected: string, actual: string }>}
+ */
+export function substitutionPairs(marks) {
+  const pairs = [];
+  let missing = [];
+  let extra = [];
+  const settle = () => {
+    const n = Math.min(missing.length, extra.length);
+    for (let i = 0; i < n; i++) pairs.push({ expected: missing[i], actual: extra[i] });
+    missing = [];
+    extra = [];
+  };
+  for (const m of marks) {
+    if (m.type === 'missing') missing.push(m.expected);
+    else if (m.type === 'extra') extra.push(m.actual);
+    else if (m.type !== 'space') settle();
+  }
+  settle();
+  return pairs;
+}
+
 /** 文字列を ".-  -..." 形式の可読なモールス表記に変換する。 */
 export function toMorseString(text) {
   return tokenize(text)
