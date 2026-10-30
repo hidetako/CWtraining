@@ -648,3 +648,7 @@ Windows では、ブラウザを使わないスタンドアロン版（exe）も
 A4 一枚にまとめた印刷用のページです（公開版: https://hidetako.github.io/CWtraining/cheatsheet.html ）。
 ブラウザで開いて Ctrl+P（Mac は ⌘P）で印刷します。アプリの下部のリンクからも開けます。
 語彙はアプリのデータ（`js/data.js`）から作っています。
+
+## ライセンス
+
+[MIT License](LICENSE)。Windows スタンドアロン版 [CWtraining-desktop](https://github.com/hidetako/CWtraining-desktop) も MIT です。
