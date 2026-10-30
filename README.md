@@ -3,6 +3,11 @@
 ブラウザだけで動く、モールス符号（CW）の受信・送信・実戦運用の練習アプリです。
 インストールもアカウント登録も API キーも不要で、`index.html` を開けばすぐ使えます。
 
+- 公開版（ブラウザで開く）: <https://hidetako.github.io/CWtraining/>
+- **Windows スタンドアロン版（インストーラー / Portable exe）**:
+  [hidetako/CWtraining-desktop](https://github.com/hidetako/CWtraining-desktop) の
+  [Releases](https://github.com/hidetako/CWtraining-desktop/releases) から。中身は同じで、ブラウザを開かずに使えます
+
 FB NEWS の記事「[生成AIとCWで交信practice](https://www.fbnews.jp/202408/special2/index.html)」
 （7M4MON 野村秀明氏）の着想と、CW コンテストシミュレーター
 [Morse Runner](https://github.com/VE3NEA/MorseRunner)（VE3NEA）の設計を参考にしています。
@@ -615,6 +620,9 @@ BASE=https://hidetako.github.io/CWtraining tests/run-e2e.sh --remote
 ## 動作環境
 
 Web Audio API に対応したブラウザ（Chrome / Edge / Firefox / Safari）で動作します。
+Windows では、ブラウザを使わないスタンドアロン版（exe）も
+[CWtraining-desktop](https://github.com/hidetako/CWtraining-desktop/releases) にあります
+（Electron で同じ画面を包んだもの。設定と記録の保存先はブラウザとは別になります）。
 音を鳴らすには最初に画面のどこかを操作する必要があります（ブラウザの自動再生制限のため）。
 設定と成績はブラウザの localStorage に保存され、外部には送信されません。
 
