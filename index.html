@@ -1011,6 +1011,26 @@
       別の端末やブラウザに移すときに使ってください。
     </p>
   </div>
+
+  <!-- Windows 版（exe）で開いたときだけ出る。exe 側が window.cwDesktop を置く -->
+  <div class="card" id="desktop-card" hidden>
+    <h3>Windows 版（デスクトップ）</h3>
+    <p class="desktop-version" id="desktop-version"></p>
+    <p class="hint desktop-status" id="desktop-update-status"></p>
+    <div class="drill-actions" style="margin-top:.8rem">
+      <button type="button" class="btn btn-primary" id="btn-desktop-update">最新版に更新する</button>
+      <button type="button" class="btn btn-primary" id="btn-desktop-install" hidden>再起動して適用する</button>
+      <button type="button" class="btn btn-ghost" id="btn-desktop-releases">ダウンロードページを開く</button>
+    </div>
+    <label class="check">
+      <input type="checkbox" id="desktop-check-startup">
+      <span>起動時に更新を確認する</span>
+    </label>
+    <p class="hint">
+      更新は GitHub の Releases から取ります。インストーラー版は裏でダウンロードして再起動時に適用、
+      Portable 版は新しい exe への入れ替えを案内します。設定と記録はこのパソコンの中に保存され、更新しても残ります。
+    </p>
+  </div>
 </section>
 
 </main>

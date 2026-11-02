@@ -2331,3 +2331,9 @@ input[type=datetime-local] {
 [data-theme="pc88"] .free-feedback .tag.got { background: #003000; color: #00ff00; }
 [data-theme="pc88"] .free-feedback .tag.missing { background: #800000; color: #fff; }
 [data-theme="pc88"] .src-badge { border-radius: 0; }
+
+/* Windows 版（デスクトップ）の欄。版の行と更新の状態 */
+.desktop-version { margin: .4rem 0 0; font-weight: 600; }
+.desktop-status[data-tone="good"] { color: var(--ok, #6c6); }
+.desktop-status[data-tone="warn"] { color: var(--accent, #f9a825); }
+.desktop-status[data-tone="bad"] { color: var(--ng, #e66); }
