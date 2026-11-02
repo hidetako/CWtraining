@@ -71,6 +71,7 @@ function init() {
   initTools();
   initGlossary();
   initSettings();
+  initDesktop();
   initBeginnerToggles();
   initPaddleWidget();
   renderStats();
@@ -3873,6 +3874,68 @@ async function measureAudioLatency(outEl) {
   else verdict = '有線として普通の値です。これ以上はプログラムでは縮められません。';
   out.textContent = `合計およそ ${total} ms（${parts.join(' ＋ ')}）。${verdict}`;
   return { ok: true, base, output, lead, ramp, total };
+}
+
+/**
+ * Windows 版（exe）のときだけ出る「Windows 版（デスクトップ）」の欄。
+ * exe 側（Electron の preload）が window.cwDesktop を置く。ブラウザでは無いので何もしない。
+ *
+ * 橋の約束（exe 側と合わせてある）:
+ *   getInfo() → { version, portable, webCommit, webDate, checkOnStartup, updateState? }
+ *   checkForUpdates() … 進み具合は onUpdateStatus で届く
+ *   installUpdate() / setCheckOnStartup(bool) / openReleases()
+ *   onUpdateStatus(cb) … cb({ state, version, percent, url, message })
+ *     state: checking / available / downloading / downloaded / up-to-date /
+ *            portable-available / error / disabled
+ */
+function initDesktop() {
+  const bridge = window.cwDesktop;
+  const card = $('#desktop-card');
+  if (!bridge || !card) return;
+  card.hidden = false;
+
+  const status = $('#desktop-update-status');
+  const btnUpdate = $('#btn-desktop-update');
+  const btnInstall = $('#btn-desktop-install');
+  const setStatus = (text, tone = '') => { status.textContent = text; status.dataset.tone = tone; };
+
+  const render = (s) => {
+    if (!s) return;
+    btnInstall.hidden = s.state !== 'downloaded';
+    btnUpdate.disabled = s.state === 'checking' || s.state === 'downloading' || s.state === 'available';
+    switch (s.state) {
+      case 'checking': setStatus('更新を確認しています…'); break;
+      case 'available': setStatus(`新しい版 ${s.version} があります。ダウンロードしています…`); break;
+      case 'downloading': setStatus(`新しい版 ${s.version} をダウンロード中… ${Math.round(s.percent || 0)}%`); break;
+      case 'downloaded': setStatus(`新しい版 ${s.version} の準備ができました。「再起動して適用する」を押してください（次にアプリを閉じたときにも適用されます）。`, 'good'); break;
+      case 'up-to-date': setStatus(`お使いの版（${s.version}）が最新です。`, 'good'); break;
+      case 'portable-available': setStatus(`新しい版 ${s.version} があります。Portable 版は自動更新できないので、ダウンロードページから新しい exe を取って入れ替えてください。`, 'warn'); break;
+      case 'error': setStatus(`更新の確認に失敗しました: ${s.message || 'ネットに接続していないか、GitHub に届きません'}`, 'bad'); break;
+      case 'disabled': setStatus('開発中の起動では更新は確認しません。'); break;
+      default: setStatus('');
+    }
+  };
+
+  const showInfo = (info) => {
+    if (!info) return;
+    const kind = info.portable ? 'Portable 版' : 'インストーラー版';
+    const commit = info.webCommit ? String(info.webCommit).slice(0, 7) : '';
+    const web = commit ? ` ・ Web 版の取り込み: ${commit}${info.webDate ? `（${info.webDate}）` : ''}` : '';
+    $('#desktop-version').textContent = `版 ${info.version} ・ ${kind}${web}`;
+    $('#desktop-check-startup').checked = info.checkOnStartup !== false;
+    if (info.updateState) render(info.updateState);
+  };
+
+  Promise.resolve().then(() => bridge.getInfo?.()).then(showInfo).catch(() => {});
+  bridge.onUpdateStatus?.(render);
+
+  btnUpdate.addEventListener('click', () => {
+    render({ state: 'checking' });
+    Promise.resolve().then(() => bridge.checkForUpdates?.()).catch((e) => render({ state: 'error', message: String(e?.message || e) }));
+  });
+  btnInstall.addEventListener('click', () => { bridge.installUpdate?.(); });
+  $('#btn-desktop-releases').addEventListener('click', () => { bridge.openReleases?.(); });
+  $('#desktop-check-startup').addEventListener('change', (e) => { bridge.setCheckOnStartup?.(e.target.checked); });
 }
 
 function initSettings() {
