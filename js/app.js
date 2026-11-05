@@ -1912,6 +1912,7 @@ function termListHtml(text, { heading = 'この送信に出てきた用語', ski
 // ═══════════════════════════════════════════ 聞き取りドリル
 
 const drill = {
+  playRun: 0,            // 出題の音声を続けて鳴らす一連の番号。進めると残りの繰り返しをやめる
   problem: null, session: null, awaitingNext: false, countdown: null, gradedAt: 0,
   // 「間違えた文字を復習する」で決めた出題文字。種類を変えるか「出題する」で解く
   review: null,   // { alphabet: string[], label: string } | null
@@ -2026,6 +2027,10 @@ function initDrill() {
   $('#drill-groupcount').addEventListener('change', (e) => {
     settings.groupCount = Math.max(1, Number(e.target.value) || 5); persist();
   });
+  $('#drill-repeat').value = String(drillRepeatCount());
+  $('#drill-repeat').addEventListener('change', (e) => {
+    settings.drillRepeat = Number(e.target.value); persist();
+  });
   $('#drill-count').value = String(settings.drillCount ?? 1);
   $('#drill-count').addEventListener('change', (e) => {
     settings.drillCount = Number(e.target.value); persist();
@@ -2045,12 +2050,14 @@ function initDrill() {
     if (!drill.problem) return;
     cancelCountdown();
     focusAnswer();
+    drill.playRun++;                   // 続けて鳴らす途中なら、残りはやめて 1 回だけ
     player.play(drill.problem.text);
   });
   $('#btn-drill-slow').addEventListener('click', () => {
     if (!drill.problem) return;
     cancelCountdown();
     focusAnswer();
+    drill.playRun++;
     player.play(drill.problem.text, {
       charWpm: Math.max(8, settings.charWpm - 5),
       effWpm: Math.max(6, Math.min(settings.effWpm, settings.charWpm - 5) - 3),
@@ -2265,7 +2272,33 @@ async function newProblem() {
   if (!await runCountdown()) return;   // 途中で終了・出題し直しになった
   if (!drill.problem) return;
 
-  await player.play(drill.problem.text);
+  await playProblemRepeated(drill.problem);
+}
+
+/** 出題の音声を続けて鳴らす回数（設定。1〜3 に収める） */
+function drillRepeatCount() {
+  return Math.min(3, Math.max(1, Number(settings.drillRepeat) || 1));
+}
+
+/** 繰り返しの間に置く無音（ミリ秒）。語間より長く、「もう一度」と分かる長さ */
+const DRILL_REPEAT_GAP_MS = 1500;
+
+/**
+ * 出題の音声を設定の回数だけ続けて鳴らす。
+ * 途中で採点・もう一度聞く・次の問題・終了があれば、そこで残りはやめる
+ * （play は止められると false で返る。無音の間に止められたときは playRun で気づく）
+ */
+async function playProblemRepeated(problem) {
+  const run = ++drill.playRun;
+  const times = drillRepeatCount();
+  for (let i = 0; i < times; i++) {
+    if (i > 0) {
+      await new Promise((r) => setTimeout(r, DRILL_REPEAT_GAP_MS));
+      if (drill.playRun !== run || drill.problem !== problem) return;
+    }
+    const done = await player.play(problem.text);
+    if (done === false || drill.playRun !== run) return;
+  }
 }
 
 function gradeCurrentProblem() {
@@ -2273,6 +2306,7 @@ function gradeCurrentProblem() {
   // まだ鳴っていないものは採点しない。数えている途中の Enter で
   // 空欄のまま記録され、答えまで見えてしまう
   if (drill.countdown) return;
+  drill.playRun++;                     // 続けて鳴らす途中でも、採点したら残りはやめる
   player.stop();
 
   const input = $('#drill-answer').value;
