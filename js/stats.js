@@ -37,6 +37,7 @@ export const DEFAULT_SETTINGS = {
   groupSize: 5,
   groupCount: 5,
   drillCount: 1,        // 連続出題の問題数（1 = 都度）
+  drillRepeat: 1,       // 出題の音声を続けて鳴らす回数（1〜3）
   qsoMode: 'cq',
   qsoLength: 'normal',
   qsoStyle: 'guided',      // 'guided'（型を覚える）| 'copy'（聞き取り試験）
