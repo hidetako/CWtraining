@@ -988,6 +988,25 @@ kbd {
   .keyer-below { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
 }
 
+/* 横に余裕のあるパソコンでは、キーヤーの設定を課題のカードの右隣に引き上げる。
+   課題・解読結果・採点ボタンの枠と同じ高さに設定が並ぶので、画面が上下に間延びしない。
+   チュートリアルは設定の下（たたんであるので小さい） */
+@media (min-width: 1200px) and (pointer: fine) {
+  /* .is-active を付けないと、他のタブでも隠れているはずの枠が grid で現れてしまう */
+  body.is-paddle-global #panel-keyer.is-active {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 0 .9rem;
+    align-items: start;
+  }
+  body.is-paddle-global #panel-keyer .panel-head { grid-column: 1 / -1; }
+  body.is-paddle-global #panel-keyer .keyer-work { margin-bottom: 0; }
+  body.is-paddle-global #panel-keyer .keyer-below { grid-template-columns: minmax(0, 1fr); }
+  body.is-paddle-global #panel-keyer .keyer-below #tutorial { order: 2; }
+  /* 設定のつまみは 2〜3 列に収める */
+  body.is-paddle-global #panel-keyer .keyer-below .field-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+}
+
 /* ── PC: パドル送信タブは画面上のパドルなし、全幅、大きな文字 ──
    画面のどこでも打てるので画面上のパドルは要らない（paddle-rail を隠すのは
    上の is-paddle-global の規則）。空いた幅で、お題（課題）と打った符号を
