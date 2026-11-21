@@ -43,6 +43,7 @@ export const DEFAULT_SETTINGS = {
   qsoStyle: 'guided',      // 'guided'（型を覚える）| 'copy'（聞き取り試験）
   qsoReaction: 'normal',   // 相手の反応のゆらぎ
   showText: false,      // 送信中に本文を表示するか
+  showPaddle: true,     // 画面上のパドル（PC は右の欄、狭い画面は引き出し）を出すか
   theme: 'default',     // 画面の見た目。'default' | 'pc88'
 
   // 模擬交信（自由に打つ）
