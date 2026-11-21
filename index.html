@@ -931,6 +931,11 @@
       <input type="checkbox" id="set-beginner">
       <span>初心者モード: 送信中の Q 符号・略語をリアルタイムで解説する</span>
     </label>
+    <label class="check">
+      <input type="checkbox" id="set-paddle-show">
+      <span>画面上のパドルを表示する（PC は右の欄、スマートフォンは下から出す引き出し。
+        外してもキーボードの Z / X とマウスのボタンでは打てます）</span>
+    </label>
     <p class="hint">
       初心者モードは受信中も語の意味を表示するため、聞き取りの答えが部分的に見えます。
       実力を試すときはオフにしてください。
@@ -1066,6 +1071,9 @@
   <div class="pw-head">
     <span class="pw-title">パドル</span>
     <span class="pw-mini" id="pw-mini"></span>
+    <!-- PC の右の欄を使わない人のために。戻すのは「設定・記録」の「画面上のパドルを表示する」 -->
+    <button type="button" class="pw-hide" id="pw-hide"
+            title="画面上のパドルを隠す（設定・記録タブで戻せます）">隠す</button>
     <!-- スマホでは下から出す引き出しになるので、閉じる手段を添える -->
     <button type="button" class="pw-close" id="pw-close" aria-label="パドルを閉じる">✕</button>
   </div>

@@ -170,6 +170,7 @@ function setPaddleSheet(open) {
   const widget = $('#paddle-widget');
   const fab = $('#btn-paddle-sheet');
   if (!widget || !fab) return;
+  if (open && settings.showPaddle === false) return;   // 画面上のパドルを使わない設定なら開かない
   widget.classList.toggle('is-open', open);
   fab.setAttribute('aria-expanded', String(open));
   // 引き出しが本文の下半分を覆うので、その分だけ余白を足して
@@ -203,9 +204,30 @@ function openPaddleSheet() {
   if (isNarrowScreen()) setPaddleSheet(true);
 }
 
+/**
+ * 画面上のパドルを出すかどうか（設定）。外すと PC の右の欄と狭い画面の引き出し・
+ * 開くボタンを隠し、本文を全幅にする。キーボードの Z / X とマウスのボタンは
+ * そのまま効く（打面が無くても打てる）
+ */
+function applyPaddleVisibility() {
+  const show = settings.showPaddle !== false;
+  document.body.classList.toggle('is-paddle-off', !show);
+  if (!show) setPaddleSheet(false);
+  const box = $('#set-paddle-show');
+  if (box) box.checked = show;
+}
+
+function setPaddleShown(show) {
+  settings.showPaddle = !!show;
+  persist();
+  applyPaddleVisibility();
+}
+
 function initPaddleSheet() {
   $('#btn-paddle-sheet').addEventListener('click', () => setPaddleSheet(true));
   $('#pw-close').addEventListener('click', () => setPaddleSheet(false));
+  $('#pw-hide').addEventListener('click', () => setPaddleShown(false));
+  applyPaddleVisibility();
 
   // 画面が広がったら、開閉の状態は意味を持たないので戻しておく
   window.matchMedia('(max-width: 760px)').addEventListener('change', (e) => {
@@ -4097,6 +4119,10 @@ function initSettings() {
       : `つながりませんでした: ${r.error || '不明'}`;
   });
 
+  const paddleShow = $('#set-paddle-show');
+  paddleShow.checked = settings.showPaddle !== false;
+  paddleShow.addEventListener('change', () => setPaddleShown(paddleShow.checked));
+
   const showText = $('#set-showtext');
   showText.checked = settings.showText;
   showText.addEventListener('change', () => {
@@ -5205,6 +5231,7 @@ window.__cw = {
   termCode, termTitle, taskTermsHtml,        // 説明に添える符号を検証できるように
   get hintLines() { return hintBoard.lines.map((l) => ({ ...l })); },
   get settings() { return settings; },
+  setPaddleShown,
   get stats() { return stats; },
   get qsoScript() { return qso.script; },
   get qsoTurn() { return qso.script?.turns[qso.index] ?? null; },

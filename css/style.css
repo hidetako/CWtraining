@@ -1784,10 +1784,10 @@ input[type=datetime-local] {
    （is-rail-hidden は app.js の syncPaddleScope が付ける）。
    狭い画面の引き出しは指の打面なので残す */
 @media (min-width: 761px) and (pointer: fine) {
-  body.is-rail-hidden .paddle-rail { display: none; }
-  body.is-rail-hidden .app-body { grid-template-columns: minmax(0, 1fr); }
+  body.is-rail-hidden .paddle-rail, body.is-paddle-off .paddle-rail { display: none; }
+  body.is-rail-hidden .app-body, body.is-paddle-off .app-body { grid-template-columns: minmax(0, 1fr); }
   /* 空いた幅を本文に使う（ふだんは 1160px まで） */
-  body.is-rail-hidden main { max-width: 1480px; }
+  body.is-rail-hidden main, body.is-paddle-off main { max-width: 1480px; }
 
   /* ── 交信シミュレーター（交信中）── 空いた幅で、今のターンと交信ログを横に並べ、
      打つ内容（お題）と打った符号を大きく出す。見比べるのはこの 2 行 */
@@ -2000,6 +2000,21 @@ input[type=datetime-local] {
 /* ───────── パドルの引き出し（スマホ用の受け皿） ───────── */
 /* 画面の広いときは使わない。下の @media で初めて意味を持つ */
 .pw-close, .paddle-fab { display: none; }
+/* 「隠す」は PC の右の欄にだけ出す。狭い画面の引き出しには ✕（閉じる）がある */
+.pw-hide {
+  margin-left: .5rem;
+  padding: .1rem .5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: .7rem;
+  cursor: pointer;
+}
+.pw-hide:hover { color: var(--text); border-color: var(--text-dim); }
+/* 画面上のパドルを使わない設定（どの幅でも）。欄・引き出し・開くボタンを出さない */
+body.is-paddle-off .paddle-rail, body.is-paddle-off .paddle-fab { display: none !important; }
 
 /* ═══════════════ スマートフォン ═══════════════
    横に 2 列を並べる余裕が無いので、本文を 1 列にし、
@@ -2012,6 +2027,8 @@ input[type=datetime-local] {
    （pointer: coarse。低いだけのパソコンの窓は対象外） */
 @media (max-width: 760px), (max-height: 520px) and (pointer: coarse) {
   body { font-size: 17px; }
+  /* 引き出しには ✕ があるので「隠す」は出さない（隠すのは設定から） */
+  .pw-hide { display: none; }
 
   /* ノッチや下端のバーに潜り込ませない */
   .app-header {
